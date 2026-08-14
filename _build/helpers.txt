@@ -1,0 +1,1 @@
+// shared helper block, prepended into each scene file manually
