@@ -437,3 +437,51 @@ is centred (`X0 = (comp.width - maxW) / 2`).
 
 Corollary: one very long token in a column blows a hole in the layout for every other
 row — shorten copy (`frozen=True` → `frozen`) rather than special-casing the grid.
+
+## 25. A modal error dialog in AE BLOCKS the CDP bridge — and every retry queues another one (LIVE-VERIFIED)
+
+When a script throws a *syntax* error, AE does not return it over the bridge — it puts
+up a modal **"Unable to execute script at line N"** dialog and waits for a human. The
+CEP panel cannot answer CDP while that modal is up, so `ae.js` sits until its own
+`CDP timeout (120s)`.
+
+The trap is the retry. Each further call is accepted, blocks, times out, and leaves
+*another* queued dialog behind it. Three "let me just check the state" probes produced
+four stacked dialogs and ~8 minutes of dead time.
+
+**Rule: on `CDP timeout (120s)`, STOP calling AE.** Ask the user to clear the dialogs
+(or reload the panel), and only then send one lightweight ping before resuming. Do not
+probe "just to see" — probing is what multiplies the dialogs.
+
+Reading the line number: `es-json.jsx` (38 lines) is prepended and joined with `\n`, so
+**the payload's own line 1 is reported as line ~40.** A reported line just above 39
+means the fault is at the very top of your jsx, not in the prelude.
+
+Related: this is a second reason to follow #19 and keep non-trivial jsx in a FILE rather
+than passing it inline through the shell — inline payloads can be mangled in transit,
+and a mangled payload is exactly what raises the blocking syntax dialog.
+
+## 26. Trim layers by SAMPLING visibility, not by remembering when you keyed them
+
+To make a timeline honest ("слои стоят там, где они существуют на видео"), do not trust
+your own build-time bookkeeping. Sample the composite state per frame:
+
+```js
+for (var fr = 0; fr <= END; fr++) {
+  for (var s = 0; s < 2; s++) {            // two probes - HOLD keys flip mid-frame
+    var t = (fr + 0.25 + s * 0.5) * FD;
+    var o = op.valueAtTime(t, false);
+    var v = sc.valueAtTime(t, false);      // max |component|, dimension-agnostic
+    ...
+  }
+}
+L.inPoint  = first * FD;                    // quirk #14: inPoint FIRST
+L.outPoint = (last + 1) * FD;               // +1: the frame must stay on screen
+```
+
+Two details that matter: probe **twice per frame** (a HOLD key landing mid-frame is
+invisible to a single sample), and set `outPoint` to `last + 1` frames — an outPoint of
+exactly `last * FD` cuts the layer off *before* its final frame renders.
+
+Check `Opacity` **and** `Scale`: a layer scaled to 0 is invisible at full opacity, and
+snap-on rigs routinely park layers at scale 0.
