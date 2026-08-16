@@ -485,3 +485,182 @@ exactly `last * FD` cuts the layer off *before* its final frame renders.
 
 Check `Opacity` **and** `Scale`: a layer scaled to 0 is invisible at full opacity, and
 snap-on rigs routinely park layers at scale 0.
+
+## 27. `saveFrameToPng` is asynchronous, and it honours the comp's Resolution
+
+Two independent traps, and together they will make you review the *wrong* picture and
+conclude your change did nothing.
+
+**It returns before the file is on disk.** The JSX resolves as soon as the frame is
+queued; AE keeps writing in the background. If the very next command converts or reads
+those PNGs, it reads the *previous* build's frames. At 4K this window is several
+seconds. Poll until both the file count and the sizes stop changing:
+
+```bash
+rm -f cloud_*.png                       # never trust leftovers
+node scripts/ae.js '@_build/shot.jsx'
+for i in $(seq 8); do
+  a=$(ls -l cloud_*.png | md5sum); sleep 3; b=$(ls -l cloud_*.png | md5sum)
+  [ "$a" = "$b" ] && [ $(ls cloud_*.png | wc -l) -eq 9 ] && break
+done
+```
+
+Deleting first is the important half: if the write has not started, a stale file with a
+plausible timestamp is indistinguishable from a fresh one.
+
+**It writes at the comp's Resolution, not full size.** A 4096x2160 comp set to Quarter
+saves a 1024x540 PNG. Fine for judging layout, useless for judging type crispness — and
+it silently breaks any crop coordinates you computed in comp space. Check `im.size`
+before cropping, or set `comp.resolutionFactor = [1, 1]` for the capture.
+
+## 28. Scaling a 1x1 solid gives you a 1-px tick, not a rule
+
+`addSolid(col, name, 1, 1, 1)` then `Scale = [46, 400]` reads as "46 wide, 400 tall" if
+you think in pixels. Scale is a *percentage*: the result is 0.46 x 4 px — a speck that
+looks like sensor dirt on the render, not a design element.
+
+Build rules, bars and underlines at their **final pixel size** and animate `Scale` from
+`[0, 100]` to `[100, 100]`. That also gives a wipe-on for free, and the growth is
+linear in pixels so the easing reads the way you designed it.
+
+## 29. Parenting AFTER positioning rewrites your values — parent FIRST, and neutralise the null
+
+Assigning `L.parent = nul` preserves the layer's *world* transform, so AE silently
+rewrites Position (and every Position keyframe) into parent space. Set one value before
+parenting and it still looks right; write 129 keyframes before parenting and AE
+re-bases all of them behind your back.
+
+Two rules that make a control null harmless:
+
+1. **Parent before writing any transform keys.**
+2. Give the null `Anchor Point == Position == comp centre`. Then a child's own
+   coordinates *are* comp coordinates while the null sits at 100%, so packed/computed
+   layouts can be written in straight (`[CX, CY]` maths, no offset bookkeeping) — and
+   scaling the null still scales about the comp centre.
+
+An anchor of `[50, 50]` on a null positioned at `[CX, CY]` (the AE default shape) offsets
+every child by `[CX-50, CY-50]`. That is the source of the classic "everything jumped
+when I parented it" bug.
+
+## 30. `setValueAtTime` on Position creates SPATIAL keys — they swoop unless you flatten them
+
+Position is a spatial property. Every key AE creates gets **auto-bezier spatial
+tangents**, so a layer moving A -> B -> C does not travel in straight lines: it arcs
+through the corners and overshoots past them. Temporal easing does nothing about this —
+the curve is in the motion *path*, not the timing.
+
+For layout moves (word clouds, grids, anything that has to land exactly where the packer
+said) flatten every key:
+
+```js
+for (var k = 1; k <= p.numKeys; k++){
+  try { p.setSpatialAutoBezierAtKey(k, false); } catch (e) {}
+  try { p.setSpatialTangentsAtKey(k, [0,0,0], [0,0,0]); } catch (e) {}
+}
+```
+
+Zero tangents on both sides = linear path, exact arrival. Keep the ease-out in the
+*temporal* ease, where it belongs.
+
+## 31. Reflow reads as mush unless travelling elements are ghosted
+
+A word cloud that re-packs (the way a live poll cloud does) has elements crossing each
+other for 10-18 frames at a time. At full opacity two words on top of each other is
+unreadable garbage for half a second, and it looks like a bug rather than a transition.
+
+Dip a travelling element to ~40-45% at ~45% of its journey and back to 100% on arrival,
+but only for real travel (> ~150 px at 4K) — nudges should stay solid, or the frame
+starts flickering. The crossing then reads as intentional motion blur, and the layout
+change is legible.
+
+## 32. Motion blur stacks destructively with ghosting, and ruins HOLD teleports + hero type
+
+Turning on comp motion blur after building a reflow looks like a free upgrade. It is not:
+
+- **Blur + opacity ghost = mush.** The 40-45% dip from quirk 31 assumes crisp glyphs.
+  With blur on, raise the dip to ~60% — the blur already sells the travel, and 42% on top
+  of it leaves nothing readable.
+- **Never blur a layer whose keys are HOLD.** A marker/underline that teleports from word
+  to word gets its instantaneous jump smeared into a white streak across the whole frame.
+  Set `layer.motionBlur = false` on anything that snaps.
+- **Never blur the hero title.** At 370 pt the smear doubles the glyphs on entrance and
+  deforms the brand word — exactly what the "no deformation on brand titles" rule forbids.
+- **Shutter angle 180 (or 150) is a film default, not a graphics default.** For type moving
+  fast across a 4K frame, 90 keeps the letterforms legible.
+
+## 33. Render out of process with aerender.exe — never block the live session
+
+`renderQueue.render()` over the CDP bridge blocks AE's UI thread; a 4K render will time the
+bridge out, and per the bridge-safety rule you then have to stop calling AE altogether.
+Instead: `app.project.save(new File(path))` (an untitled project gains a home, no loss), then
+shell out:
+
+```
+aerender.exe -project P.aep -comp "Comp 1" -RStemplate "Best Settings" \
+             -OMtemplate "H.264 - Match Render Settings - 15 Mbps" -output out.mp4
+```
+
+`Best Settings` forces Full resolution, so the comp being parked at 1/4 for preview does not
+leak into the render. 30 s of 4096x2160 with 41 animated text layers took ~45-55 s per comp.
+The live AE session stays interactive throughout.
+
+## 34. `saveFrameToPng` honours the comp's preview resolution factor
+
+A comp parked at 1/4 for interactive work writes 1024x540 PNGs, silently. Every "defect"
+you then diagnose is really a resampling artefact — I once spent a round chasing a marker
+that appeared to strike through a word, and at 1:1 the marker was nowhere near it.
+
+```js
+var keep = comp.resolutionFactor;
+comp.resolutionFactor = [1, 1];
+comp.saveFrameToPng(f * (1 / comp.frameRate), new File(path));
+comp.resolutionFactor = keep;      // always restore, the user is still working in it
+```
+
+Unlike `aerender`, there is no "Best Settings" to force full res for you here.
+
+## 35. A reflowing layout is only clean at its keyframes — sweep every frame
+
+A packer that guarantees no overlap at each layout event says nothing about the straight
+line between two events. Words swapping slots pass straight through each other, and a spot
+check of four frames will not find it: v4 looked clean at every frame I sampled by hand and
+had 59 real collisions in transit.
+
+Sweep the generator's own state lists frame by frame, offline, before touching AE. Then:
+
+- **Sweep to the end of MOTION, not the last arrival.** `F_LAST` was the last word landing
+  at f545, but the vote ladder kept reflowing to f604 and states ran to f620. The sweep
+  stopped at f585 and left the busiest stretch of the spot unexamined — fixing the bound
+  alone took collisions 3 -> 1. Use `max(s[-1][0] for s in STATES)`.
+- **The sweep and the offline checker must agree on "live" and "hidden".** Every time they
+  disagreed (different entrance offsets, the sweep not knowing which words it had already
+  blanked) the disagreement was hiding a real defect.
+- **A blanked word cannot collide.** Read opacity, not just geometry, or you re-report
+  crossings you already solved and start blanking innocent bystanders.
+- **One pass is not a fixed point.** Blanking a word frees the slot it was fighting over,
+  exposing a crossing that was masked behind it. Iterate until nothing new turns up.
+- **Merge a word's overlapping blank windows, darkest floor wins.** Left separate, one
+  window's ramp back to full opacity lands inside the next window's blank and cancels it:
+  the word strobes on-off-on instead of going away.
+- **Fixed ramp lengths, not proportional.** Merging lengthens the window, and a
+  proportional ramp then bottoms out well after the crossing it was minted for.
+
+## 36. Hiding crossings is a budget — count how many words vanish at once
+
+Blanking a word in transit is the right move (a word that dissolves and re-forms elsewhere
+is the language of a live poll), but it is a cost. Audit concurrency, not just totals: v4
+had one collision left and *nine words gone simultaneously*, six of them bunched in the
+same flank — a hole punched in one side of the cloud, which is a worse defect than the
+crossings it cured. Check the spatial spread too; scattered blanks read as a re-shuffle,
+adjacent ones read as a dropout.
+
+Two things that fixed it, and one that did not:
+
+- **Keep hand-scheduled "act break" events clear of the automatic ones.** A hero surge
+  landing 3 frames from a routine climb sets two full re-packs rippling at once, and
+  overlapping ripples cross far more often than either alone. A guard band (13 frames)
+  took concurrency 9 -> 7 and cost nothing.
+- **Do NOT lengthen the ripple stagger to spread the load.** It is the obvious move and it
+  is backwards: a longer stagger keeps words in flight longer, and a word in flight is a
+  word that can be crossed. Concurrency went 7 -> 9. Words shoved as one block travel in
+  parallel and never meet.
