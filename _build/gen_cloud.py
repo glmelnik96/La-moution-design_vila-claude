@@ -52,15 +52,22 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BOXES = os.path.join(HERE, "boxes.json")
 
 VER = 1
-for a in ("--v2", "--v3", "--v4"):
+for a in ("--v2", "--v3", "--v4", "--v5"):
     if a in sys.argv:
         VER = int(a[-1])
-COMP_NAME = {1: "Comp 1", 2: "Comp 2", 3: "Comp 3", 4: "Comp 4"}[VER]
-OUTNAME = {1: "cloud.jsx", 2: "cloud_v2.jsx",
-           3: "cloud_v3.jsx", 4: "cloud_v4.jsx"}[VER]
+COMP_NAME = {1: "Comp 1", 2: "Comp 2", 3: "Comp 3",
+             4: "Comp 4", 5: "Comp 5"}[VER]
+OUTNAME = {1: "cloud.jsx", 2: "cloud_v2.jsx", 3: "cloud_v3.jsx",
+           4: "cloud_v4.jsx", 5: "cloud_v5.jsx"}[VER]
 IS3D = (VER >= 3)
 RICH = (VER >= 2)          # gather-in, ripple, marker, counter, motion blur
-GROW = (VER == 4)          # words climb the type scale as votes arrive
+GROW = (VER >= 4)          # words climb the type scale as votes arrive
+# v5 is the calm cut: same cloud, same ladder, but the hero is on screen from
+# early on and the crowd is allowed to ignore small displacements. v4 asks every
+# word to hold a mathematically perfect slot after every one of 72 events, and
+# the price is 221 separate flights - each individually short, collectively
+# fidgety. v5 trades a few pixels of packing rigour for stillness.
+CALM = (VER == 5)
 
 FPS = 25.0
 W, H = 4096, 2160
@@ -81,8 +88,6 @@ FONT = "Arial-BoldMT"
 
 QUESTION = "\u0421 \u043a\u0430\u043a\u0438\u043c \u0441\u043b\u043e\u0432\u043e\u043c \u0443 \u0432\u0430\u0441 \u0430\u0441\u0441\u043e\u0446\u0438\u0438\u0440\u0443\u0435\u0442\u0441\u044f \u0421\u043b\u0430\u0432\u043d\u0435\u0444\u0442\u044c-\u042f\u041d\u041e\u0421?"
 QSIZE = 78
-CNT_LABEL = "\u041e\u0422\u0412\u0415\u0422\u041e\u0412"   # OTVETOV
-CNT_SIZE = 44
 
 LOGO = ("C:\\Users\\\u0413\u043b\u0435\u0431\\Downloads\\"
         "\u043e\u0431\u043b\u0430\u043a\u043e \u0442\u0435\u0433\u043e\u0432\\"
@@ -163,40 +168,124 @@ WORDS = build_words()
 N = len(WORDS)
 
 # ---- timing (frames) ----
+# The reveal runs SMALLEST answer to largest, and KOLLEKTIV arrives last of all.
+# Leading with the hero states the conclusion in the first second and leaves the
+# remaining 29 with nothing to find out; starting at the rim with the one-off
+# answers keeps the question open, and the cloud reads as a result being counted
+# rather than a title with decoration.
 F_Q_IN    = 6      # question starts
 F_Q_FULL  = 26
-F_HERO    = 34     # KOLLEKTIV lands
-F_FIRST   = 52     # first supporting word
-# v4 gets all the words in early, because the second half of the spot belongs
-# to the VOTES: the cloud keeps re-ranking after the last answer has landed
-F_LAST    = 545 if GROW else 630
-F_LOGO    = 648
+F_FIRST   = 34     # first (smallest) answer
+F_LAST    = 420 if GROW else 630   # last SUPPORTING answer
+F_HERO    = 500    # KOLLEKTIV finally lands - and then grows on screen
+if CALM:
+    # v5: the hero is on screen from a third of the way in, hiding in the crowd
+    # rather than announcing itself, so the audience cannot tell which of the
+    # big words wins until one of them starts growing at the end. Making that
+    # true takes more than moving F_HERO - see START_SZ / F_HERO_UP below.
+    #
+    # This is also the main calming move, not just a dramaturgical one. In v4
+    # the 370 pt hero drops into a full frame at f500 and every word in the
+    # middle third has to flee. Seating it early means the crowd packs AROUND
+    # the centre from the start and that mass displacement never happens.
+    F_LAST = 470
+    F_HERO = 250
+F_LOGO    = 0      # the logo holds from the first frame
 F_SWEEP   = 636    # v3 light sweep crosses just before the sign-off
 SPAN = F_LAST - F_FIRST
 
 # v4: the voting window. The brief is explicit - sizes must still be changing
-# up to 0:25 (f625) - so the last climb starts early enough to SETTLE by then.
-F_VOTE0, F_VOTE1 = 118, 604
-F_HERO_UP = [300, 566]      # the two moments KOLLEKTIV pulls ahead
-HERO_GUARD = 13             # frames a regular climb must keep clear of a surge
+# up to 0:25 (f625) - and now it is the hero that carries that last change.
+F_VOTE0, F_VOTE1 = 118, 470
+F_HERO_UP = [548, 598]      # KOLLEKTIV grows 168 -> 240 -> 370 in full view
+if CALM:
+    # Moving the hero's arrival forward silently broke its camouflage. 168 pt
+    # hides it at f500, where a dozen answers have already climbed to 168 - but
+    # at f250 the largest word on screen is 63 pt, so the hero lands 2.7x taller
+    # than anything else and the result is announced ten seconds early. Rendered
+    # f275 shows it plainly: KOLLEKTIV alone at the top of the scale, no peer.
+    #
+    # So the hero enters a rung lower and takes an extra step, tracking the
+    # crowd's own climb instead of standing still above it:
+    #   f250  102 pt, crowd 63     - one of the big answers, no more
+    #   f490  168 pt, crowd ~150   - still no daylight between them
+    #   f548  240 pt               - and now it breaks away
+    #   f598  370 pt
+    # The last two beats are untouched: the growth at the end plays exactly as
+    # it did before, which is what was asked for.
+    #
+    # The new rung has to sit AFTER F_LAST. Tried at f400 first, and it cost
+    # two of the calmest words in the cut: HERO_GUARD holds regular CLIMBS off a
+    # hero beat but says nothing about ARRIVALS, so a hero surge inside the
+    # arrival window ripples straight through words that landed seconds earlier.
+    # TEKHNOLOGII and BEZOPASNOST both went ~700 px at 50 px/f within a second
+    # of appearing - precisely the defect this version exists to remove. Every
+    # v4 hero beat happened to fall after the last arrival, which is why the
+    # rule was never needed before and never written down.
+    F_HERO_UP = [490, 548, 598]
+# The hero's arrival displaces more of the frame than any other event, so the
+# regular climbs must keep clear of the landing as well as of the two surges.
+HERO_BEATS = [F_HERO] + F_HERO_UP
+HERO_GUARD = 18             # frames a regular climb must keep clear of a beat
 
 DAMP = 9.0 if GROW else 6.0  # px: below this a word stays put (no micro-twitch)
+if CALM:
+    # The single biggest lever on fidget. At 9 px a word chases every rounding
+    # the packer hands it; at 24 it only moves when it is genuinely in someone's
+    # way. 24 is not arbitrary - PADX is 26, so a word that stays put through a
+    # sub-DAMP displacement still keeps positive horizontal padding and cannot
+    # touch its neighbour's ink. The y axis has only PADY = 16 to give, which is
+    # why the deadband below is applied per-axis rather than to the distance.
+    DAMP = 24.0
 ENTER_F = 9        # gather-in travel (v2/v3)
 GATHER = 130.0     # px a word travels inward as it arrives (v2/v3)
-MARK_W = 1400      # base width of the answer-marker solid
 
 # v4 type ladder: a word enters one rung below where it will finish (the hero
 # two), so the final frame still matches the designed type scale exactly
 START_SZ = {"H": 168, "B": 63, "M": 63, "S": 63}
 LADDER = {"H": [240, 370], "B": [102, 168], "M": [102], "S": []}
+if CALM:
+    # one rung lower in, one extra rung on the way up - see F_HERO_UP above.
+    # The rungs are zipped against F_HERO_UP by index, so the two lists have to
+    # stay the same length.
+    START_SZ = dict(START_SZ, H=102)
+    LADDER = dict(LADDER, H=[168, 240, 370])
 # votes implied by each rung - drives the counter so the number on screen and
 # the size on screen are the same fact
 VOTES = {63: 3, 102: 14, 168: 31, 240: 58, 370: 96}
 
 
+def stay_put(dx, dy, d):
+    """True when a displacement is small enough that the word should ignore it.
+
+    v4 tests the straight-line distance against a single threshold. That is the
+    wrong shape for this layout: the padding is anisotropic (PADX 26, PADY 16),
+    so a 22 px sideways nudge is free while a 22 px vertical one eats the whole
+    gap. Testing the axes separately lets the deadband be as wide as the
+    horizontal slack really is without ever spending vertical slack it does not
+    have - which is where a distance test would have quietly created overlaps.
+    """
+    if not CALM:
+        return d < DAMP
+    return abs(dx) < DAMP and abs(dy) < DAMP * (PADY / float(PADX))
+
+
 def move_len(d):
     """Travel time in frames. A word shoved 800 px and one nudged 40 px must
-    not take the same time, or the long move whips and the short one crawls."""
+    not take the same time, or the long move whips and the short one crawls.
+
+    Peak speed is set by the SLOPE, not the ceiling - d/85 means a long move
+    approaches 85 px/frame however high the ceiling is raised. Reading the
+    ceiling as the speed limit is what let a 2084 px eviction run at 98 px/f
+    with the cap at 28: move_len returned 31 frames, so the cap never applied.
+    CALM therefore halves the slope as well, to d/50, and raises the ceiling
+    far enough that the slope is what actually binds - about 45 px/frame, which
+    is where a move stops reading as a throw. v4 cannot afford either change:
+    it re-packs so often that a 46-frame move would still be in flight when the
+    slot is next needed.
+    """
+    if CALM:
+        return max(8.0, min(46.0, 7.0 + d / 50.0))
     return max(8.0, min(18.0, 7.0 + d / 85.0))
 
 
@@ -350,7 +439,7 @@ def arrival_order():
     for tier in ("B", "M", "S"):
         groups.append([i for i in range(N) if WORDS[i][1] == tier])
     idx = [0] * len(groups)
-    out = [0]
+    out = []
     for _ in range(sum(len(g) for g in groups)):
         best, bestv = -1, -1.0
         for g, grp in enumerate(groups):
@@ -361,19 +450,23 @@ def arrival_order():
                 best, bestv = g, v
         out.append(groups[best][idx[best]])
         idx[best] += 1
-    return out
+    return out + [0]
 
 
 def arrival_order_rank():
-    """v4: the popular answers show up early, with a little local disorder.
+    """v4: the rarest answers show up first and the winner arrives last.
 
-    In v1-v3 the weave exists only to force reflow. v4 gets its reflow from the
-    VOTES instead, and it needs the opposite arrival rule: a word that will end
-    up at 370 pt has to already be near the centre when it starts winning, or
-    the cloud finishes with its heavyweights stranded on the rim. Shuffling
-    inside windows of six keeps it from reading as a sorted list.
+    WORDS is built biggest-first, so walking it backwards gives smallest-first:
+    the one-off answers scatter onto the rim, the mid tier fills in, the big
+    answers push into the middle, and only then does KOLLEKTIV land. Reversing
+    this was a dramaturgy fix, not a technical one - the previous order put the
+    370 pt answer on screen at 1.4 s, which told the audience the result before
+    the question had finished appearing.
+
+    Shuffling inside windows of six keeps it from reading as a sorted list while
+    preserving the overall small-to-large sweep.
     """
-    rest = list(range(1, N))
+    rest = list(range(N - 1, 0, -1))
     seed = 20260814
     for a in range(0, len(rest), 6):
         win = rest[a:a + 6]
@@ -382,16 +475,18 @@ def arrival_order_rank():
             c = seed % (b + 1)
             win[b], win[c] = win[c], win[b]
         rest[a:a + 6] = win
-    return [0] + rest
+    return rest + [0]
 
 
 ARRIVE = arrival_order_rank() if GROW else arrival_order()
 
 # arrival frames: a constant interval reads as a metronome, the mild power
-# curve makes the cloud start deliberately and gather pace as it fills
-FRAME = {ARRIVE[0]: F_HERO}
-for k in range(1, N):
-    u = (k - 1) / float(N - 2)
+# curve makes the cloud start deliberately and gather pace as it fills.
+# ARRIVE ends with the hero, which is scheduled by hand - it has to sit clear of
+# the last supporting answer so its landing reads as a separate beat.
+FRAME = {0: float(F_HERO)}
+for k in range(N - 1):
+    u = k / float(N - 2)
     FRAME[ARRIVE[k]] = F_FIRST + SPAN * math.pow(u, 1.14)
 
 # ---- the event list: what happens, when, to whom ----
@@ -421,7 +516,7 @@ if GROW:
         # every neighbour. Overlapping ripples cross far more often than either
         # alone, and each crossing costs a word off screen: nine words vanished
         # together at f568. Push the regular climb clear so the waves take turns.
-        for h in F_HERO_UP:
+        for h in HERO_BEATS:
             if h - HERO_GUARD < t < h + HERO_GUARD:
                 t = h + HERO_GUARD
         last = t
@@ -529,7 +624,6 @@ def grow_len(r0, r1):
 KEYS = [None] * N
 OPA = [None] * N
 SCL = [None] * N
-SETTLE = {}        # event index -> frame the event's own word stops moving
 STATES = [None] * N   # v4: raw [frame, (x, y), size ratio] per word, for checks
 DIPS = [[] for _ in range(N)]   # v4: [start, length, floor] ghost windows
 moved_total = 0
@@ -557,18 +651,26 @@ def build_grow_keys():
         st = [[fr, gather_from(i, p), r * 0.93], [fr + ENTER_F, p, r]]
         ops = [[fr, 0], [fr + 5, omax]]
         cp, cr = p, r
-        SETTLE[k0] = fr + ENTER_F
 
         for k in range(k0 + 1, len(EV)):
             nq = layouts[k][i]
             nr = SIZES[k][i] / sf
             d = math.hypot(nq[0] - cp[0], nq[1] - cp[1])
             mine = (EV[k][2] == i)
-            if not mine and d < DAMP:
+            if not mine and stay_put(nq[0] - cp[0], nq[1] - cp[1], d):
                 continue
             if mine:                       # this word just won votes
                 t0 = EV[k][0]
                 dur = grow_len(cr, nr)
+                if CALM:
+                    # A word that wins votes usually also gets re-seated, and
+                    # both ride this one duration - so the travel is timed by
+                    # how long the SCALE needs and move_len never gets a say.
+                    # That is the last uncapped path in the cut: DRUZYA was
+                    # thrown 2015 px in the 21 frames its 63->102 step wanted,
+                    # 95 px/f, more than twice anything else in the spot. Give
+                    # the pair whichever duration is slower.
+                    dur = max(dur, move_len(d))
                 grown_total += 1
             else:                          # ... and everyone else gives way
                 # No beat before the ripple here, unlike v2/v3: a growing word
@@ -581,7 +683,12 @@ def build_grow_keys():
                 # a word that can be crossed - concurrent blanks went 7 -> 9.
                 # Words shoved as one block travel in parallel and never meet.
                 t0 = EV[k][0] + ripple_delay(i, k) * 0.4
-                dur = min(move_len(d), 11.0)
+                # v4 caps every yield at 11 frames so words clear their slot
+                # before the next event needs it. At 800 px that is 0.44 s, and
+                # the eye reads it as a word being flung. v5 buys the time back
+                # by moving far less often, so a displacement can take the full
+                # time move_len wanted to give it and read as drift instead.
+                dur = min(move_len(d), 48.0 if CALM else 11.0)
                 moved_total += 1
             # Events come every ~7 frames but a move takes 8-18, so a word can
             # be asked to leave before it has arrived. Queueing the move behind
@@ -590,13 +697,42 @@ def build_grow_keys():
             # then. Cut the transition in flight short instead: re-routing
             # mid-travel is what a reflow does anyway.
             if t0 < st[-1][0] and len(st) > 1:
-                st[-1][0] = max(t0, st[-2][0] + 4.0)
+                if CALM:
+                    # THE source of the flung-word effect, and it is here rather
+                    # than in any duration constant. v4 cuts the in-flight move
+                    # short in TIME only: it drags the arrival key back to t0 but
+                    # leaves the arrival POSITION alone, so a move authored as 18
+                    # frames of travel is made to cover the same distance in as
+                    # few as 4. That is a 4.5x speed-up applied at random, and it
+                    # is what produces the 914 px / 7 frame and 370 px / 4 frame
+                    # moves the speed audit found - both far beyond anything
+                    # move_len can return, which is how they were traced back
+                    # here.
+                    #
+                    # Cut it in SPACE as well: re-route from wherever the word
+                    # had actually got to by t0. Same velocity throughout, no
+                    # compression, and the reflow still happens on time.
+                    a0, a1 = st[-2], st[-1]
+                    u = (t0 - a0[0]) / max(a1[0] - a0[0], 1e-6)
+                    u = min(max(u, 0.0), 1.0)
+                    a1[0] = t0
+                    a1[1] = (a0[1][0] + (a1[1][0] - a0[1][0]) * u,
+                             a0[1][1] + (a1[1][1] - a0[1][1]) * u)
+                    a1[2] = a0[2] + (a1[2] - a0[2]) * u
+                    # the word is no longer where the last event thought it was,
+                    # so the distance - and therefore the travel time - changes
+                    cp, cr = a1[1], a1[2]
+                    d = math.hypot(nq[0] - cp[0], nq[1] - cp[1])
+                    if mine:
+                        dur = max(grow_len(cr, nr), move_len(d))
+                    else:
+                        dur = min(move_len(d), 48.0)
+                else:
+                    st[-1][0] = max(t0, st[-2][0] + 4.0)
             t0 = max(t0, st[-1][0])
             if t0 - st[-1][0] > 0.5:
                 st.append([t0, cp, cr])
             st.append([t0 + dur, nq, nr])
-            if mine:
-                SETTLE[k] = t0 + dur
             if not mine:
                 # every move gets a window; a short shuffle keeps full opacity
                 # unless the crossing sweep later asks for it to be blanked
@@ -686,7 +822,11 @@ def hide_crossings():
     # for another three seconds after the final word lands - sweeping to
     # F_LAST left the busiest stretch of the whole spot unexamined
     end = int(max(s[-1][0] for s in STATES)) + 6
-    for f in range(int(FRAME[0]), end):
+    # Start at the FIRST arrival, whichever word that is. This used to read
+    # FRAME[0] because index 0 - the hero - opened the spot; now that it closes
+    # it, FRAME[0] is f500 and that spelling silently skipped the first twenty
+    # seconds, which is where every crossing lives.
+    for f in range(int(min(FRAME.values())), end):
         # count a word from the moment it is legible, not from the end of its
         # entrance: an answer lands at full opacity 5 frames in, well before it
         # has finished scaling into place, and it can cross a reflowing
@@ -709,6 +849,14 @@ def hide_crossings():
                 # smaller one gives way, because losing the big word reads as
                 # a dropout while losing a 63 pt one reads as a re-shuffle
                 order = (i, j) if WORDS[i][2] <= WORDS[j][2] else (j, i)
+                # ...but never pick a word that has only just arrived. merge_dips
+                # holds every dip until FRAME+6 so a fresh word cannot strobe on-
+                # off-on, which means a dip minted for it here is clamped to start
+                # exactly at the crossing and hides nothing. Hand the blank to the
+                # counterpart instead: it has been on screen long enough to
+                # dissolve without the drop reading as a glitch.
+                if f < FRAME[order[0]] + 12 and f >= FRAME[order[1]] + 12:
+                    order = (order[1], order[0])
                 cand = [dp for w in order for dp in DIPS[w]
                         if dp[0] - 1 <= f <= dp[0] + dp[1] + 1 and dp[2] > 0]
                 if cand:
@@ -813,39 +961,6 @@ for i in ([] if GROW else range(N)):
     OPA[i] = ops
     SCL[i] = scl
 
-# ---- answer marker + counter (v2/v3/v4) ----
-# In v4 the marker pings on EVERY event, not just arrivals: a ping means "a
-# vote just landed here", which is exactly what a climb is. And the counter
-# counts votes rather than words - the number and the type size are then the
-# same fact stated twice.
-MARK, COUNT = [], []
-votes = {}
-mt = -1e9
-for k, e in enumerate(EV):
-    i = e[2]
-    p = layouts[k][i]
-    b = BOX[i]
-    z, kk = depth(i)
-    r = SIZES[k][i] / float(WORDS[i][2])
-    # the marker is drawn at the word's DESTINATION, so it must not appear until
-    # the word has actually arrived there - ping it on the event frame and the
-    # hairline hangs in open space, or strikes through whoever still occupies it
-    tm = SETTLE.get(k, e[0]) if GROW else e[0]
-    tm = max(tm, mt + 1.0)
-    mt = tm
-    # the gap scales with the type: a fixed 34 px reads as an elegant underline
-    # beneath the 370 pt hero but lands in the NEXT word's face under a 102 pt
-    # one, because the packer only leaves a 32 px gutter between rows
-    yb = p[1] + b["ht"] * r / 2.0 + max(12.0, e[3] * 0.09)
-    MARK.append([round(tm, 2),
-                 round(CX + (p[0] - CX) * kk, 1),
-                 round(CY + (yb - CY) * kk, 1),
-                 round(z, 1),
-                 round(b["wd"] * r * kk / MARK_W * 100.0, 2)])
-    votes[i] = VOTES[e[3]] if GROW else 1
-    COUNT.append([round(e[0], 2), sum(votes.values())])
-CNT_TOTAL = COUNT[-1][1]
-
 buf = io.StringIO()
 w = buf.write
 
@@ -871,7 +986,7 @@ for (var i = comp.numLayers; i >= 1; i--)
 
 var made = [];
 function keep(L){ L.comment = "CLOUD_FX"; made.push(L); return L; }
-""" % ({1: "", 2: " --v2", 3: " --v3", 4: " --v4"}[VER], js(COMP_NAME),
+""" % ("" if VER == 1 else " --v%d" % VER, js(COMP_NAME),
        W, H, DUR_F / FPS, FPS, "v%d" % VER))
 
 w("""
@@ -922,16 +1037,8 @@ function straighten(p){
     try { p.setSpatialTangentsAtKey(k, [0,0,0], [0,0,0]); } catch (e1) {}
   }
 }
-function holdAll(p){
-  for (var k = 1; k <= p.numKeys; k++){
-    try { p.setInterpolationTypeAtKey(k, KeyframeInterpolationType.HOLD,
-                                         KeyframeInterpolationType.HOLD); } catch (e0) {}
-  }
-}
 function P(v){ return THREE ? [v[0], v[1], v[2]] : [v[0], v[1]]; }
 function S(s){ return THREE ? [s, s, 100] : [s, s]; }
-// the marker only ever stretches horizontally, so Y stays pinned at 100
-function MS(x){ return THREE ? [x, 100, 100] : [x, 100]; }
 
 function txt(name, str, size, col){
   var L = comp.layers.addText(str);
@@ -1037,55 +1144,6 @@ for (var i3 = 0; i3 < lays.length; i3++){
 }
 """)
 
-if RICH:
-    w("""
-// ---------- answer marker: one hairline that pings under each new answer ----
-// Position keys are HOLD - interpolated ones would send the bar sliding across
-// the frame between answers instead of teleporting under the newest word.
-STEP_ = "marker";
-var MARK = %s;
-var mk = keep(comp.layers.addSolid([%.5f,%.5f,%.5f], "CLOUD MARKER", %d, 4, 1));
-if (THREE) mk.threeDLayer = true;
-// no blur on the marker: it HOLD-teleports between words, so the shutter
-// smears the jump into a white streak across the frame
-var mp = mk.property("Transform").property("Position");
-var ms = mk.property("Transform").property("Scale");
-for (var m2 = 0; m2 < MARK.length; m2++){
-  var mm = MARK[m2];
-  mp.setValueAtTime(f(mm[0]), P([mm[1], mm[2], mm[3]]));
-  ms.setValueAtTime(f(mm[0]),       MS(0));
-  ms.setValueAtTime(f(mm[0] + 3),   MS(mm[4]));
-  ms.setValueAtTime(f(mm[0] + 7),   MS(0));
-}
-holdAll(mp);
-easeAll(ms);
-mk.inPoint = f(MARK[0][0]);
-mk.outPoint = f(MARK[MARK.length - 1][0] + 8);
-""" % (jsonjs(MARK), BLUE_L[0], BLUE_L[1], BLUE_L[2], MARK_W))
-
-    w("""
-// ---------- live counter, bottom left ----------
-STEP_ = "counter";
-var COUNT = %s;
-var cn = txt("CLOUD COUNTER", "%s  %s", %d, [%.5f,%.5f,%.5f]);
-var cr = cn.sourceRectAtTime(0, false);
-cn.property("Transform").property("Anchor Point").setValue([0, 0]);
-cn.property("Transform").property("Position").setValue([150 - cr.left,
-                                                        H - 132 - cr.top - cr.height / 2]);
-var st = cn.property("Source Text");
-for (var c2 = 0; c2 < COUNT.length; c2++){
-  var cd = st.value;
-  var nn = COUNT[c2][1];
-  cd.text = "%s  " + (GROW ? nn : (nn < 10 ? "0" + nn : nn) + " / 41");
-  st.setValueAtTime(f(COUNT[c2][0]), cd);
-}
-var co = cn.property("Transform").property("Opacity");
-co.setValueAtTime(f(COUNT[0][0]), 0);
-co.setValueAtTime(f(COUNT[0][0] + 8), 72); reveal(co);
-cn.inPoint = f(COUNT[0][0]);
-""" % (jsonjs(COUNT), js(CNT_LABEL), str(CNT_TOTAL) if GROW else "41 / 41",
-       CNT_SIZE, BLUE_L[0], BLUE_L[1], BLUE_L[2], js(CNT_LABEL)))
-
 if IS3D:
     w("""
 // ---------- camera: the slow move that replaces v1's flat scale-up ----------
@@ -1151,7 +1209,10 @@ sw.outPoint = f(%d + 60);
 """ % (F_SWEEP, F_SWEEP, F_SWEEP, F_SWEEP))
 
 w("""
-// ---------- logo sign-off ----------
+// ---------- logo: up from the first frame ----------
+// It is the sender, not the punchline. Holding it for the whole spot lets the
+// cloud be the only thing that changes, and gives the question an owner while
+// it is still being asked.
 STEP_ = "logo";
 var logoNote = "skipped";
 try {
@@ -1205,8 +1266,8 @@ print("words: %d   events: %d   relocations: %d   climbs: %d"
 print("pos keys: %d   max on one word: %d   packer bails: %d"
       % (nk, kmax, BAILS[0]))
 if GROW:
-    print("last size change: f%.0f (%.1f s)   votes: %d   crossings hidden: %d"
-          % (EV[-1][0], EV[-1][0] / FPS, CNT_TOTAL, crossings_hidden))
+    print("last size change: f%.0f (%.1f s)   crossings hidden: %d"
+          % (EV[-1][0], EV[-1][0] / FPS, crossings_hidden))
 x0 = min(FINAL[i][0] - BOX[i]["wd"] / 2.0 for i in range(N))
 x1 = max(FINAL[i][0] + BOX[i]["wd"] / 2.0 for i in range(N))
 y0 = min(FINAL[i][1] - BOX[i]["ht"] / 2.0 for i in range(N))

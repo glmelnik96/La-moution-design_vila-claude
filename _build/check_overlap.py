@@ -12,7 +12,8 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.argv = [sys.argv[0], "--v4"]
+VERFLAG = os.environ.get("CLOUD_VER", "--v4")
+sys.argv = [sys.argv[0], VERFLAG]
 G = {"__name__": "__gen__", "__file__": os.path.join(HERE, "gen_cloud.py")}
 buf, sys.stdout = sys.stdout, io.StringIO()
 exec(compile(open(G["__file__"], encoding="utf-8").read(), G["__file__"], "exec"), G)

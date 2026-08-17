@@ -664,3 +664,272 @@ Two things that fixed it, and one that did not:
   is backwards: a longer stagger keeps words in flight longer, and a word in flight is a
   word that can be crossed. Concurrency went 7 -> 9. Words shoved as one block travel in
   parallel and never meet.
+
+## 37. A geometry model is not the render — audit collisions from AE, not from the packer
+
+LIVE-VERIFIED. `check_overlap.py` swept every frame of the v4 cloud and reported **1 real
+collision**. The rendered frames showed words sitting on top of each other, including in
+the held final layout that carries the last five seconds of the spot. The sweep was not
+lying about its own numbers; it was auditing the *packer's* idea of where the words are,
+which is not where AE puts them.
+
+**On a 3D layer `sourceRect * scale` is NOT the on-screen box** — it skips the camera
+projection, and `Layer.toComp()` does not exist in this build (verified: `typeof L.toComp
+=== "undefined"` on a layer with `threeDLayer === true`). Project by hand:
+
+```jsx
+// anchor is [0,0], so scale multiplies the source rect about the layer origin
+var r = L.sourceRectAtTime(t, false);
+var p = L.position.valueAtTime(t, false);        // world x, y, z
+var s = L.scale.valueAtTime(t, false)[0] / 100;
+var wl = p[0] + r.left * s, wt = p[1] + r.top * s;    // world-space ink box
+// then through the camera (cam = its Position value, ZOOM = its Zoom):
+//   screen_x = CX + (wl - cam[0]) * ZOOM / (z - cam[2])
+```
+
+Getting this wrong both invents defects and hides real ones. Same frame, three answers:
+
+| f625, held final layout | packer model | `sourceRect * scale` | projected properly |
+|---|---|---|---|
+| ink overlaps | 0 | 6 | **6 — a different 6** |
+| МОЩЬ x ЛЮДИ | clean | 43.7%, 100x61 px | **clean** — pure arithmetic artefact |
+| ДВИЖЕНИЕ x КОЛЛЕКТИВ | clean | clean | **113x90 px** — the one you can see |
+| ПРОФЕССИОНАЛЫ x КОМАНДА | clean | 74x72 px | 13x77 px — renders "ПРОФЕССИОНАЛЬ" |
+
+Only the last column matches the rendered pixels. Check an auditor against a render before
+trusting any number it prints.
+
+The packer column is clean for a second reason on top of the projection: its ink boxes were
+stale and too narrow, so in its own world the words really did not touch. Two wrong models
+agreeing on "clean" is not corroboration — see the differencing recipe below.
+
+- **Measured boxes go stale silently.** `boxes.json` is a snapshot of ink boxes at the
+  moment `measure.jsx` ran. Every later edit to sizes, tiers or the vote ladder invalidates
+  it — and so does anything that changes how the font resolves — and nothing complains.
+  Re-measure in the same session you build in.
+- **Ink boxes do not scale linearly.** A word set at 200 pt is not its 100 pt box doubled;
+  hinting, side bearings and tracking all shift. Modelling size change as `BOX * ratio`
+  accumulates error exactly where the v4 vote-climb applies the largest ratios.
+- **Area fraction is the wrong metric for type.** «8% of the smaller box» sounds like a
+  brush-past and is in fact a 29x69 px letter-on-letter hit — a long word's box is mostly
+  empty, so real glyph collisions score tiny. Gate on **minimum px gap between boxes**
+  (negative = overlap), not on overlapped area.
+- **Audit the held frames hardest.** A crossing during a re-pack is on screen for 5 frames;
+  a defect in the final layout holds for seconds and is the frame that gets screenshotted.
+
+### The actual culprit: a stale `boxes.json`, found by differencing model against AE
+
+My first diagnosis was the camera, and it was wrong. Write the differencing script before
+writing the explanation — the explanation is cheap to invent and always sounds plausible.
+
+Difference the model against AE one layer at a time, in this order:
+
+1. **Transforms.** Read `position` / `scale` from AE at one frame and compare with what the
+   generator thinks it wrote. Here they agreed to **0.5 px on all 41 words** — so the
+   keyframe authoring, the depth compensation and the easing were all exonerated at once,
+   and the whole camera theory with them.
+2. **Boxes.** Same frame, compare cached `BOX[i]` against `sourceRectAtTime`. Heights and
+   `left`/`top` matched; **every width was 5–8% short.** КОЛЛЕКТИВ: cache 2149, AE 2323.
+   The deficit scaled with character count x font size — a per-glyph advance difference,
+   i.e. the cache had been measured under a font that resolved differently.
+
+That is the entire bug. A packer given boxes 7% too narrow packs a layout that is 7% too
+tight, and the overlaps land exactly where the longest words meet. Re-measuring dropped the
+disagreement to zero; the packer still fit with 0 bails. **`boxes.json` is a build artifact,
+not input** — regenerate it in the same session that builds the comp.
+
+The tell that it is the boxes and not the transforms: heights match and widths do not. A
+projection or scale error moves both.
+
+### Camera drift is real, but it is a ~13 px effect — size it before blaming it
+
+The depth trick (`scale = k`, position pushed out from centre by the same
+`k = (z + CAMD) / CAMD`) reproduces the packed 2D layout **exactly, and only while the
+camera sits at home** `z = -CAMD`, `zoom = CAMD`, centred. Once the camera drifts, each tier
+is magnified and slid by a slightly different amount, so cross-tier pairs do move relative
+to one another. That part is true.
+
+But arithmetic it before building a theory on it. For `CAMD = 5200`, tiers at
+`z = -520..+520`, camera at `(2121, 1041, -5095)`:
+
+| tier | z | magnification | x shift |
+|---|---|---|---|
+| H | -520 | 1.0229 | -83.0 |
+| B | -230 | 1.0217 | -78.0 |
+| M | +180 | 1.0199 | -72.0 |
+| S | +520 | 1.0186 | -67.6 |
+
+Worst cross-tier differential: **~11 px of shift and 0.3% of scale.** It cannot produce a
+113 px overlap. A camera excursion this gentle is comfortably inside normal packer padding
+(`PADX = 26`).
+
+- **The give-away that a layout is depth-compensated** is several distinct scale values on
+  the settled final frame (here 90 / 95.6 / 103.5 / 110, one per tier). Every audit of such
+  a layout must go through the camera — but going through the camera is a correctness fix,
+  not necessarily a *large* one.
+- **Parallax and a guaranteed layout are the same budget spent twice.** Either the camera
+  returns home by the time the layout must be clean, or the packer carries inter-tier margin
+  sized for the camera's worst excursion. Size that excursion first: if it is 11 px, the
+  padding already covers it and there is nothing to buy.
+
+## 38. Reordering a sequence breaks every index that was standing in for a time
+
+Reversing the reveal (hero first -> hero last) needed one line in the ordering
+function. It also silently disabled the collision blanker, because the blanker
+opened with:
+
+```python
+for f in range(int(FRAME[0]), end):
+```
+
+`FRAME[0]` is the hero's arrival frame. It was written when the hero opened the
+spot, so `FRAME[0]` and "the first thing that happens" were the same number and
+either spelling worked. After the reorder `FRAME[0]` became f500 and the sweep
+skipped the first twenty seconds - which is where every crossing lives. The
+generator reported `crossings hidden: 44` and the offline auditor reported 29
+real collisions in the stretch the blanker never looked at.
+
+**The tell is two of your own tools disagreeing.** A blanker that claims to have
+solved crossings and an auditor that still finds them are not both wrong about
+geometry; one of them is not being run over the same frames. Diff their loop
+bounds before you diff their math.
+
+The fix is to stop letting an index proxy for a time:
+
+```python
+for f in range(int(min(FRAME.values())), end):
+```
+
+Grep for every `[0]` and `[-1]` subscript on an ordered collection before
+reordering it. Each one is an assumption about position that the reorder is
+about to falsify, and none of them will raise.
+
+## 39. Never blank a word that has just appeared - blank its counterpart
+
+The crossing blanker hides a word by dipping its opacity to zero while it moves.
+A separate rule holds every dip until `FRAME[i] + 6` so a dip cannot land inside
+the word's own 5-frame entrance and make it strobe on-off-on.
+
+Those two rules collide when the crossing happens *at* `FRAME[i] + 6`: the
+blanker mints a dip, the clamp shoves its start to exactly the colliding frame,
+and the word is still at 85% opacity through the whole crossing. Three
+collisions survived four sweep passes this way, and each extra pass just minted
+another dip that the clamp ate identically - a fixed point the `if not got:
+break` loop cannot detect, because it counts mints, not effect.
+
+The fix is in the choice of victim, not in the clamp:
+
+```python
+order = (i, j) if WORDS[i][2] <= WORDS[j][2] else (j, i)
+if f < FRAME[order[0]] + 12 and f >= FRAME[order[1]] + 12:
+    order = (order[1], order[0])
+```
+
+A word that has been on screen for half a second can dissolve without the drop
+reading as a glitch; a word that appeared four frames ago cannot. 29 -> 3 came
+from fixing the loop bound in quirk 38; 3 -> 0 came from this.
+
+**General shape:** when a guard clause and a solver both act on the same
+timeline, the guard will quietly neutralise the solver at the boundary. Check
+whether the solver has a second candidate to act on instead of weakening the
+guard.
+
+## 40. `saveFrameToPng` returns before the file is on disk
+
+The call returns, the JSON payload comes back listing eight paths, and reading
+them immediately gives:
+
+```
+OSError: image file is truncated (0 bytes not processed)
+```
+
+`ls -la` showed six of the eight files present and the seventh still growing.
+The return value reports that AE *accepted* the render, not that it finished
+writing. At 4096x2160 the flush takes seconds per frame.
+
+Sleep before reading — 25–30 s for a batch of eight at this size — or poll the
+file sizes until two consecutive reads match. Do not treat the returned path
+list as a completion signal.
+
+Related: render each version's frames under a distinct prefix (`v5beat400.png`,
+not `beat400.png`). Stale PNGs from the previous version sit in `Folder.temp`
+with plausible names and are indistinguishable from fresh ones once you are
+reading them by path.
+
+## 41. Truncating an in-flight move in time is a random speed-up
+
+A word asked to move again before its last move finished has to have that move
+cut short. The obvious spelling cuts the keyframe's *time*:
+
+```python
+st[-1][0] = max(t0, st[-2][0] + 4.0)
+```
+
+The word still travels the full distance to the old destination — it now just
+does it in the frames that remain. Interrupt at 20% of the way through and you
+have applied a 4.5x speed-up to a move that was authored at a calm speed. That
+is the "word appears and then flies across half the screen" complaint, and it is
+invisible in the duration constants because nothing in them is wrong.
+
+The fix is to truncate in space as well: sample where the word actually was at
+`t0`, make that the endpoint, and re-derive the remaining distance and duration
+from it.
+
+**General shape:** a keyframe pair encodes distance *and* time. Editing one
+without the other silently edits velocity, and velocity is the thing a viewer
+perceives.
+
+## 42. Peak speed comes from the slope, not the ceiling
+
+```python
+return max(8.0, min(18.0, 7.0 + d / 85.0))
+```
+
+Reads like a speed limit. It is not one. For large `d` the `min` never binds, so
+the duration is `d/85` and the speed asymptotically approaches **85 px/frame**
+however the ceiling is set. A 2084 px eviction ran at 98 px/f with the ceiling
+at 28, because `move_len` returned 31 frames and the cap was never reached.
+
+To actually slow long moves, halve the divisor and raise the ceiling until the
+slope is what binds. Cap and slope pull in opposite directions: the ceiling
+limits how long a move may take, the slope limits how fast it may go.
+
+**General shape:** in `min(cap, a + d/k)`, `k` is the speed and `cap` is a
+deadline. If you want a speed guarantee, read `k`.
+
+## 43. A guard that protects one event type does not protect the others
+
+`HERO_GUARD` keeps ordinary size climbs off the hero's beats, so the hero's
+growth reads as a solo. It says nothing about *arrivals*. Every hero beat in v4
+happened to fall after the last word had landed, so the gap never mattered and
+was never written down.
+
+v5 hand-scheduled one extra hero rung at f400, inside the arrival window
+(`F_LAST = 470`). The surge re-packed the layout and rippled straight through
+two words that had appeared a second earlier — 700 px at 50 px/f each, exactly
+the defect the version existed to remove. Moving the rung to f490, past the last
+arrival, cost nothing and fixed both.
+
+**General shape:** a guard's coverage is defined by the events it was written
+against, not by its name. Before scheduling a new event by hand, check it
+against the *windows* other events live in, not just against the guard.
+
+## 44. A deadband's real clearance is `PAD - 2*DAMP`
+
+`stay_put` lets a word ignore a displacement smaller than `DAMP` so the layout
+stops fidgeting. The packer lays out a grid with `PADX` of clearance between
+neighbours, so the comment claimed the worst case was `PADX - DAMP`.
+
+Both words either side of a gap may ignore a move, and they may ignore them
+*toward each other*. The guarantee is `PADX - 2*DAMP`. With `PADX=26` and
+`DAMP=24` that is −22 px — the two words are allowed to touch.
+
+The measurement that finds this is not the collision checker.
+`check_overlap.py` gates on intersection, so two words 1 px apart score exactly
+as well as two 100 px apart, and a pair that reads on screen as one run-on word
+scores clean. `gaps.py` reports the distribution of the *gap* instead.
+
+**General shape:** every tolerance that both parties to a constraint may spend
+independently costs the constraint twice. And a checker that gates on a
+threshold cannot tell you how close you are to it — to see margin, measure
+margin.
