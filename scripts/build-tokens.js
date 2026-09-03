@@ -102,6 +102,22 @@ function buildJsx(t) {
     const lit = Array.isArray(v) ? '[' + v.join(', ') + ']' : (typeof v === 'string' ? '"' + v + '"' : String(v));
     L.push('CR.GEO.' + ident(k).toUpperCase() + ' = ' + lit + ';');
   });
+  L.push('CR.SPRING = {};  // {stiffness, damping ratio}; use M.springBake(prop, ms0, v0, v1, "SNAPPY")');
+  Object.keys(t.spring).forEach((k) => {
+    if (k[0] === '_') return;
+    L.push('CR.SPRING.' + ident(k).toUpperCase() + ' = { stiffness: ' + t.spring[k].stiffness + ', damping: ' + t.spring[k].damping + ' };');
+  });
+  L.push('CR.ENTRANCE = {};');
+  Object.keys(t.entrance).forEach((k) => {
+    if (k[0] === '_') return;
+    L.push('CR.ENTRANCE.' + ident(k).toUpperCase() + ' = ' + t.entrance[k] + ';');
+  });
+  L.push('CR.CAMERA = {};');
+  Object.keys(t.camera).forEach((k) => {
+    if (k[0] === '_') return;
+    const v = t.camera[k];
+    L.push('CR.CAMERA.' + ident(k).toUpperCase() + ' = ' + (Array.isArray(v) ? '[' + v.join(', ') + ']' : v) + ';');
+  });
   L.push('CR.FORMAT = {};');
   Object.keys(t.format).forEach((k) => {
     if (k[0] === '_') return;

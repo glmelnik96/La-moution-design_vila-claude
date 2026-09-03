@@ -793,3 +793,144 @@ M.run = function (label, fn) {
   out.warnings = M.warnings;
   return out;
 };
+
+// ───────────────────────────── v1.1: market-practice additions ─────────────────────────────
+// Springs (closed-form damped oscillator, mass 1, 0→1, v0 = 0) — SAME math as html/engine/motion.js
+// (Motion.springSolver), verified equal in scripts/lib.test.js. Baked to per-frame keys because
+// AE has no spring interpolation; the keys are linear between frames (invisible at 25+ fps).
+M.springSolver = function (stiffness, zeta) {
+  var w0 = Math.sqrt(stiffness);
+  if (zeta < 1) {
+    var wd = w0 * Math.sqrt(1 - zeta * zeta);
+    return function (t) { return 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd * t) + (zeta * w0 / wd) * Math.sin(wd * t)); };
+  }
+  if (zeta === 1) return function (t) { return 1 - Math.exp(-w0 * t) * (1 + w0 * t); };
+  var s = Math.sqrt(zeta * zeta - 1);
+  var r1 = -w0 * (zeta - s), r2 = -w0 * (zeta + s);
+  return function (t) { return 1 - (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r2 - r1); };
+};
+M.springOf = function (nameOrCfg) {
+  if (typeof nameOrCfg === "string") {
+    var key = nameOrCfg.toUpperCase().replace(/^SPRING:/, "");
+    if (!CR.SPRING[key]) throw new Error("unknown spring: " + nameOrCfg);
+    return CR.SPRING[key];
+  }
+  return nameOrCfg;
+};
+// Settle time in seconds (|1−x| < 0.001 and nearly still), 1 ms search like the HTML engine.
+M.springDuration = function (cfg) {
+  var c = M.springOf(cfg), f = M.springSolver(c.stiffness, c.damping), settle = 0;
+  for (var t = 0; t <= 10; t += 0.001) {
+    if (Math.abs(1 - f(t)) < 0.001 && Math.abs(f(t + 0.016) - f(t)) < 0.0005) { settle = t; break; }
+    settle = t;
+  }
+  return Math.ceil(settle * 1000) / 1000;
+};
+// Bake a spring from v0 to v1 starting at ms0: one LINEAR key per frame until settled. Returns the key count.
+// Position keys are flattened (straight path). v0/v1 numbers or arrays.
+M.springBake = function (prop, ms0, v0, v1, cfg) {
+  var c = M.springOf(cfg || "M3_EXPRESSIVE");
+  var f = M.springSolver(c.stiffness, c.damping);
+  var dur = M.springDuration(c);
+  var frames = Math.ceil(dur * M.FPS);
+  var t0 = M.f(ms0), n = 0;
+  var arr = M.isArray(v0);
+  for (var i = 0; i <= frames; i++) {
+    var u = (i >= frames) ? 1 : f(i * M.FD);
+    var v;
+    if (arr) { v = []; for (var d = 0; d < v0.length; d++) v.push(v0[d] + (v1[d] - v0[d]) * u); }
+    else v = v0 + (v1 - v0) * u;
+    prop.setValueAtTime(t0 + i * M.FD, v);
+    n++;
+  }
+  var k0 = prop.nearestKeyIndex(t0);
+  for (var k = k0; k < k0 + n; k++) {
+    try { prop.setInterpolationTypeAtKey(k, KeyframeInterpolationType.LINEAR, KeyframeInterpolationType.LINEAR); } catch (e0) {}
+  }
+  M.flatten(prop);
+  return n;
+};
+// Gaussian blur in → 0 (transition aid only; brand: ≤ 6 px at 1080p, 0 at rest). <!-- VERIFY matchName -->
+M.blurIn = function (L, ms0, opts) {
+  var o = M.merge({ from: M.px(CR.ENTRANCE.BLUR_PX), dur: CR.MS.BASE, ease: "enter", out: false }, opts);
+  var fx = M.fx(L).addProperty("ADBE Gaussian Blur 2");
+  var b = M.prop(fx, "ADBE Gaussian Blur 2-0001", "Blurriness");
+  try { M.prop(fx, "ADBE Gaussian Blur 2-0003", "Repeat Edge Pixels").setValue(true); } catch (e0) {}
+  if (o.out) M.tween(b, ms0, ms0 + o.dur, 0, o.from, "exit");
+  else M.tween(b, ms0, ms0 + o.dur, o.from, 0, o.ease);
+  return L;
+};
+// The premium entrance: opacity + rise + scale (+ blur) together. opts { rise, dx, scale, blur, dur, ease|spring }
+M.premiumIn = function (L, ms0, opts) {
+  var o = M.merge({ rise: M.px(CR.ENTRANCE.RISE_PX), dx: 0, scale: CR.ENTRANCE.SCALE_FROM, blur: 0, dur: CR.MS.BASE, ease: "enter", spring: null }, opts);
+  var p = M.pos(L), land = p.value;
+  var from = [land[0] - o.dx, land[1] - o.rise];
+  if (land.length === 3) from.push(land[2]);
+  var sc = M.scale(L), s1 = sc.value, s0 = [];
+  for (var i = 0; i < s1.length; i++) s0.push(i < 2 ? s1[i] * o.scale : s1[i]);
+  if (o.spring) {
+    M.springBake(p, ms0, from, land, o.spring);
+    M.springBake(sc, ms0, s0, s1, o.spring);
+    o.dur = Math.round(M.springDuration(o.spring) * 1000);
+  } else {
+    M.tween(p, ms0, ms0 + o.dur, from, land, o.ease);
+    M.tween(sc, ms0, ms0 + o.dur, s0, s1, o.ease);
+  }
+  M.tween(M.opacity(L), ms0, ms0 + Math.round(o.dur * 0.6), 0, 100, "enter");
+  if (o.blur) M.blurIn(L, ms0, { from: o.blur, dur: Math.round(o.dur * 0.8) });
+  return L;
+};
+// Exit: ≤ 10 frames, ease-in, opacity + short drop. opts { drop, dx, dur }
+M.exitOut = function (L, ms0, opts) {
+  var o = M.merge({ drop: -M.px(32), dx: 0, dur: Math.round(CR.ENTRANCE.EXIT_FRAMES_MAX / M.FPS * 1000) }, opts);
+  var p = M.pos(L), here = p.valueAtTime(M.f(ms0), false);
+  var to = [here[0] + o.dx, here[1] + o.drop];
+  if (here.length === 3) to.push(here[2]);
+  M.tween(p, ms0, ms0 + o.dur, here, to, "exit");
+  M.tween(M.opacity(L), ms0, ms0 + o.dur, 100, 0, "exit");
+  return L;
+};
+// Word cascade on ONE text layer via a Text Animator (Based On = words): each word rises + fades in,
+// offset sweeping across the string. opts { rise, each (ms per word), words (count, for the sweep length) }
+// <!-- VERIFY: ADBE Text Range Advanced / Type2 = 3 (words), Percent Offset sweep -->
+M.wordCascade = function (L, ms0, opts) {
+  var o = M.merge({ rise: M.px(30), each: Math.round(CR.ENTRANCE.WORD_STAGGER_FRAMES / M.FPS * 1000), words: 4, dur: CR.MS.BASE, ease: "enter" }, opts);
+  var anims = L.property("ADBE Text Properties").property("ADBE Text Animators");
+  var anim = anims.addProperty("ADBE Text Animator");
+  anim.name = "word cascade";
+  var sels = anim.property("ADBE Text Selectors");
+  if (sels.numProperties === 0) { try { sels.addProperty("ADBE Text Selector"); } catch (e0) { M.warn("range selector: " + e0); } }
+  var sel = sels.property(1);
+  try { sel.property("ADBE Text Range Advanced").property("ADBE Text Range Type2").setValue(3); } catch (e1) { M.warn("based on words: " + e1); }
+  try { sel.property("ADBE Text Range Advanced").property("ADBE Text Range Shape").setValue(2); } catch (e2) { M.warn("ramp up shape: " + e2); }
+  var props = anim.property("ADBE Text Animator Properties");
+  var ap = props.addProperty("ADBE Text Position 3D");
+  ap.setValue([0, o.rise, 0]);
+  var op = props.addProperty("ADBE Text Opacity");
+  op.setValue(0);
+  // sweep the selector offset from -100% (nothing selected → all words "animated" = hidden) to +100%
+  var off = sel.property("ADBE Text Percent Offset");
+  var total = o.dur + o.each * Math.max(1, o.words - 1);
+  M.tween(off, ms0, ms0 + total, -100, 100, "linear");
+  return L;
+};
+// Camera push: parent the given layers to a null at comp centre and scale it 100 → 100·push over [ms0, ms1].
+M.cameraPush = function (layers, ms0, ms1, push) {
+  push = push || CR.CAMERA.PUSH_SCALE;
+  var nul = M.keep(M.comp.layers.addNull(M.comp.duration));
+  nul.name = "CAMERA";
+  M.anchor(nul).setValue([M.W / 2, M.H / 2]);
+  M.pos(nul).setValue([M.W / 2, M.H / 2]);
+  for (var i = 0; i < layers.length; i++) layers[i].parent = nul;   // parent BEFORE any keys (quirk #29)
+  var sc = M.scale(nul);
+  M.tween(sc, ms0, ms1, [100, 100], [100 * push, 100 * push], "linear");
+  nul.enabled = false;
+  return nul;
+};
+// Follow-through helper: run fn for each layer with an accumulating offset (default 60 ms) — the
+// hero first, then support elements landing one after another.
+M.followThrough = function (layers, ms0, fn, offsetMs) {
+  offsetMs = offsetMs || CR.ENTRANCE.FOLLOW_THROUGH_DELAY_MS;
+  for (var i = 0; i < layers.length; i++) fn(layers[i], ms0 + i * offsetMs, i);
+  return layers;
+};

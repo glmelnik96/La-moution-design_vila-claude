@@ -94,6 +94,28 @@ Rule of thumb for time: brand tokens are milliseconds — `sec(MS.base)`; frames
 | `Brand.counter({decimals, prefix, suffix})` | setter for prop `n` (U+202F thousands, comma decimals) | `n: [0, 12500]`, `ease: 'count'` |
 | `Brand.colorMix('#222222', '#26D07C', 'color')` | setter for prop `mix` | the one green accent, last |
 
+### v1.1 — market-practice additions (see `reference/motion-best-practices.md`)
+
+| API | What |
+|---|---|
+| `ease: 'spring:m3_expressive'` / `'spring:snappy'` / `{ stiffness, damping }` | closed-form damped spring; **time-based** — omit `dur`, the tween takes the spring's settle time (`Motion.spring(name).duration`). ζ ≥ 0.8 for Cloud.ru. |
+| props `blur` (px), `letterSpacing` (em), `rotateX rotateY z` | blur is a transition aid (0 at rest); 3D props add `perspective(1200px)` |
+| `opts.mblur: 1` | velocity-driven motion blur on `x`/`y` above 30 px/frame (wipes, whip pans) |
+| `Brand.words(el)` / `Brand.chars(el)` | word / character spans (chars only for code) |
+| `Brand.highlight(wordEl)` | the one green word: returns its underline (`scaleX: [0, 1]`, 5–8 frames after the word lands) |
+| `Brand.odometer(parent, { digits, cls })` | rolling digit columns, prop `n`, `set: od.set` |
+| `Brand.texture(parent, { kind:'dots'|'grid', opacity })` | ambient dot field / hairline grid, prop `drift` (seconds) with `set: tex.drift` |
+| `Brand.enter(tl, targets, { at, rise, scale, blur, stagger, ease })` | the premium entrance (opacity + rise + scale + blur) |
+| `Brand.exit(tl, targets, { at, dur, drop, stagger, from:'end' })` | ≤ 10-frame exits, reverse stagger |
+| `Brand.camera(tl, sceneEl, t0, t1, { push, dx, layers:[{el, depth}] })` | 2–3 % push with 3-layer parallax |
+| `Brand.scaleThrough(tl, outEl, inEl, at)` | hidden-cut transition: out scales 1→1.06 + blur, in scales 0.96→1. Pass the **whole incoming scene** as `inEl` (later scenes sit on top). |
+| `Brand.anticipate(tl, targets, { axis, back, travel })` | 20–30 % wind-up before a big move |
+| `Brand.breathe(amp, period)` | setter for prop `breath` — texture tier only |
+
+Scene overlap: `addScene(name, tone, seconds, build, lead)` in the showreel starts a scene `lead`
+seconds early so a wipe or scale-through can hide the cut; entrances may start at negative
+offsets inside that lead.
+
 ## 3. Preview
 
 ```bash

@@ -1,7 +1,7 @@
 {
   "meta": {
     "brand": "Cloud.ru 2.0",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "source": "Брендбук Cloud.ru 2.0 (49 стр.) + Cloud.ru_Template_2026 canonical rules + motion adaptation (this repo)",
     "generated": [
       "scripts/lib/tokens.jsx",
@@ -10,58 +10,118 @@
     ],
     "note": "Single source of truth for BOTH engines. Edit this file, then run `node scripts/build-tokens.js`. Never hand-edit the generated files."
   },
-
   "color": {
     "base": {
-      "green":    { "hex": "#26D07C", "role": "accent — the single signal colour; ≤10% of frame area, never body text, never arrows" },
-      "black":    { "hex": "#222222", "role": "primary text, dark ground" },
-      "white":    { "hex": "#FFFFFF", "role": "primary ground, text on dark" },
-      "gray":     { "hex": "#F2F2F2", "role": "secondary ground, hairlines, inactive" },
-      "graphite": { "hex": "#343F48", "role": "secondary text, scheme blocks, arrows on light" },
-      "yellow":   { "hex": "#CFF500", "role": "secondary KPI / process colour-coding — always together with green, max one extra colour per frame" },
-      "purple":   { "hex": "#A068FF", "role": "AI / innovation context — same rule as yellow" },
-      "blue":     { "hex": "#C0E0FC", "role": "educational / technical — same rule as yellow" }
+      "green": {
+        "hex": "#26D07C",
+        "role": "accent — the single signal colour; ≤10% of frame area, never body text, never arrows"
+      },
+      "black": {
+        "hex": "#222222",
+        "role": "primary text, dark ground"
+      },
+      "white": {
+        "hex": "#FFFFFF",
+        "role": "primary ground, text on dark"
+      },
+      "gray": {
+        "hex": "#F2F2F2",
+        "role": "secondary ground, hairlines, inactive"
+      },
+      "graphite": {
+        "hex": "#343F48",
+        "role": "secondary text, scheme blocks, arrows on light"
+      },
+      "yellow": {
+        "hex": "#CFF500",
+        "role": "secondary KPI / process colour-coding — always together with green, max one extra colour per frame"
+      },
+      "purple": {
+        "hex": "#A068FF",
+        "role": "AI / innovation context — same rule as yellow"
+      },
+      "blue": {
+        "hex": "#C0E0FC",
+        "role": "educational / technical — same rule as yellow"
+      }
     },
     "extended": {
       "_rule": "Special projects only. Never mixed with base accents in one piece. Only the muted (row 2/3) variants on text frames; saturated row only for illustration / KV.",
-      "aquamarine": { "hex": "#18F4CF", "muted": "#C9F2EA" },
-      "ultramarine": { "hex": "#0063FF", "muted": "#C9D9F2" },
-      "magenta":    { "hex": "#FF00FF", "muted": "#C067C0" },
-      "carrot":     { "hex": "#FF4517", "muted": "#DD7D64" },
-      "coral":      { "hex": "#FF0642", "muted": "#E25B7C" }
+      "aquamarine": {
+        "hex": "#18F4CF",
+        "muted": "#C9F2EA"
+      },
+      "ultramarine": {
+        "hex": "#0063FF",
+        "muted": "#C9D9F2"
+      },
+      "magenta": {
+        "hex": "#FF00FF",
+        "muted": "#C067C0"
+      },
+      "carrot": {
+        "hex": "#FF4517",
+        "muted": "#DD7D64"
+      },
+      "coral": {
+        "hex": "#FF0642",
+        "muted": "#E25B7C"
+      }
     },
-    "arrow": { "light": "#8C959E", "dark": "#8C959E", "_rule": "arrows are neutral grey, 1pt-equivalent; never green" },
-    "area_budget": { "ground": "60-70%", "graphite_text": "20-30%", "green": "5-10%", "extra": "0-5%" }
+    "arrow": {
+      "light": "#8C959E",
+      "dark": "#8C959E",
+      "_rule": "arrows are neutral grey, 1pt-equivalent; never green"
+    },
+    "area_budget": {
+      "ground": "60-70%",
+      "graphite_text": "20-30%",
+      "green": "5-10%",
+      "extra": "0-5%"
+    }
   },
-
   "type": {
     "family": "SB Sans Display",
-    "fallback": ["Verdana", "system-ui", "sans-serif"],
+    "fallback": [
+      "Verdana",
+      "system-ui",
+      "sans-serif"
+    ],
     "ae_postscript": {
-      "regular":  "SBSansDisplay-Regular",
-      "medium":   "SBSansDisplay-Medium",
+      "regular": "SBSansDisplay-Regular",
+      "medium": "SBSansDisplay-Medium",
       "semibold": "SBSansDisplay-SemiBold",
-      "bold":     "SBSansDisplay-Bold",
+      "bold": "SBSansDisplay-Bold",
       "_note": "PostScript names as AE expects them in TextDocument.font. LIVE-VERIFY on the local machine (read back .font after setValue, see quirk #9). Verdana fallback: 'Verdana' / 'Verdana-Bold'."
     },
-    "weights": { "body": 400, "heading": 600, "kpi": 400 },
+    "weights": {
+      "body": 400,
+      "heading": 600,
+      "kpi": 400
+    },
     "scale_1080": {
       "_note": "px at 1920×1080. Slide canon (1280×720) × 1.5. Multiply by format.scale for other canvases.",
-      "title":     132,
-      "subtitle":  42,
-      "section":   66,
-      "divider":   144,
-      "colhead":   30,
-      "body":      24,
-      "caption":   18,
-      "kpi_hero":  300,
+      "title": 132,
+      "subtitle": 42,
+      "section": 66,
+      "divider": 144,
+      "colhead": 30,
+      "body": 24,
+      "caption": 18,
+      "kpi_hero": 300,
       "kpi_second": 132,
-      "kpi_unit":  132,
-      "kpi_desc":  20,
-      "step_num":  66,
-      "label":     16
+      "kpi_unit": 132,
+      "kpi_desc": 20,
+      "step_num": 66,
+      "label": 16
     },
-    "leading":  { "heading": 1.0, "subtitle": 1.2, "body": 1.2, "body_dense": 1.0, "kpi": 0.95 },
+    "leading": {
+      "heading": 1.0,
+      "subtitle": 1.2,
+      "body": 1.2,
+      "body_dense": 1.0,
+      "kpi": 0.95
+    },
     "tracking": {
       "_note": "em units for CSS; AE units = em × 1000 (tracking is 1/1000 em in AE)",
       "heading": 0,
@@ -72,41 +132,122 @@
     },
     "figures": "tabular-nums (AE: use a fixed-width digit font or a mono digit layer for counters)"
   },
-
   "ease": {
     "_note": "cubic-bezier(x1,y1,x2,y2). AE mapping is EXACT via bezierEase() (see motion-design-principles.md §2b): outInfluence=x1·100, outSpeed=y1·Δv/(x1·Δt); inInfluence=(1−x2)·100, inSpeed=(1−y2)·Δv/((1−x2)·Δt). `ae_influence` below is the zero-speed shorthand [start-key out, land-key in].",
-    "enter":  { "bezier": [0.16, 1.00, 0.30, 1.00], "ae_influence": [16, 70], "use": "everything that ARRIVES: titles, blocks, patterns, the portal. Decisive, no overshoot." },
-    "exit":   { "bezier": [0.70, 0.00, 0.84, 0.00], "ae_influence": [70, 16], "use": "everything that LEAVES. Accelerates out, ~70% of the enter duration." },
-    "move":   { "bezier": [0.65, 0.00, 0.35, 1.00], "ae_influence": [65, 65], "use": "on-screen A→B repositioning, layout reflow, camera drift" },
-    "wipe":   { "bezier": [0.87, 0.00, 0.13, 1.00], "ae_influence": [87, 87], "use": "hard geometric wipes and portal steps — slow-fast-slow, reads as a mechanism" },
-    "count":  { "bezier": [0.10, 0.90, 0.20, 1.00], "ae_influence": [10, 80], "use": "number counters — most of the digits change early, the last few settle" },
-    "ui":     { "bezier": [0.20, 0.00, 0.38, 0.90], "ae_influence": [20, 62], "use": "micro / productive UI motion (toggles, hover, cursor)" },
-    "linear": { "bezier": [0.00, 0.00, 1.00, 1.00], "ae_influence": [0.1, 0.1], "use": "constant-velocity mechanics only: tickers, marquees, spinning loaders" }
+    "enter": {
+      "bezier": [
+        0.16,
+        1.0,
+        0.3,
+        1.0
+      ],
+      "ae_influence": [
+        16,
+        70
+      ],
+      "use": "everything that ARRIVES: titles, blocks, patterns, the portal. Decisive, no overshoot."
+    },
+    "exit": {
+      "bezier": [
+        0.7,
+        0.0,
+        0.84,
+        0.0
+      ],
+      "ae_influence": [
+        70,
+        16
+      ],
+      "use": "everything that LEAVES. Accelerates out, ~70% of the enter duration."
+    },
+    "move": {
+      "bezier": [
+        0.65,
+        0.0,
+        0.35,
+        1.0
+      ],
+      "ae_influence": [
+        65,
+        65
+      ],
+      "use": "on-screen A→B repositioning, layout reflow, camera drift"
+    },
+    "wipe": {
+      "bezier": [
+        0.87,
+        0.0,
+        0.13,
+        1.0
+      ],
+      "ae_influence": [
+        87,
+        87
+      ],
+      "use": "hard geometric wipes and portal steps — slow-fast-slow, reads as a mechanism"
+    },
+    "count": {
+      "bezier": [
+        0.1,
+        0.9,
+        0.2,
+        1.0
+      ],
+      "ae_influence": [
+        10,
+        80
+      ],
+      "use": "number counters — most of the digits change early, the last few settle"
+    },
+    "ui": {
+      "bezier": [
+        0.2,
+        0.0,
+        0.38,
+        0.9
+      ],
+      "ae_influence": [
+        20,
+        62
+      ],
+      "use": "micro / productive UI motion (toggles, hover, cursor)"
+    },
+    "linear": {
+      "bezier": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "ae_influence": [
+        0.1,
+        0.1
+      ],
+      "use": "constant-velocity mechanics only: tickers, marquees, spinning loaders"
+    }
   },
-
   "duration_ms": {
     "_note": "ms. Convert with fps: frames = round(ms/1000·fps). Bigger element or longer travel → longer duration (Carbon rule).",
     "micro": 120,
-    "fast":  200,
-    "base":  400,
-    "slow":  700,
-    "hero":  1000,
-    "wipe":  600,
+    "fast": 200,
+    "base": 400,
+    "slow": 700,
+    "hero": 1000,
+    "wipe": 600,
     "count": 1400,
     "hold_title_min": 2000,
     "hold_kpi_min": 2500,
     "exit_ratio": 0.7
   },
-
   "stagger_ms": {
     "tight": 40,
-    "base":  70,
+    "base": 70,
     "loose": 120,
     "pattern_row": 30,
     "chars": 18,
-    "_rule": "Cascade in reading order (left→right, top→bottom) or outward from the accent. Overlap tails: element i+1 starts at ~50-70% of element i."
+    "_rule": "Cascade in reading order (left→right, top→bottom) or outward from the accent. Words 3 frames, cards 4–5, big blocks 6 (at 30 fps). Cap a group at ~600–800 ms total. Reverse for exits.",
+    "words": 100
   },
-
   "travel_px_1080": {
     "_note": "px at 1080p; scale with format.scale",
     "slide": 40,
@@ -114,42 +255,170 @@
     "line_reveal": "100% of line box (masked)",
     "portal_step": 40
   },
-
   "geometry": {
     "micro_module": 2,
     "edge_step": 10,
-    "line_weights": [2, 4, 6],
-    "dot_sizes": [2, 4, 6],
-    "dot_gaps": [8, 12, 16, 24],
+    "line_weights": [
+      2,
+      4,
+      6
+    ],
+    "dot_sizes": [
+      2,
+      4,
+      6
+    ],
+    "dot_gaps": [
+      8,
+      12,
+      16,
+      24
+    ],
     "corner_radius": 0,
     "stroke_linecap": "square",
     "stroke_linejoin": "miter",
     "portal_steps_default": 4,
     "llll_cells_default": 4
   },
-
   "format": {
     "_note": "scale is relative to 1080p (use for type & travel). margin = multiple of 10.",
-    "1080p": { "w": 1920, "h": 1080, "fps": 25, "scale": 1.0,  "margin": 80,  "safe_title": 120 },
-    "4k":    { "w": 3840, "h": 2160, "fps": 25, "scale": 2.0,  "margin": 160, "safe_title": 240 },
-    "story": { "w": 1080, "h": 1920, "fps": 30, "scale": 0.9,  "margin": 60,  "safe_title": 220 },
-    "square":{ "w": 1080, "h": 1080, "fps": 30, "scale": 0.8,  "margin": 60,  "safe_title": 100 },
-    "slide": { "w": 1280, "h": 720,  "fps": 30, "scale": 0.667,"margin": 40,  "safe_title": 60 },
-    "web":   { "w": 1440, "h": 900,  "fps": 60, "scale": 0.75, "margin": 60,  "safe_title": 80 }
+    "1080p": {
+      "w": 1920,
+      "h": 1080,
+      "fps": 25,
+      "scale": 1.0,
+      "margin": 80,
+      "safe_title": 120
+    },
+    "4k": {
+      "w": 3840,
+      "h": 2160,
+      "fps": 25,
+      "scale": 2.0,
+      "margin": 160,
+      "safe_title": 240
+    },
+    "story": {
+      "w": 1080,
+      "h": 1920,
+      "fps": 30,
+      "scale": 0.9,
+      "margin": 60,
+      "safe_title": 220
+    },
+    "square": {
+      "w": 1080,
+      "h": 1080,
+      "fps": 30,
+      "scale": 0.8,
+      "margin": 60,
+      "safe_title": 100
+    },
+    "slide": {
+      "w": 1280,
+      "h": 720,
+      "fps": 30,
+      "scale": 0.667,
+      "margin": 40,
+      "safe_title": 60
+    },
+    "web": {
+      "w": 1440,
+      "h": 900,
+      "fps": 60,
+      "scale": 0.75,
+      "margin": 60,
+      "safe_title": 80
+    }
   },
-
   "forbidden": [
-    "bounce / elastic / spring overshoot on brand elements (max 2% overshoot on non-brand UI only)",
+    "elastic / bouncy springs (damping ratio < 0.8) and overshoot > 3% on brand elements; hero marks and the logo get no overshoot at all",
     "rotation other than 0/90/180° steps (no spinning logos, no tilted type)",
-    "squash & stretch, jelly, wobble, idle wiggle on settled elements",
-    "drop shadows, glows, blur-as-style, lens flares, light leaks, film grain",
+    "squash & stretch, jelly, wobble; idle motion on TYPE (texture-tier breathing ≤ 1.2% is allowed)",
+    "drop shadows, glows, lens flares, light leaks, film grain, vignette",
     "gradients on brand elements (flat fills only; photo/video may carry its own tonality)",
     "rounded corners, round line caps, round joins",
     "particles, organic noise, hand-drawn / paper textures",
-    "italic, underline, mixed weights inside one run",
+    "italic, underline (except the animated accent underline under ONE word), mixed weights inside one run",
     "green as body text, green arrows, green filling >30% of a content frame",
     "emoji, stock icons outside the SB icon pack",
-    "3D camera swoops / orbits (only linear dolly or parallax ≤ 3% of frame)",
-    "per-character letter tumble / typewriter on headings (allowed only for code / terminal metaphors)"
-  ]
+    "3D camera orbits / swoops (linear dolly ≤ 4% and 3-layer parallax are fine)",
+    "per-character letter tumble / typewriter on headings (words yes, chars only for code / terminal metaphors)",
+    "blur that stays: blur is a transition aid ≤ 6 px and must be 0 at rest",
+    "cross-dissolves between scenes (hard cut, mask wipe, portal wipe, scale-through only)"
+  ],
+  "spring": {
+    "_note": "Physics springs (stiffness, damping RATIO ζ, mass 1). Overshoot ≈ exp(-πζ/√(1-ζ²)): ζ0.8→1.5%, ζ0.7→4.6%, ζ0.6→9%. Brand: ζ ≥ 0.8 on support/UI, none on hero marks. HTML: Motion.spring(name); AE: M.springBake(prop, ms0, v0, v1, name).",
+    "snappy": {
+      "stiffness": 300,
+      "damping": 0.87,
+      "use": "Framer default (300/30/1 → ζ≈0.87); interactive UI, cards"
+    },
+    "gentle": {
+      "stiffness": 120,
+      "damping": 0.91,
+      "use": "soft arrivals (120/20/1)"
+    },
+    "stiff": {
+      "stiffness": 500,
+      "damping": 1.0,
+      "use": "heavy panels, no overshoot"
+    },
+    "m3_expressive": {
+      "stiffness": 380,
+      "damping": 0.8,
+      "use": "Material 3 Expressive default spatial — hero-adjacent moments"
+    },
+    "m3_expressive_fast": {
+      "stiffness": 800,
+      "damping": 0.6,
+      "use": "M3 Expressive fast — playful only, NOT Cloud.ru"
+    },
+    "m3_standard": {
+      "stiffness": 700,
+      "damping": 0.9,
+      "use": "Material 3 Standard default spatial — product UI"
+    },
+    "m3_effects": {
+      "stiffness": 1600,
+      "damping": 1.0,
+      "use": "M3 effects (opacity/colour): critically damped, never bounces"
+    },
+    "counter": {
+      "stiffness": 60,
+      "damping": 1.0,
+      "use": "number count-up (haidrrrry: 60/30 → overdamped)"
+    }
+  },
+  "entrance": {
+    "_note": "The premium entrance: 2–3 properties together (never opacity alone). px at 1080p.",
+    "rise_px": 40,
+    "rise_hero_px": 80,
+    "scale_from": 0.96,
+    "blur_px": 6,
+    "word_stagger_frames": 3,
+    "card_stagger_frames": 5,
+    "block_stagger_frames": 6,
+    "exit_ratio": 0.7,
+    "exit_frames_max": 10,
+    "anticipation_ratio": 0.25,
+    "anticipation_px": 16,
+    "follow_through_delay_ms": 60,
+    "hold_after_hit_frames": 18,
+    "first_motion_within_frames": 15,
+    "max_frames_without_new_visual": 90,
+    "duration_distance_exponent": 0.5
+  },
+  "camera": {
+    "_note": "per-scene camera push and 3-layer parallax factors",
+    "push_scale": 1.03,
+    "parallax": [
+      0.3,
+      0.6,
+      1.0
+    ],
+    "breathe_scale": 0.012,
+    "breathe_period_s": 3.2,
+    "drift_px_per_s": 2
+  }
 }

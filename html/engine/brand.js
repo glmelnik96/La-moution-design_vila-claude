@@ -274,3 +274,153 @@
            arrow: arrow, star: star, cloud: cloud, drawOn: drawOn, formatNumber: formatNumber, counter: counter,
            colorMix: colorMix, hexToRgb: hexToRgb, tokens: TOKENS, THIN: NBSP_THIN };
 });
+
+// ───────── v1.1 additions: words / chars, highlight, odometer, texture, choreography helpers ─────────
+// Appended as a second UMD block so brand.js stays one file; it extends the Brand object.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) factory(module.exports, require('./motion.js'));
+  else factory(root.Brand, root.Motion);
+})(typeof self !== 'undefined' ? self : this, function (Brand, Motion) {
+  'use strict';
+  const el = Brand.el;
+
+  // Split into word spans (inline-block, so transforms apply). Returns the spans. Call after fonts.
+  Brand.words = function (elm, opts) {
+    opts = opts || {};
+    const raw = elm.textContent;
+    elm.textContent = '';
+    const spans = raw.split(/\s+/).filter(Boolean).map(function (w, i, arr) {
+      const s = el('span', 'cr-word', { display: 'inline-block', willChange: 'transform' }, elm);
+      s.textContent = w;
+      if (i < arr.length - 1) elm.appendChild(document.createTextNode(' '));
+      return s;
+    });
+    elm.classList.add('cr-words');
+    if (opts.mask) { spans.forEach(function (s) { const m = el('span', 'cr-word-mask', { display: 'inline-block', overflow: 'hidden', verticalAlign: 'bottom' }); s.parentNode.insertBefore(m, s); m.appendChild(s); }); }
+    return spans;
+  };
+  // Split into character spans (code / terminal metaphors only). Keeps words unbreakable.
+  Brand.chars = function (elm) {
+    const raw = elm.textContent;
+    elm.textContent = '';
+    elm.style.fontKerning = 'none';
+    const out = [];
+    raw.split(/(\s+)/).forEach(function (tok) {
+      if (!tok) return;
+      if (/^\s+$/.test(tok)) { elm.appendChild(document.createTextNode(tok)); return; }
+      const w = el('span', 'cr-word', { display: 'inline-block', whiteSpace: 'nowrap' }, elm);
+      Array.from(tok).forEach(function (ch) { const c = el('span', 'cr-char', { display: 'inline-block' }, w); c.textContent = ch; out.push(c); });
+    });
+    return out;
+  };
+  // Highlight ONE word: colour + an underline that grows from the left (returns the underline el).
+  Brand.highlight = function (wordEl, opts) {
+    opts = Object.assign({ color: 'var(--cr-green)', weight: 4, gap: 6, textColor: null }, opts || {});
+    wordEl.style.position = 'relative';
+    if (opts.textColor) wordEl.style.color = opts.textColor;
+    const u = el('span', 'cr-underline', { position: 'absolute', left: 0, right: 0, bottom: -opts.gap, height: opts.weight, background: opts.color, transformOrigin: 'left center', display: 'block' }, wordEl);
+    return u;
+  };
+  // Odometer: fixed digit columns, each a strip 0–9 that slides vertically. Prop 'n' (0..max).
+  //   const od = Brand.odometer(parent, { digits: 3, cls: 'cr-kpi', pos }); tl.fromTo(od.el, { n: [0, 152] }, { set: od.set, ease: 'count' })
+  Brand.odometer = function (parent, o) {
+    o = Object.assign({ digits: 3, cls: 'cr-kpi', suffix: '', pos: null, lineHeight: 1 }, o || {});
+    const wrap = Brand.box(parent, 'cr-odometer ' + o.cls, o.pos);
+    wrap.style.display = 'flex'; wrap.style.overflow = 'hidden'; wrap.style.lineHeight = String(o.lineHeight);
+    wrap.style.fontVariantNumeric = 'tabular-nums';
+    const cols = [];
+    for (let d = 0; d < o.digits; d++) {
+      const col = el('span', 'cr-odo-col', { display: 'block', height: '1em', overflow: 'hidden' }, wrap);
+      const strip = el('span', 'cr-odo-strip', { display: 'block', willChange: 'transform' }, col);
+      for (let k = 0; k <= 10; k++) { const s = el('span', '', { display: 'block', height: '1em' }, strip); s.textContent = String(k % 10); }
+      cols.push(strip);
+    }
+    if (o.suffix) { const sfx = el('span', 'cr-odo-suffix', null, wrap); sfx.textContent = o.suffix; }
+    const set = function (elm, st) {
+      if (!('n' in st)) return;
+      let v = Math.max(0, st.n);
+      for (let d = o.digits - 1; d >= 0; d--) {
+        const place = Math.pow(10, d);
+        const digitVal = (v / place) % 10;                     // fractional digit → smooth roll
+        const strip = cols[o.digits - 1 - d];
+        // roll only the lowest changing digit smoothly; higher digits snap at the carry
+        const lower = v % place;
+        const frac = (place === 1) ? digitVal - Math.floor(digitVal) : (lower / place > 0.9 ? (lower / place - 0.9) * 10 : 0);
+        const shown = Math.floor(digitVal) + frac;
+        strip.style.transform = 'translateY(' + (-shown) + 'em)';
+      }
+    };
+    return { el: wrap, cols: cols, set: set };
+  };
+  // Ambient texture: dot field or hairline grid at low contrast; returns { el, drift } where drift is a
+  // setter for prop 'drift' (seconds) — tl.fromTo(tex.el, { drift: [0, 6] }, { at, dur: 6, ease: 'linear', set: tex.drift })
+  Brand.texture = function (parent, o) {
+    o = Object.assign({ kind: 'dots', size: 2, gap: 24, color: 'var(--cr-black)', opacity: 0.08, speed: 2, angle: 0 }, o || {});
+    const t = Brand.box(parent, 'cr-texture', { left: -o.gap * 2, top: -o.gap * 2, right: -o.gap * 2, bottom: -o.gap * 2 });
+    t.style.opacity = String(o.opacity);
+    t.style.pointerEvents = 'none';
+    if (o.kind === 'grid') {
+      t.style.backgroundImage = 'linear-gradient(to right, ' + o.color + ' ' + o.size + 'px, transparent ' + o.size + 'px), linear-gradient(to bottom, ' + o.color + ' ' + o.size + 'px, transparent ' + o.size + 'px)';
+      t.style.backgroundSize = o.gap + 'px ' + o.gap + 'px';
+    } else {
+      t.style.backgroundImage = 'radial-gradient(' + o.color + ' ' + (o.size / 2) + 'px, transparent ' + (o.size / 2 + 0.5) + 'px)';
+      t.style.backgroundSize = o.gap + 'px ' + o.gap + 'px';
+    }
+    const drift = function (elm, st) { if ('drift' in st) elm.style.backgroundPosition = (Math.cos(o.angle) * o.speed * st.drift).toFixed(2) + 'px ' + (Math.sin(o.angle) * o.speed * st.drift).toFixed(2) + 'px'; };
+    return { el: t, drift: drift };
+  };
+
+  // ───────── choreography helpers (emit tweens on a timeline) ─────────
+  // Premium entrance: opacity + rise + scale (+ blur) together. opts { at, dur, ease, rise, scale, blur, stagger, from }
+  Brand.enter = function (tl, targets, o) {
+    o = Object.assign({ at: 0, ease: 'enter', rise: 40, scale: 0.96, blur: 0, stagger: 0, dur: null, from: 'start', x: 0 }, o || {});
+    const props = { opacity: [0, 1] };
+    if (o.rise) props.y = [o.rise, 0];
+    if (o.x) props.x = [o.x, 0];
+    if (o.scale !== 1) props.scale = [o.scale, 1];
+    if (o.blur) props.blur = [o.blur, 0];
+    const opts = { at: o.at, ease: o.ease, stagger: o.stagger, from: o.from };
+    if (o.dur != null) opts.dur = o.dur;
+    return tl.fromTo(targets, props, opts);
+  };
+  // Exit: faster than the entrance, ease-in, 2 properties. opts { at, dur, drop, stagger, from:'end' }
+  Brand.exit = function (tl, targets, o) {
+    o = Object.assign({ at: 0, dur: 0.28, drop: -32, x: 0, stagger: 0, from: 'end', blur: 0, ease: 'exit' }, o || {});
+    const props = { opacity: [1, 0] };
+    if (o.drop) props.y = [0, o.drop];
+    if (o.x) props.x = [0, o.x];
+    if (o.blur) props.blur = [0, o.blur];
+    return tl.fromTo(targets, props, { at: o.at, dur: o.dur, ease: o.ease, stagger: o.stagger, from: o.from });
+  };
+  // Camera push on a scene root: scale 1 → push over [t0, t1]; layers get parallax by depth (0..1).
+  Brand.camera = function (tl, sceneEl, t0, t1, o) {
+    o = Object.assign({ push: 1.03, layers: [], dx: 0, dy: 0 }, o || {});
+    sceneEl.style.transformOrigin = '50% 50%';
+    tl.fromTo(sceneEl, { scale: [1, o.push] }, { at: t0, dur: t1 - t0, ease: 'linear' });
+    (o.layers || []).forEach(function (L) {           // { el, depth }
+      const p = { x: [0, -o.dx * L.depth], y: [0, -o.dy * L.depth] };
+      tl.fromTo(L.el, p, { at: t0, dur: t1 - t0, ease: 'linear' });
+    });
+  };
+  // Scale-through transition: A scales up + fades out while B scales in from 0.96 beneath it.
+  Brand.scaleThrough = function (tl, outEl, inEl, at, o) {
+    o = Object.assign({ dur: 0.44, up: 1.06, down: 0.96, blur: 4 }, o || {});
+    if (outEl) { outEl.style.transformOrigin = '50% 50%'; tl.fromTo(outEl, { scale: [1, o.up], opacity: [1, 0], blur: [0, o.blur] }, { at: at, dur: o.dur * 0.7, ease: 'exit' }); }
+    if (inEl) { inEl.style.transformOrigin = '50% 50%'; tl.fromTo(inEl, { scale: [o.down, 1], opacity: [0, 1], blur: [o.blur, 0] }, { at: at + o.dur * 0.25, dur: o.dur, ease: 'enter' }); }
+  };
+  // Anticipation: a small opposite move before the main move. Emits two tweens on prop `axis`.
+  Brand.anticipate = function (tl, targets, o) {
+    o = Object.assign({ at: 0, axis: 'y', back: 16, travel: 0, dur: 0.4, ease: 'enter' }, o || {});
+    const a = o.dur * 0.25;
+    const p1 = {}; p1[o.axis] = [0, o.back];
+    const p2 = {}; p2[o.axis] = [o.back, o.travel];
+    tl.fromTo(targets, p1, { at: o.at, dur: a, ease: 'move' });
+    tl.fromTo(targets, p2, { at: o.at + a, dur: o.dur, ease: o.ease });
+  };
+  // Breathing for the texture tier only (portal, pattern). prop 'breath' in seconds; scale ± amp.
+  Brand.breathe = function (amp, period) {
+    amp = amp || 0.012; period = period || 3.2;
+    return function (elm, st) { if ('breath' in st) elm.style.transform = 'scale(' + (1 + amp * Math.sin(st.breath / period * Math.PI * 2)).toFixed(4) + ')'; };
+  };
+  return Brand;
+});

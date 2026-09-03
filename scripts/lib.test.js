@@ -199,3 +199,55 @@ test('capture() restores the resolution factor and returns one path per frame', 
   assert.deepStrictEqual(v.res, [4, 4]);
   v.saved.forEach(x => assert.deepStrictEqual(x.res, [1, 1]));
 });
+
+test('springBake uses the same closed-form spring as the HTML engine (parity) and settles exactly', () => {
+  const Motion = require('../html/engine/motion.js');
+  const s = fresh();
+  const v = JSON.parse(s.run(`
+    var L = M.solid("s", CR.COLOR.WHITE); var op = M.opacity(L);
+    var n = M.springBake(op, 0, 0, 100, "M3_EXPRESSIVE");
+    var f = M.springSolver(380, 0.8);
+    JSON.stringify({ n: n, keys: op.numKeys, last: op.keyValue(op.numKeys), dur: M.springDuration("M3_EXPRESSIVE"),
+                     samples: [f(0.05), f(0.1), f(0.2), f(0.3)], max: (function(){ var m=0; for (var k=1;k<=op.numKeys;k++) m=Math.max(m,op.keyValue(k)); return m; })() })`));
+  const h = Motion.spring('spring:m3_expressive');
+  const solver = Motion.springSolver(380, 0.8);
+  assert.strictEqual(v.keys, v.n);
+  assert.strictEqual(v.last, 100);
+  assert.ok(Math.abs(v.dur - h.duration) < 1e-9, 'settle time identical in both engines');
+  [0.05, 0.1, 0.2, 0.3].forEach((t, i) => assert.ok(Math.abs(v.samples[i] - solver(t)) < 1e-12));
+  assert.ok(v.max < 102 && v.max > 100.5, 'M3 expressive overshoots ~1.5% (got ' + v.max + ')');
+});
+
+test('premiumIn animates position, scale and opacity together; exitOut is ≤ 10 frames', () => {
+  const s = fresh();
+  const v = JSON.parse(s.run(`
+    var T = M.text("t", "Cloud", { size: 132, x: 80, y: 500 });
+    M.premiumIn(T, 200, { blur: 0 });
+    M.exitOut(T, 3000);
+    var p = M.pos(T), sc = M.scale(T), op = M.opacity(T);
+    JSON.stringify({ pk: p.numKeys, sk: sc.numKeys, ok: op.numKeys, from: p.keyValue(1), land: p.keyValue(2), s0: sc.keyValue(1),
+                     exitFrames: Math.round((p.keyTime(4) - p.keyTime(3)) * M.FPS) })`));
+  assert.strictEqual(v.pk, 4);
+  assert.strictEqual(v.sk, 2);
+  assert.strictEqual(v.ok, 4);
+  assert.deepStrictEqual(v.from, [80, 460]);
+  assert.deepStrictEqual(v.land, [80, 500]);
+  assert.strictEqual(v.s0[0], 96);
+  assert.ok(v.exitFrames <= 10);
+});
+
+test('cameraPush parents before keying and wordCascade creates a words-based animator', () => {
+  const s = fresh();
+  const v = JSON.parse(s.run(`
+    JSON.stringify(M.run("cam", function () {
+      var A = M.rect("a", 0, 0, 10, 10, CR.COLOR.GREEN), B = M.rect("b", 0, 0, 10, 10, CR.COLOR.GREEN);
+      var cam = M.cameraPush([A, B], 0, 4000);
+      var T = M.text("t", "Cloud.ru снижает цену прогресса", { size: 132 });
+      M.wordCascade(T, 500, { words: 4 });
+      return { parentA: A.parent === cam, camKeys: M.scale(cam).numKeys, anims: T.property("ADBE Text Properties").property("ADBE Text Animators").numProperties };
+    }))`));
+  assert.strictEqual(v.ok, true, JSON.stringify(v));
+  assert.strictEqual(v.parentA, true);
+  assert.strictEqual(v.camKeys, 2);
+  assert.strictEqual(v.anims, 1);
+});

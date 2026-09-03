@@ -6,7 +6,7 @@
   return {
     "meta": {
       "brand": "Cloud.ru 2.0",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "source": "Брендбук Cloud.ru 2.0 (49 стр.) + Cloud.ru_Template_2026 canonical rules + motion adaptation (this repo)",
       "generated": [
         "scripts/lib/tokens.jsx",
@@ -242,7 +242,8 @@
       "base": 70,
       "loose": 120,
       "pattern_row": 30,
-      "chars": 18
+      "chars": 18,
+      "words": 100
     },
     "travel_px_1080": {
       "slide": 40,
@@ -326,18 +327,91 @@
       }
     },
     "forbidden": [
-      "bounce / elastic / spring overshoot on brand elements (max 2% overshoot on non-brand UI only)",
+      "elastic / bouncy springs (damping ratio < 0.8) and overshoot > 3% on brand elements; hero marks and the logo get no overshoot at all",
       "rotation other than 0/90/180° steps (no spinning logos, no tilted type)",
-      "squash & stretch, jelly, wobble, idle wiggle on settled elements",
-      "drop shadows, glows, blur-as-style, lens flares, light leaks, film grain",
+      "squash & stretch, jelly, wobble; idle motion on TYPE (texture-tier breathing ≤ 1.2% is allowed)",
+      "drop shadows, glows, lens flares, light leaks, film grain, vignette",
       "gradients on brand elements (flat fills only; photo/video may carry its own tonality)",
       "rounded corners, round line caps, round joins",
       "particles, organic noise, hand-drawn / paper textures",
-      "italic, underline, mixed weights inside one run",
+      "italic, underline (except the animated accent underline under ONE word), mixed weights inside one run",
       "green as body text, green arrows, green filling >30% of a content frame",
       "emoji, stock icons outside the SB icon pack",
-      "3D camera swoops / orbits (only linear dolly or parallax ≤ 3% of frame)",
-      "per-character letter tumble / typewriter on headings (allowed only for code / terminal metaphors)"
-    ]
+      "3D camera orbits / swoops (linear dolly ≤ 4% and 3-layer parallax are fine)",
+      "per-character letter tumble / typewriter on headings (words yes, chars only for code / terminal metaphors)",
+      "blur that stays: blur is a transition aid ≤ 6 px and must be 0 at rest",
+      "cross-dissolves between scenes (hard cut, mask wipe, portal wipe, scale-through only)"
+    ],
+    "spring": {
+      "snappy": {
+        "stiffness": 300,
+        "damping": 0.87,
+        "use": "Framer default (300/30/1 → ζ≈0.87); interactive UI, cards"
+      },
+      "gentle": {
+        "stiffness": 120,
+        "damping": 0.91,
+        "use": "soft arrivals (120/20/1)"
+      },
+      "stiff": {
+        "stiffness": 500,
+        "damping": 1,
+        "use": "heavy panels, no overshoot"
+      },
+      "m3_expressive": {
+        "stiffness": 380,
+        "damping": 0.8,
+        "use": "Material 3 Expressive default spatial — hero-adjacent moments"
+      },
+      "m3_expressive_fast": {
+        "stiffness": 800,
+        "damping": 0.6,
+        "use": "M3 Expressive fast — playful only, NOT Cloud.ru"
+      },
+      "m3_standard": {
+        "stiffness": 700,
+        "damping": 0.9,
+        "use": "Material 3 Standard default spatial — product UI"
+      },
+      "m3_effects": {
+        "stiffness": 1600,
+        "damping": 1,
+        "use": "M3 effects (opacity/colour): critically damped, never bounces"
+      },
+      "counter": {
+        "stiffness": 60,
+        "damping": 1,
+        "use": "number count-up (haidrrrry: 60/30 → overdamped)"
+      }
+    },
+    "entrance": {
+      "rise_px": 40,
+      "rise_hero_px": 80,
+      "scale_from": 0.96,
+      "blur_px": 6,
+      "word_stagger_frames": 3,
+      "card_stagger_frames": 5,
+      "block_stagger_frames": 6,
+      "exit_ratio": 0.7,
+      "exit_frames_max": 10,
+      "anticipation_ratio": 0.25,
+      "anticipation_px": 16,
+      "follow_through_delay_ms": 60,
+      "hold_after_hit_frames": 18,
+      "first_motion_within_frames": 15,
+      "max_frames_without_new_visual": 90,
+      "duration_distance_exponent": 0.5
+    },
+    "camera": {
+      "push_scale": 1.03,
+      "parallax": [
+        0.3,
+        0.6,
+        1
+      ],
+      "breathe_scale": 0.012,
+      "breathe_period_s": 3.2,
+      "drift_px_per_s": 2
+    }
   };
 });

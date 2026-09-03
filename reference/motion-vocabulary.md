@@ -9,6 +9,9 @@ Engine APIs: `M.*` = `scripts/lib/cloudru-motion.jsx` (AE), `Motion`/`Brand` =
 
 ---
 
+> Market baseline with sources and numbers: `reference/motion-best-practices.md`. This catalogue
+> maps techniques to the two engines; that document says why they matter and how much.
+
 ## A. What separates pro motion from amateur motion
 
 Ten things an art director sees in the first two seconds:

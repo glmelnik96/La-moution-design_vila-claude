@@ -35,13 +35,13 @@ test('fromTo resolves from/during/after and applies transform + opacity strings'
   const tl = Motion.timeline({ fps: 25 });
   tl.fromTo(el, { y: [40, 0], opacity: [0, 1] }, { at: 1, dur: 0.4, ease: 'linear' });
   tl.seek(0);
-  assert.strictEqual(el.style.transform, 'translate(0px, 40px)');
+  assert.strictEqual(el.style.transform, 'translate3d(0px, 40px, 0px)');
   assert.strictEqual(el.style.opacity, '0');
   tl.seek(1.2);
-  assert.strictEqual(el.style.transform, 'translate(0px, 20px)');
+  assert.strictEqual(el.style.transform, 'translate3d(0px, 20px, 0px)');
   assert.strictEqual(el.style.opacity, '0.5');
   tl.seek(3);
-  assert.strictEqual(el.style.transform, 'translate(0px, 0px)');
+  assert.strictEqual(el.style.transform, 'translate3d(0px, 0px, 0px)');
   assert.strictEqual(el.style.opacity, '1');
   assert.strictEqual(tl.duration, 1.4);
 });
@@ -51,8 +51,8 @@ test('sequential tweens on the same prop: the latest started one wins; earlier o
   const tl = Motion.timeline();
   tl.fromTo(el, { x: [0, 100] }, { at: 0, dur: 1, ease: 'linear' });
   tl.fromTo(el, { x: [100, 300] }, { at: 2, dur: 1, ease: 'linear' });
-  tl.seek(1.5); assert.strictEqual(el.style.transform, 'translate(100px, 0px)');
-  tl.seek(2.5); assert.strictEqual(el.style.transform, 'translate(200px, 0px)');
+  tl.seek(1.5); assert.strictEqual(el.style.transform, 'translate3d(100px, 0px, 0px)');
+  tl.seek(2.5); assert.strictEqual(el.style.transform, 'translate3d(200px, 0px, 0px)');
 });
 
 test('stagger offsets each target; from:"end" reverses; duration grows accordingly', () => {
@@ -121,4 +121,39 @@ test('mount exposes a seek API without a DOM (render contract)', () => {
   assert.strictEqual(m.frames, 60);
   assert.strictEqual(m.seek(1), 1);
   assert.strictEqual(m.seekFrame(45), 1.5);
+});
+
+test('spring eases are time-based, settle to 1, respect the damping budget, and set their own duration', () => {
+  const sp = Motion.spring('spring:m3_expressive');
+  assert.strictEqual(sp.timeBased, true);
+  assert.ok(sp.duration > 0.3 && sp.duration < 0.6, 'settle ' + sp.duration);
+  let max = 0; for (let t = 0; t < sp.duration; t += 0.001) max = Math.max(max, sp(t));
+  assert.ok(max > 1.01 && max < 1.02, 'ζ=0.8 overshoot ≈ 1.5% (got ' + max + ')');
+  assert.strictEqual(sp(sp.duration + 1), 1);
+  const el = fake();
+  const tl = Motion.timeline({ fps: 25 });
+  tl.fromTo(el, { y: [40, 0], opacity: [0, 1] }, { at: 0, ease: 'spring:snappy' });
+  assert.ok(Math.abs(tl.duration - Motion.spring('spring:snappy').duration) < 1e-9, 'auto duration from the spring');
+  tl.seek(0.1);
+  assert.ok(parseFloat(el.style.opacity) > 0.5);
+  assert.throws(() => Motion.spring('spring:bouncy_nope'), /unknown spring/);
+});
+
+test('blur, letterSpacing and 3D props render; velocity motion blur kicks in above 30 px/frame', () => {
+  const el = fake();
+  const tl = Motion.timeline({ fps: 25 });
+  tl.fromTo(el, { blur: [6, 0], letterSpacing: [-0.03, 0], rotateX: [12, 0] }, { at: 0, dur: 1, ease: 'linear' });
+  tl.seek(0.5);
+  assert.strictEqual(el.style.filter, 'blur(3px)');
+  assert.strictEqual(el.style.letterSpacing, '-0.015em');
+  assert.ok(/perspective\(1200px\)/.test(el.style.transform) && /rotateX\(6deg\)/.test(el.style.transform));
+  tl.seek(1);
+  assert.strictEqual(el.style.filter, '');
+  const fast = fake();
+  const tl2 = Motion.timeline({ fps: 25 });
+  tl2.fromTo(fast, { x: [1920, 0] }, { at: 0, dur: 0.5, ease: 'linear', mblur: 1 });   // 153 px/frame
+  tl2.seek(0.25);
+  assert.ok(/blur\(/.test(fast.style.filter), 'moving fast → blurred');
+  tl2.seek(0.5);
+  assert.strictEqual(fast.style.filter, '', 'at rest → no blur');
 });

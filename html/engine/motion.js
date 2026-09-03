@@ -60,6 +60,40 @@
       return Math.min(1, k / n);
     };
   }
+  // ───────── springs (closed-form damped oscillator, mass 1, from 0 to 1, v0 = 0) ─────────
+  // Shared with the AE lib (M.springBake) — identical math, so a spring tuned here lands the same in AE.
+  function springSolver(stiffness, zeta) {
+    const w0 = Math.sqrt(stiffness);
+    if (zeta < 1) {
+      const wd = w0 * Math.sqrt(1 - zeta * zeta);
+      return function (t) { return 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd * t) + (zeta * w0 / wd) * Math.sin(wd * t)); };
+    }
+    if (zeta === 1) return function (t) { return 1 - Math.exp(-w0 * t) * (1 + w0 * t); };
+    const s = Math.sqrt(zeta * zeta - 1);
+    const r1 = -w0 * (zeta - s), r2 = -w0 * (zeta + s);
+    return function (t) { return 1 - (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r2 - r1); };
+  }
+  // Returns a TIME-based ease: fn(seconds) → progress, with fn.duration = settle time (|1−x| < 0.001).
+  function spring(cfg) {
+    let c = cfg;
+    if (typeof cfg === 'string') {
+      const key = cfg.replace(/^spring:/, '');
+      c = TOKENS && TOKENS.spring && TOKENS.spring[key];
+      if (!c) throw new Error('unknown spring: ' + cfg);
+    }
+    const k = c.stiffness || 300, z = c.damping != null ? c.damping : 0.87;
+    const f = springSolver(k, z);
+    let settle = 0;
+    for (let t = 0; t <= 10; t += 0.001) {
+      if (Math.abs(1 - f(t)) < 0.001 && Math.abs(f(t + 0.016) - f(t)) < 0.0005) { settle = t; break; }
+      settle = t;
+    }
+    const fn = function (t) { if (t <= 0) return 0; if (t >= settle) return 1; return f(t); };
+    fn.timeBased = true;
+    fn.duration = Math.ceil(settle * 1000) / 1000;
+    fn.spring = { stiffness: k, damping: z };
+    return fn;
+  }
   const FALLBACK_EASES = {
     enter: [0.16, 1, 0.3, 1], exit: [0.7, 0, 0.84, 0], move: [0.65, 0, 0.35, 1], wipe: [0.87, 0, 0.13, 1],
     count: [0.1, 0.9, 0.2, 1], ui: [0.2, 0, 0.38, 0.9], linear: [0, 0, 1, 1]
@@ -68,7 +102,9 @@
   function ease(spec) {
     if (typeof spec === 'function') return spec;
     if (Array.isArray(spec)) return cubicBezier(spec[0], spec[1], spec[2], spec[3]);
+    if (spec && typeof spec === 'object' && spec.stiffness) return spring(spec);
     const name = spec || 'enter';
+    if (/^spring:/.test(name)) return (easeCache[name] = easeCache[name] || spring(name));
     if (easeCache[name]) return easeCache[name];
     const m = /^steps\((\d+)\)$/.exec(name);
     if (m) return (easeCache[name] = steps(Number(m[1])));
@@ -86,7 +122,7 @@
   }
   function lerp(a, b, u) { return a + (b - a) * u; }
   function ms(v) { return v / 1000; }
-  const TRANSFORM_PROPS = { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotate: 0 };
+  const TRANSFORM_PROPS = { x: 0, y: 0, z: 0, scale: 1, scaleX: 1, scaleY: 1, rotate: 0, rotateX: 0, rotateY: 0 };
   const CLIP_PROPS = { clipL: 0, clipR: 0, clipT: 0, clipB: 0 };
   function fmt(n) { return Math.abs(n) < 1e-6 ? '0' : String(Math.round(n * 1000) / 1000); }
 
@@ -99,13 +135,21 @@
       const x = st.x || 0, y = st.y || 0;
       const sx = 'scaleX' in st ? st.scaleX : ('scale' in st ? st.scale : 1);
       const sy = 'scaleY' in st ? st.scaleY : ('scale' in st ? st.scale : 1);
-      const r = st.rotate || 0;
-      let t = 'translate(' + fmt(x) + 'px, ' + fmt(y) + 'px)';
+      const r = st.rotate || 0, rx = st.rotateX || 0, ry = st.rotateY || 0, z = st.z || 0;
+      let t = (rx || ry || z) ? 'perspective(1200px) ' : '';
+      t += 'translate3d(' + fmt(x) + 'px, ' + fmt(y) + 'px, ' + fmt(z) + 'px)';
       if (sx !== 1 || sy !== 1) t += ' scale(' + fmt(sx) + ', ' + fmt(sy) + ')';
       if (r) t += ' rotate(' + fmt(r) + 'deg)';
+      if (rx) t += ' rotateX(' + fmt(rx) + 'deg)';
+      if (ry) t += ' rotateY(' + fmt(ry) + 'deg)';
       s.transform = t;
     }
     if ('opacity' in st) s.opacity = fmt(Math.max(0, Math.min(1, st.opacity)));
+    if ('blur' in st || 'mblur' in st) {
+      const b = Math.max(0, (st.blur || 0) + (st.mblur || 0));
+      s.filter = b > 0.05 ? 'blur(' + fmt(b) + 'px)' : '';
+    }
+    if ('letterSpacing' in st) s.letterSpacing = fmt(st.letterSpacing) + 'em';
     if ('width' in st) s.width = fmt(st.width) + 'px';
     if ('height' in st) s.height = fmt(st.height) + 'px';
     let hasC = false;
@@ -145,8 +189,8 @@
     const els = toArray(targets);
     const n = els.length;
     const at0 = this._resolveAt(opts);
-    const dur = opts.dur != null ? opts.dur : 0.4;
     const easeFn = ease(opts.ease);
+    const dur = opts.dur != null ? opts.dur : (easeFn.timeBased ? easeFn.duration : 0.4);
     const stag = opts.stagger || 0;
     let last = at0;
     for (let i = 0; i < n; i++) {
@@ -154,7 +198,7 @@
       if (opts.from === 'end') order = n - 1 - i;
       else if (opts.from === 'center') order = Math.abs(i - (n - 1) / 2);
       const at = at0 + order * stag;
-      const tw = { el: els[i], props: props, at: at, dur: dur, easeFn: easeFn, set: opts.set || null, index: i };
+      const tw = { el: els[i], props: props, at: at, dur: dur, easeFn: easeFn, set: opts.set || null, index: i, mblur: opts.mblur || 0 };
       this.tweens.push(tw);
       this._reg(els[i]);
       last = Math.max(last, at + dur);
@@ -180,6 +224,7 @@
   };
   // Resolve the state of every target at time t (pure; no DOM).
   Timeline.prototype.stateAt = function (t) {
+    const self = this;
     const out = new Map();
     const byEl = new Map();
     this.tweens.forEach(function (tw) {
@@ -192,17 +237,30 @@
       const customs = [];
       // per prop: the latest tween that has started wins; before any started → first tween's from
       const seen = {};
+      const fps = self.fps;
+      function progress(tw, tt) {
+        if (tt < tw.at) return 0;
+        if (tw.dur <= 0 || tt >= tw.at + tw.dur) return 1;
+        return tw.easeFn.timeBased ? tw.easeFn(tt - tw.at) : tw.easeFn((tt - tw.at) / tw.dur);
+      }
+      let mblur = 0;
       list.forEach(function (tw) {
         for (const p in tw.props) {
           const pair = tw.props[p];
           if (!(p in seen)) { seen[p] = true; st[p] = pair[0]; }        // default = first tween's from
           if (t >= tw.at) {
-            const u = tw.dur <= 0 ? 1 : Math.min(1, (t - tw.at) / tw.dur);
-            st[p] = lerp(pair[0], pair[1], tw.easeFn(u));
+            st[p] = lerp(pair[0], pair[1], progress(tw, t));
+            // velocity-driven motion blur (px per frame above the 30 px/frame threshold → blur px)
+            if (tw.mblur && (p === 'x' || p === 'y') && t < tw.at + tw.dur) {
+              const prev = lerp(pair[0], pair[1], progress(tw, t - 1 / fps));
+              const v = Math.abs(st[p] - prev);
+              mblur = Math.max(mblur, Math.min(12, Math.max(0, (v - 30) / 12) * tw.mblur));
+            }
           }
         }
         if (tw.set && customs.indexOf(tw.set) === -1) customs.push(tw.set);
       });
+      if (mblur > 0 || list.some(function (tw) { return tw.mblur; })) st.mblur = mblur;
       out.set(el, { state: st, customs: customs.map(function (fn) { return { set: fn, props: null }; }) });
     });
     return out;
@@ -305,6 +363,6 @@
     update(0);
   }
 
-  return { cubicBezier: cubicBezier, steps: steps, ease: ease, timeline: timeline, Timeline: Timeline,
+  return { cubicBezier: cubicBezier, steps: steps, spring: spring, springSolver: springSolver, ease: ease, timeline: timeline, Timeline: Timeline,
            applyState: applyState, mount: mount, lerp: lerp, ms: ms, toArray: toArray, tokens: TOKENS };
 });

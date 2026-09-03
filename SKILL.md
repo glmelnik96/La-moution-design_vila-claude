@@ -30,7 +30,7 @@ look before you leap and confirm intent.
 
 **Brand + tests (always):**
 ```bash
-node --test            # 52 tests: lib against the AE mock, lint, tokens in sync, HTML core, renderer CLI
+node --test            # 57 tests: lib against the AE mock, lint, tokens in sync, HTML core, renderer CLI
 ```
 
 **AE channel (when AE work is requested):**
@@ -54,8 +54,10 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 
 ## 3. Workflow: brand first, then the engine
 
-1. **Read the brand** (`brand/cloudru-motion-brand.md`) and pick the scene types from §3 there.
-   Non-Cloud.ru showcase work only: `reference/motion-art-direction.md`.
+1. **Read the brand** (`brand/cloudru-motion-brand.md`) and pick the scene types from §3 there;
+   then `reference/motion-best-practices.md` — the market baseline (premium entrance triple,
+   three motion layers, holds, follow-through, springs ζ ≥ 0.8, hidden-cut transitions) that the
+   brand adapts. Non-Cloud.ru showcase work only: `reference/motion-art-direction.md`.
 2. **Write the beat sheet** before any code: `t (ms) | element | action | ease | dur | note`.
    Durations/staggers are tokens (`base`, `slow`, `tight`…); eases are tokens (`enter`,
    `exit`, `move`, `wipe`, `count`). Sum the holds against the target length.
@@ -90,6 +92,8 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
   vs RIGHT) in the same session, before reporting back. State in one line what you recorded.
 - Render out of process with `aerender` (quirk #33); capture full-res (`M.capture`);
   PNG writes are asynchronous — poll file sizes (quirks #27/#40).
+- Market-practice helpers: `M.premiumIn`, `M.springBake` (same spring math as the HTML
+  engine), `M.blurIn`, `M.wordCascade`, `M.cameraPush`, `M.followThrough`, `M.exitOut`.
 - Reference docs on demand: `reference/ae-cloudru-recipes.md` (scenes), `reference/extendscript-patterns.md`
   (text animators, masks/mattes, shape paths/trim, camera, precompose, markers, rigs),
   `reference/expression-library.md`, `reference/ae-quirks.md` (**read before debugging any weird ES3 error**).
