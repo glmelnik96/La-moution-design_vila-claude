@@ -252,3 +252,136 @@ if (!(comp instanceof CompItem)) {
   JSON.stringify({ ok: true });
 }
 ```
+
+---
+
+## 8. Text Animators (per-line / per-character motion inside ONE layer)
+
+The engine behind every "premium" text reveal. An Animator holds *properties* (Position,
+Opacity, Scale, Tracking…) and *selectors* that decide which characters/words/lines they
+apply to. Animating the animator property (or the selector's Offset) moves glyphs **inside**
+the layer, so a layer mask stays put — that is how `M.lineReveal` clips a rising line without
+a matte.  <!-- VERIFY: addProperty("ADBE Text Animator") creates a default Range Selector? The lib adds one if none -->
+
+```jsx
+var tp   = L.property("ADBE Text Properties");
+var anim = tp.property("ADBE Text Animators").addProperty("ADBE Text Animator");
+anim.name = "rise";
+var sels = anim.property("ADBE Text Selectors");
+if (sels.numProperties === 0) sels.addProperty("ADBE Text Selector");     // Range Selector
+var sel  = sels.property(1);
+// Units / Based On live under "ADBE Text Range Advanced": Based On 1=chars 2=chars excl. spaces 3=words 4=lines <!-- VERIFY -->
+try { sel.property("ADBE Text Range Advanced").property("ADBE Text Range Type2").setValue(4); } catch (e) {}
+var posP = anim.property("ADBE Text Animator Properties").addProperty("ADBE Text Position 3D");
+posP.setValueAtTime(0,   [0, 120, 0]);
+posP.setValueAtTime(0.6, [0,   0, 0]);
+M.bezierEase(posP, 1, CR.EASE.ENTER);
+```
+
+Per-character cascade (only for code/terminal metaphors in Cloud.ru): keep Based On = chars and
+animate `sel.property("ADBE Text Percent Offset")` from `-100` to `100` with Start 0 / End 20 —
+a 20 % window sweeps across the string. Add `"ADBE Text Opacity"` to the same animator for a
+combined fade.
+
+Other animator property matchNames: `ADBE Text Opacity`, `ADBE Text Scale 3D`,
+`ADBE Text Tracking Amount`, `ADBE Text Rotation`, `ADBE Text Fill Color`, `ADBE Text Anchor Point 3D`.
+
+## 9. Shape paths, strokes and Trim Paths (draw-on)
+
+```jsx
+var S = M.shape("arrow");                       // anchor == position == [0,0]
+var g = M.group(S, "line");                     // returns the GROUP
+var c = M.inner(g);                             // its Contents
+M.pathIn(c, [[100, 500], [600, 500]], false);   // open path (Shape object)
+M.pathIn(c, [[586, 490], [600, 500], [586, 510]], false);   // arrowhead
+M.stroke(c, CR.COLOR.ARROW, 2);                 // square caps, miter joins
+var trim = c.addProperty("ADBE Vector Filter - Trim");
+M.tween(trim.property("ADBE Vector Trim End"), 0, 400, 0, 100, "enter");
+```
+
+Order matters inside a group: paths first, then the Trim Paths operator, then Fill/Stroke —
+AE evaluates top-down. Adding a property invalidates sibling references (quirk #3), so re-resolve
+the group with `M.groupByName(S, "line")` before touching it again.
+
+Bezier paths: set `shape.inTangents` / `shape.outTangents` (arrays of `[dx,dy]` relative to
+each vertex) before `setValue`. For the brand, tangents are `[0,0]` — straight segments only.
+
+## 10. Masks and track mattes (revealing without moving)
+
+**Mask on the layer itself** — layer space; moves with the layer; ideal for `M.wipe` (the
+layer is still, the mask path animates):
+
+```jsx
+var m = L.property("ADBE Mask Parade").addProperty("ADBE Mask Atom");
+m.maskMode = MaskMode.ADD;
+var sh = new Shape(); sh.vertices = [[0,0],[600,0],[600,120],[0,120]]; sh.closed = true;
+m.property("ADBE Mask Shape").setValueAtTime(0, sh);
+// mask-shape keys interpolate; ease them by influence only (no speed term for shapes)
+```
+
+**Track matte** — a separate layer supplies alpha/luma; the content layer can move freely
+under it. AE 23+: `L.setTrackMatte(matteLayer, TrackMatteType.ALPHA)` (matte can be
+anywhere); older: `L.trackMatteType = TrackMatteType.ALPHA` with the matte directly ABOVE.
+`M.lineReveal(L, t, { mode: "matte" })` wraps both.  <!-- VERIFY on the installed AE version -->
+
+## 11. 3D layers, camera, parallax (brand: linear dolly only)
+
+```jsx
+var cam = comp.layers.addCamera("cam", [comp.width / 2, comp.height / 2]);   // 2-node camera
+cam.property("ADBE Transform Group").property("ADBE Position").setValue([comp.width / 2, comp.height / 2, -2000]);
+L.threeDLayer = true;
+L.property("ADBE Transform Group").property("ADBE Position").setValue([x, y, -300]);   // closer = bigger
+// dolly 3 % of the frame over the scene, linear-in-space, `move` in time:
+var cp = cam.property("ADBE Transform Group").property("ADBE Position");
+M.tween(cp, 0, 4000, [960, 540, -2000], [960, 540, -1940], "move");
+```
+
+Text-layer Scale is 3-D (quirk #18); `sourceRect * scale` is NOT the on-screen box on 3D
+layers — project through the camera (quirk #37) before auditing overlaps.
+
+## 12. Precompose, adjustment layers, markers
+
+```jsx
+var pre = comp.layers.precompose([1, 2, 3], "scene 1", true);   // moves attributes into the precomp
+var adj = comp.layers.addSolid([0,0,0], "adjust", comp.width, comp.height, 1, comp.duration);
+adj.adjustmentLayer = true;                                     // effects apply to everything below
+L.property("ADBE Marker").setValueAtTime(1.0, new MarkerValue("beat"));   // layer marker
+comp.markerProperty.setValueAtTime(2.0, new MarkerValue("scene 2"));      // comp marker
+```
+
+Comp markers named by scene are the cheapest "beat sheet inside AE": expressions can read
+`marker.key(n).time` and `M.capture` can be driven from them.
+
+## 13. Expression controls rig (one null drives many layers)
+
+```jsx
+var ctl = comp.layers.addNull(comp.duration); ctl.name = "CTL";
+var sl = ctl.property("ADBE Effect Parade").addProperty("ADBE Slider Control"); sl.name = "Progress";
+var cb = ctl.property("ADBE Effect Parade").addProperty("ADBE Checkbox Control"); cb.name = "Dark";
+var col = ctl.property("ADBE Effect Parade").addProperty("ADBE Color Control"); col.name = "Accent";
+// consumer expressions
+opacity.expression = 'thisComp.layer("CTL").effect("Dark")("Checkbox") == 1 ? 100 : 0';
+fillColor.expression = 'thisComp.layer("CTL").effect("Accent")("Color")';
+```
+
+Property-index addressing (`("ADBE Slider Control-0001")` / `(1)`) survives renaming and
+localisation; display names (`("Slider")`) do not.
+
+## 14. Reading back what you built (the verification half)
+
+```jsx
+JSON.stringify(M.run("audit", function () {
+  M.active();
+  var out = [];
+  for (var i = 1; i <= M.comp.numLayers; i++) {
+    var L = M.comp.layer(i);
+    out.push({ name: L.name, win: M.visibleWindow(L), box: M.bounds(L, L.inPoint + M.FD),
+               keys: M.pos(L).numKeys, font: (L.property("ADBE Text Properties") ? M.srcText(L).value.font : null) });
+  }
+  return { layers: out, errs: M.exprErrors() };
+}))
+```
+
+Use it after every build step: intended windows vs `visibleWindow`, intended layout vs
+`bounds`, requested font vs read-back font, and zero `expressionError`s before any capture
+(a throwing expression during `saveFrameToPng` can raise a blocking modal — quirk #11).

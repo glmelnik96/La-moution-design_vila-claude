@@ -1,10 +1,14 @@
-# Motion art-direction — "GRID & RUPTURE"
+# Motion art-direction — "GRID & RUPTURE" (non-brand alternative)
+
+> **Default house style is now Cloud.ru** — see `brand/cloudru-motion-brand.md`. Use this
+> manifesto only when the user explicitly asks for a non-Cloud.ru showcase piece. Its palette
+> (vermillion, electric blue), grain, glow and kinetic overshoot are all on the Cloud.ru
+> stop-list; its grid discipline, asymmetry, scale contrast and stagger are not.
 
 A design-philosophy manifesto for live AE motion work, authored with the
 `anthropic-skills:canvas-design` method (write the philosophy first, then express
-it with master-level craft). This is the house aesthetic for showcase/motion
-pieces in this skill. Read it before art-directing any animation. It blends the
-two directions the user chose: **A — Swiss / editorial** and **C — Bold / kinetic**.
+it with master-level craft). It blends the two directions the user chose for showcase
+work: **A — Swiss / editorial** and **C — Bold / kinetic**.
 
 ---
 

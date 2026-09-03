@@ -1,3 +1,6 @@
 node_modules/
 *.png
 __pycache__/
+out/
+*.mp4
+*.webm

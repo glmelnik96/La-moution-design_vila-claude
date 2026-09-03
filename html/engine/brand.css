@@ -1,0 +1,65 @@
+/* brand.css — Cloud.ru motion canvas. Load tokens.css first (colours, type scale, eases). */
+
+@font-face { font-family: 'SB Sans Display'; font-weight: 400; src: url('fonts/SBSansDisplay-Regular.otf') format('opentype'); }
+@font-face { font-family: 'SB Sans Display'; font-weight: 500; src: url('fonts/SBSansDisplay-Medium.otf') format('opentype'); }
+@font-face { font-family: 'SB Sans Display'; font-weight: 600; src: url('fonts/SBSansDisplay-SemiBold.otf') format('opentype'); }
+@font-face { font-family: 'SB Sans Display'; font-weight: 700; src: url('fonts/SBSansDisplay-Bold.otf') format('opentype'); }
+
+* { box-sizing: border-box; border-radius: 0 !important; }
+html, body { margin: 0; padding: 0; background: #111; }
+body { font-family: var(--cr-font); -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; color: var(--cr-black); }
+
+/* The fixed-size stage. Everything inside is absolutely positioned in canvas px. */
+.cr-canvas {
+  position: relative; overflow: hidden; background: var(--cr-white);
+  --cr-scale: 1; --cr-margin: 80px;
+  font-feature-settings: 'kern' 1, 'liga' 0, 'tnum' 1;
+}
+.cr-scene { position: absolute; inset: 0; overflow: hidden; }
+.cr-tone-light { background: var(--cr-white); color: var(--cr-black); }
+.cr-tone-gray  { background: var(--cr-gray);  color: var(--cr-black); }
+.cr-tone-dark  { background: var(--cr-black); color: var(--cr-white); }
+.cr-tone-green { background: var(--cr-green); color: var(--cr-black); }
+
+/* Text: sizes are 1080p px × --cr-scale; leading/tracking from the brand */
+.cr-text { position: absolute; white-space: pre-wrap; margin: 0; }
+.cr-title    { font-size: calc(var(--cr-type-title) * var(--cr-scale));    font-weight: 600; line-height: var(--cr-leading-heading);  letter-spacing: var(--cr-tracking-heading); }
+.cr-divider  { font-size: calc(var(--cr-type-divider) * var(--cr-scale));  font-weight: 600; line-height: var(--cr-leading-heading); }
+.cr-section  { font-size: calc(var(--cr-type-section) * var(--cr-scale));  font-weight: 400; line-height: 1.05; }
+.cr-subtitle { font-size: calc(var(--cr-type-subtitle) * var(--cr-scale)); font-weight: 400; line-height: var(--cr-leading-subtitle); }
+.cr-colhead  { font-size: calc(var(--cr-type-colhead) * var(--cr-scale));  font-weight: 600; line-height: 1.2; }
+.cr-body     { font-size: calc(var(--cr-type-body) * var(--cr-scale));     font-weight: 400; line-height: var(--cr-leading-body); }
+.cr-caption  { font-size: calc(var(--cr-type-caption) * var(--cr-scale));  font-weight: 400; line-height: 1.3; }
+.cr-label    { font-size: calc(var(--cr-type-label) * var(--cr-scale));    font-weight: 500; line-height: 1.2; letter-spacing: var(--cr-tracking-label); text-transform: uppercase; }
+.cr-kpi      { font-size: calc(var(--cr-type-kpi-hero) * var(--cr-scale)); font-weight: 400; line-height: var(--cr-leading-kpi); letter-spacing: var(--cr-tracking-kpi); font-variant-numeric: tabular-nums; }
+.cr-kpi-second { font-size: calc(var(--cr-type-kpi-second) * var(--cr-scale)); font-weight: 400; line-height: 1; letter-spacing: var(--cr-tracking-kpi); font-variant-numeric: tabular-nums; }
+.cr-kpi-desc { font-size: calc(var(--cr-type-kpi-desc) * var(--cr-scale)); font-weight: 400; line-height: 1.3; color: var(--cr-graphite); }
+.cr-tone-dark .cr-kpi-desc { color: var(--cr-gray); }
+.cr-step-num { font-size: calc(var(--cr-type-step-num) * var(--cr-scale)); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* Line-mask reveal: each line is clipped to its own box; the line rises inside it */
+.cr-lines .cr-line-mask { overflow: hidden; display: block; }
+.cr-lines .cr-line { display: block; will-change: transform; }
+
+/* Logo */
+.cr-logo { display: flex; align-items: center; gap: 12px; }
+.cr-logo svg { display: block; }
+.cr-logo-word { font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+
+/* Patterns & shapes */
+.cr-dot { display: block; }
+.cr-portal-step { position: absolute; }
+.cr-bracket-side { position: absolute; }
+.cr-rule, .cr-plate { position: absolute; }
+.cr-arrow, .cr-star, .cr-cloud, .cr-llll-cell { display: block; overflow: visible; }
+
+/* Accent mark: the 12×12 green square before a callout line */
+.cr-mark { position: absolute; width: calc(12px * var(--cr-scale)); height: calc(12px * var(--cr-scale)); background: var(--cr-green); }
+
+/* Dev controls (hidden in render mode) */
+.cr-controls {
+  position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 12px; align-items: center;
+  padding: 8px 12px; background: rgba(34,34,34,0.92); color: #fff; font: 12px/1 monospace; z-index: 9999;
+}
+.cr-controls button { font: inherit; background: var(--cr-green); color: #222; border: 0; padding: 6px 10px; cursor: pointer; }
+.cr-controls input[type=range] { flex: 1; }
