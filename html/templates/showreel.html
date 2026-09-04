@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Cloud.ru motion — showreel</title>
+<link rel="stylesheet" href="../engine/tokens.css">
+<link rel="stylesheet" href="../engine/brand.css">
+<script src="../engine/tokens.js"></script>
+<script src="../engine/motion.js"></script>
+<script src="../engine/brand.js"></script>
+</head>
+<body>
+<script>
+// Cloud.ru showreel v2 — six brand scenes built on reference/motion-best-practices.md:
+// premium entrances (opacity+rise+scale+blur), word reveals with ONE green word, follow-through,
+// holds after every hit, three motion layers (hero / support / ambient texture), springs ζ≥0.8 on
+// support elements, scale-through and mask-wipe transitions with a hidden cut, motion-blurred wipes,
+// a 3% camera push with 3-layer parallax, exits ≤ 10 frames.
+// ?scene=title|divider|kpi|content|scheme|finale renders one scene; ?format=story|square|4k.
+(function () {
+  const q = new URLSearchParams(location.search);
+  const FORMAT = q.get('format') || '1080p';
+  const ONLY = q.get('scene');
+  const F = MotionTokens.format[FORMAT];
+  const S = F.scale;
+  const px = (v) => Math.round(v * S / 2) * 2;
+  const MS = MotionTokens.duration_ms, ST = MotionTokens.stagger_ms, EN = MotionTokens.entrance, CAM = MotionTokens.camera;
+  const sec = (ms) => ms / 1000;
+  const fr = (n) => n / F.fps;                       // frames → seconds
+  const M = F.margin, W = F.w, H = F.h;
+  const narrow = (W - 2 * M) < px(1700);
+
+  const canvas = Brand.canvas(document.body, FORMAT);
+  const tl = Motion.timeline({ fps: F.fps });
+  const scenes = [];
+  let T = 0;
+  // scenes overlap by `lead` seconds so transitions (wipes, scale-through) can hide the cut
+  function addScene(name, tone, seconds, build, lead) {
+    if (ONLY && ONLY !== name) return;
+    const sc = Brand.scene(canvas, tone);
+    const t0 = T, t1 = T + seconds;
+    tl.scene(name, Math.max(0, t0 - (lead || 0)), t1, sc);
+    scenes.push({ name, el: sc, t0, t1, build });
+    T = t1;
+  }
+  const at = (t0, ms) => t0 + sec(ms);
+  const rise = px(EN.rise_px), blur = px(EN.blur_px);
+  const wordStagger = fr(EN.word_stagger_frames), cardStagger = fr(EN.card_stagger_frames);
+
+  // ambient texture for every scene (texture tier): dot field at 6–8 %, drifting 2 px/s
+  function texture(sc, t0, t1, color, opacity) {
+    const tx = Brand.texture(sc, { kind: 'dots', size: px(2), gap: px(28), color: color || 'var(--cr-black)', opacity: opacity || 0.07, speed: CAM.drift_px_per_s, angle: -0.6 });
+    tl.fromTo(tx.el, { drift: [0, t1 - t0] }, { at: t0, dur: t1 - t0, ease: 'linear', set: tx.drift });
+    return tx.el;
+  }
+  // a layer wrapper for parallax depth
+  function layer(sc) { const l = Brand.box(sc, 'cr-layer', { left: 0, top: 0, right: 0, bottom: 0 }); return l; }
+
+  // ─────────────────────────── 1. TITLE (hook: portal wipe in the first 15 frames) ───────────────────────────
+  addScene('title', 'cr-tone-light', 5.2, function (sc, t0) {
+    const t1 = t0 + 5.2;
+    const bg = layer(sc), mid = layer(sc), fg = layer(sc);
+    texture(bg, t0, t1);
+    // hero: the portal wipes in from the right with motion blur, steps staggered tight
+    const portal = Brand.portal(mid, { w: px(480), h: px(320), steps: 4, dx: px(40), dy: px(40), color: 'var(--cr-green)', pos: { left: W - M - px(600), top: px(200) } });
+    tl.fromTo(portal.steps, { x: [W * 0.45, 0], opacity: [0, 1] }, { at: t0, dur: sec(MS.wipe), ease: 'enter', stagger: sec(ST.tight), mblur: 1 });
+    // support: logo lands from above after the portal starts (offset, not delay)
+    const logo = Brand.logo(fg, { size: px(42), pos: { left: M, top: px(60) } });
+    Brand.enter(tl, logo, { at: at(t0, 260), rise: -px(28), scale: 0.98, blur: px(4), dur: sec(MS.base) });
+    // hero text: word reveal, premium entrance per word, ONE green word with a growing underline
+    const h = Brand.text(fg, 'Cloud.ru снижает цену прогресса', 'cr-title', { left: M, top: px(380), width: narrow ? W - 2 * M : W - M * 2 - px(640) });
+    h.style.letterSpacing = '-0.02em'; h.style.lineHeight = '1.04';
+    const words = Brand.words(h);
+    const tWords = at(t0, 520);
+    Brand.enter(tl, words, { at: tWords, rise: px(36), scale: 0.96, blur: px(5), dur: sec(MS.slow), stagger: wordStagger });
+    const hot = words[2];                                        // «цену»
+    hot.style.color = 'var(--cr-green)';
+    const u = Brand.highlight(hot, { weight: px(6), gap: px(4) });
+    tl.fromTo(u, { scaleX: [0, 1] }, { at: tWords + wordStagger * 2 + sec(MS.slow) + fr(5), dur: fr(8), ease: 'enter' });
+    // support: subtitle plate wipes in, its text follows 150 ms later (follow-through)
+    const hBottom = px(380) + 2 * px(MotionTokens.type.scale_1080.title) * 1.04 + px(48);
+    const plate = Brand.plate(fg, { pos: { left: M, top: hBottom, width: px(1000), height: px(96) } });
+    tl.fromTo(plate, { clipR: [100, 0] }, { at: at(t0, 1350), dur: sec(MS.base), ease: 'wipe' });
+    const sub = Brand.text(plate, 'Устойчивая основа для движения вперёд', 'cr-subtitle', { left: px(28), top: px(24), width: px(960) });
+    sub.style.whiteSpace = 'nowrap';
+    const subLines = Brand.lines(sub);
+    tl.fromTo(subLines, { y: [px(52), 0] }, { at: at(t0, 1500), dur: sec(MS.base), ease: 'enter' });
+    // texture tier: dots build row by row, then breathe with the portal
+    const dots = Brand.dots(fg, { cols: 36, rows: 3, size: px(4), gap: px(12), pos: { left: M, top: H - M - px(36) } });
+    dots.rows.forEach((row, r) => tl.fromTo(row, { opacity: [0, 1] }, { at: at(t0, 1650) + sec(ST.pattern_row) * r, dur: sec(MS.fast), ease: 'linear', stagger: 0.004 }));
+    tl.fromTo(portal.el, { breath: [0, t1 - t0] }, { at: at(t0, 900), dur: t1 - t0, ease: 'linear', set: Brand.breathe(CAM.breathe_scale, CAM.breathe_period_s) });
+    // camera: 3% push with three-layer parallax over the whole scene
+    Brand.camera(tl, sc, t0, t1, { push: CAM.push_scale, dx: px(24), layers: [{ el: bg, depth: CAM.parallax[0] }, { el: mid, depth: CAM.parallax[1] }, { el: fg, depth: CAM.parallax[2] }] });
+    // HOLD ≈ 2.2 s, then exits ≤ 10 frames, reverse stagger; the green wipe hides the cut
+    const X = at(t0, 4050);
+    Brand.exit(tl, words, { at: X, dur: fr(9), drop: -px(28), blur: px(3), stagger: fr(1), from: 'end' });
+    tl.fromTo(u, { scaleX: [1, 0] }, { at: X, dur: fr(6), ease: 'exit' });
+    tl.fromTo(plate, { clipL: [0, 100] }, { at: X + fr(2), dur: fr(9), ease: 'exit' });
+    tl.fromTo(subLines, { y: [0, px(52)] }, { at: X, dur: fr(8), ease: 'exit' });
+    tl.fromTo(dots.el, { opacity: [1, 0] }, { at: X, dur: fr(6), ease: 'exit' });
+    Brand.exit(tl, logo, { at: X + fr(3), dur: fr(8), drop: -px(20) });
+    tl.fromTo(portal.steps, { x: [0, W * 0.6] }, { at: X + fr(2), dur: fr(10), ease: 'exit', stagger: fr(1), from: 'end', mblur: 1 });
+    // transition: green plate rises from the bottom over the last 12 frames (belongs to this scene, cut hidden)
+    const wipe = Brand.plate(sc, { color: 'var(--cr-green)' });
+    tl.fromTo(wipe, { clipT: [100, 0] }, { at: t1 - fr(12), dur: fr(12), ease: 'wipe' });
+  });
+
+  // ─────────────────────────── 2. DIVIDER (odometer + bracket, rhythm not metronome) ───────────────────────────
+  addScene('divider', 'cr-tone-green', 3.4, function (sc, t0) {
+    const t1 = t0 + 3.4;
+    texture(sc, t0, t1, 'var(--cr-black)', 0.08);
+    const od = Brand.odometer(sc, { digits: 2, cls: 'cr-divider', pos: { left: M, top: px(300) } });
+    tl.fromTo(od.el, { n: [0, 2] }, { at: at(t0, 140), dur: 0.5, ease: 'count', set: od.set });
+    Brand.enter(tl, od.el, { at: at(t0, 120), rise: px(24), scale: 1, blur: px(4), dur: sec(MS.base) });
+    const h = Brand.text(sc, 'Инфраструктура, которая не подводит', 'cr-section', { left: M, top: px(480), width: W - 2 * M });
+    const hw = Brand.words(h);
+    Brand.enter(tl, hw, { at: at(t0, 420), rise: px(30), scale: 0.97, blur: px(4), dur: sec(MS.base), stagger: wordStagger });
+    // bracket draws on with phrasing: 0 / 180 / 340 / 550 / 720 ms
+    const br = Brand.bracket(sc, { inset: M, weight: px(2), color: 'var(--cr-black)', cut: [0.3, 0.42] });
+    const b0 = at(t0, 700);
+    tl.fromTo(br.sides.top1, { scaleX: [0, 1] }, { at: b0, dur: sec(MS.fast), ease: 'enter' });
+    tl.fromTo(br.sides.top2, { scaleX: [0, 1] }, { at: b0 + 0.18, dur: sec(MS.base), ease: 'enter' });
+    tl.fromTo(br.sides.right, { scaleY: [0, 1] }, { at: b0 + 0.34, dur: sec(MS.base), ease: 'enter' });
+    tl.fromTo(br.sides.bottom, { scaleX: [0, 1] }, { at: b0 + 0.55, dur: sec(MS.slow), ease: 'enter' });
+    tl.fromTo(br.sides.left, { scaleY: [0, 1] }, { at: b0 + 0.72, dur: sec(MS.base), ease: 'enter' });
+    const logo = Brand.logo(sc, { size: px(42), pos: { right: M + px(40), top: M + px(36) }, inner: 'var(--cr-green)', mark: 'var(--cr-black)' });
+    Brand.enter(tl, logo, { at: at(t0, 900), rise: -px(16), scale: 0.98, dur: sec(MS.base) });
+    // hold → hard cut (nothing animates at the end on purpose)
+  });
+
+  // ─────────────────────────── 3. KPI (springs on cards, counters, one green number) ───────────────────────────
+  addScene('kpi', 'cr-tone-light', 5.4, function (sc, t0) {
+    const t1 = t0 + 5.4;
+    const bg = layer(sc), fg = layer(sc);
+    texture(bg, t0, t1);
+    const h = Brand.text(fg, 'Экономия TCO за 12 месяцев', 'cr-section', { left: M, top: px(120), width: W - 2 * M });
+    const hl = Brand.lines(h);
+    tl.fromTo(hl, { y: [Brand.lineHeight(hl[0]), 0] }, { at: at(t0, 80), dur: sec(MS.slow), ease: 'enter' });
+    const rule = Brand.rule(fg, { w: W - M * 2, h: px(2), color: 'var(--cr-gray)', origin: 'left', pos: { left: M, top: narrow ? px(240) : px(340) } });
+    tl.fromTo(rule, { scaleX: [0, 1] }, { at: at(t0, 260), dur: sec(MS.slow), ease: 'enter' });
+    const stacked = narrow;
+    const cols = stacked ? [M, M, M] : [M, M + px(600), M + px(1200)];
+    const tops = stacked ? [px(300), px(600), px(900)] : [px(400), px(400), px(400)];
+    const data = [[30, 0, '%', 'к затратам on-prem'], [99.9, 1, '%', 'SLA платформы'], [152, 0, '', 'сервисов в каталоге']];
+    const nums = [], units = [];
+    data.forEach((d, i) => {
+      const wrap = Brand.box(fg, '', { left: cols[i], top: tops[i], width: px(560) });
+      const row = Brand.el('div', '', { display: 'flex', alignItems: 'baseline', gap: px(12), whiteSpace: 'nowrap' }, wrap);
+      const n = Brand.el('span', 'cr-kpi', { fontSize: px(200) }, row); n.textContent = '0';
+      const unit = Brand.el('span', 'cr-kpi-second', { fontSize: px(88) }, row); unit.textContent = d[2];
+      const cap = Brand.text(wrap, d[3], 'cr-kpi-desc', { left: 0, top: px(12) }); cap.style.position = 'relative';
+      const start = at(t0, 420) + cardStagger * i;
+      // hero: card springs in (ζ 0.8 → ~1.5% overshoot, reads as weight)
+      tl.fromTo(wrap, { y: [px(48), 0], opacity: [0, 1], scale: [0.96, 1] }, { at: start, ease: 'spring:m3_expressive' });
+      tl.fromTo(n, { n: [0, d[0]] }, { at: start + fr(2), dur: sec(MS.count), ease: 'count', set: Brand.counter({ decimals: d[1] }) });
+      // follow-through: unit lands 60 ms after the count settles, caption 60 ms after that
+      Brand.enter(tl, unit, { at: start + sec(MS.count) - 0.16, x: -px(16), rise: 0, scale: 1, dur: sec(MS.base) });
+      Brand.enter(tl, cap, { at: start + sec(MS.count) - 0.16 + sec(EN.follow_through_delay_ms), rise: px(10), scale: 1, dur: sec(MS.base) });
+      nums.push(n); units.push(unit);
+    });
+    // the accent, last: ONE number turns green and gets its underline
+    const hot = nums[0];
+    tl.fromTo(hot, { mix: [0, 1] }, { at: at(t0, 2650), dur: 0.2, ease: 'linear', set: Brand.colorMix('#222222', '#26D07C', 'color') });
+    const u = Brand.rule(fg, { w: px(300), h: px(6), color: 'var(--cr-green)', pos: { left: cols[0], top: tops[0] + px(210) } });
+    tl.fromTo(u, { scaleX: [0, 1] }, { at: at(t0, 2750), dur: fr(8), ease: 'enter' });
+    Brand.camera(tl, sc, t0, t1, { push: 1.02, dx: px(12), layers: [{ el: bg, depth: 0.3 }, { el: fg, depth: 1 }] });
+    // hold, then scale-through out (the next scene scales in underneath)
+    Brand.scaleThrough(tl, fg, null, t1 - fr(12), { dur: fr(14), up: 1.05, blur: px(4) });
+  }, 0);
+
+  // ─────────────────────────── 4. CONTENT (scale-through in; columns with follow-through rules) ───────────────────────────
+  addScene('content', 'cr-tone-gray', 4.6, function (sc, t0) {
+    const t1 = t0 + 4.6;
+    const bg = layer(sc), fg = layer(sc);
+    texture(bg, t0, t1);
+    Brand.scaleThrough(tl, null, sc, t0 - fr(10), { dur: fr(14), down: 0.96, blur: px(4) });
+    const h = Brand.text(fg, 'Три уровня платформы', 'cr-section', { left: M, top: px(120), width: W - 2 * M });
+    const hw = Brand.words(h);
+    Brand.enter(tl, hw, { at: at(t0, -160), rise: px(30), scale: 0.97, blur: px(4), dur: sec(MS.base), stagger: wordStagger });
+    const heads = ['Evolution', 'Advanced', 'ML Space'];
+    const bodies = ['Публичное облако для продуктовых команд: IaaS, PaaS и managed-сервисы',
+      'Гибридные сценарии и enterprise-требования: 152-ФЗ, изолированные контуры',
+      'Платформа для обучения и инференса моделей на GPU-кластерах'];
+    const cw = px(560), gap = px(40);
+    heads.forEach((t, i) => {
+      const x = narrow ? M : M + i * (cw + gap);
+      const y = narrow ? px(300) + i * px(220) : px(360);
+      const head = Brand.text(fg, t, 'cr-colhead', { left: x, top: y, width: cw });
+      const rule = Brand.rule(fg, { w: cw, h: px(2), color: 'var(--cr-graphite)', pos: { left: x, top: y + px(50) } });
+      const body = Brand.text(fg, bodies[i], 'cr-body', { left: x, top: y + px(80), width: cw - px(40) });
+      body.style.color = 'var(--cr-graphite)';
+      const s = at(t0, 200) + cardStagger * i;
+      tl.fromTo(head, { y: [px(40), 0], opacity: [0, 1], scale: [0.97, 1] }, { at: s, ease: 'spring:m3_standard' });
+      tl.fromTo(rule, { scaleX: [0, 1] }, { at: s + sec(EN.follow_through_delay_ms) * 2, dur: sec(MS.fast), ease: 'enter' });
+      tl.fromTo(body, { opacity: [0, 1], y: [px(10), 0] }, { at: s + sec(EN.follow_through_delay_ms) * 4, dur: sec(MS.base), ease: 'enter' });
+    });
+    const ll = Brand.llll(fg, { cells: 4, cell: px(80), gap: px(12), weight: px(2), pos: { right: M, top: px(120) } });
+    tl.fromTo(ll.cells, { opacity: [0, 1], x: [px(20), 0] }, { at: at(t0, 800), dur: sec(MS.base), ease: 'enter', stagger: sec(ST.tight) });
+    Brand.scaleThrough(tl, fg, null, t1 - fr(12), { dur: fr(14), up: 1.05, blur: px(4) });
+  }, fr(10));
+
+  // ─────────────────────────── 5. SCHEME (blocks anticipate, arrows draw after both ends, accent last) ───────────────────────────
+  addScene('scheme', 'cr-tone-light', 5.0, function (sc, t0) {
+    const t1 = t0 + 5.0;
+    const bg = layer(sc), fg = layer(sc);
+    texture(bg, t0, t1);
+    Brand.scaleThrough(tl, null, sc, t0 - fr(10), { dur: fr(14), down: 0.96, blur: px(4) });
+    const h = Brand.text(fg, 'Данные превращаются в решения за три шага', 'cr-section', { left: M, top: px(120), width: W - M * 2 });
+    const hw = Brand.words(h);
+    Brand.enter(tl, hw, { at: at(t0, -160), rise: px(30), scale: 0.97, blur: px(4), dur: sec(MS.base), stagger: wordStagger });
+    const bw = px(500), bh = px(240), gapX = px(130);
+    const stackedS = narrow;
+    const xs = stackedS ? [M, M, M] : [M, M + bw + gapX, M + 2 * (bw + gapX)];
+    const ys = stackedS ? [px(300), px(300) + bh + px(80), px(300) + 2 * (bh + px(80))] : [px(440), px(440), px(440)];
+    const labels = ['Данные', 'Обработка', 'Инсайты'];
+    const blocks = xs.map((x, i) => {
+      const b = Brand.box(fg, '', { left: x, top: ys[i], width: bw, height: bh });
+      b.style.background = 'var(--cr-gray)';
+      const n = Brand.text(b, '0' + (i + 1), 'cr-label', { left: px(32), top: px(28) }); n.style.color = 'var(--cr-graphite)';
+      Brand.text(b, labels[i], 'cr-colhead', { left: px(32), top: px(150) });
+      return b;
+    });
+    blocks.forEach((b, i) => tl.fromTo(b, { y: [px(48), 0], opacity: [0, 1], scale: [0.96, 1] }, { at: at(t0, 260) + cardStagger * 2 * i, ease: 'spring:m3_expressive' }));
+    for (let j = 0; j < 2 && !stackedS; j++) {
+      const a = Brand.arrow(fg, { len: gapX - px(20), weight: px(2), head: px(12), pos: { left: xs[j] + bw + px(10), top: ys[j] + bh / 2 - px(13) } });
+      tl.fromTo(a.el, { draw: [0, 1] }, { at: at(t0, 260) + cardStagger * 2 * (j + 1) + 0.3, dur: sec(MS.fast), ease: 'enter', set: Brand.drawOn(a.path) });
+    }
+    const acc = Brand.svg('svg', { width: bw, height: bh, viewBox: '0 0 ' + bw + ' ' + bh });
+    acc.style.position = 'absolute'; acc.style.left = xs[2] + 'px'; acc.style.top = ys[2] + 'px';
+    const p = Brand.svg('path', { d: 'M2 2 H' + (bw - 2) + ' V' + (bh - 2) + ' H2 Z', fill: 'none', stroke: 'var(--cr-green)', 'stroke-width': px(4), 'stroke-linejoin': 'miter' }, acc);
+    fg.appendChild(acc);
+    tl.fromTo(acc, { draw: [0, 1] }, { at: at(t0, 1900), dur: sec(MS.slow), ease: 'enter', set: Brand.drawOn(p) });
+    const star = Brand.star(fg, { size: px(48), weight: px(2), pos: { left: xs[2] + bw - px(80), top: ys[2] + px(28) } });
+    tl.fromTo(star.el, { draw: [0, 1] }, { at: at(t0, 2500), dur: sec(MS.base), ease: 'enter', set: Brand.drawOn(star.path) });
+    Brand.camera(tl, sc, t0, t1, { push: 1.02, dx: px(10), layers: [{ el: bg, depth: 0.3 }, { el: fg, depth: 1 }] });
+    // exit: green mask wipe from the left with motion blur (belongs to this scene → the cut is hidden)
+    const wipe = Brand.plate(sc, { color: 'var(--cr-green)' });
+    tl.fromTo(wipe, { x: [-W, 0] }, { at: t1 - fr(14), dur: fr(14), ease: 'wipe', mblur: 1 });
+  }, fr(10));
+
+  // ─────────────────────────── 6. LOGO FINALE (portal build, logo lands with no overshoot, stillness) ───────────────────────────
+  addScene('finale', 'cr-tone-green', 4.6, function (sc, t0) {
+    const t1 = t0 + 4.6;
+    const bg = layer(sc), mid = layer(sc), fg = layer(sc);
+    texture(bg, t0, t1, 'var(--cr-black)', 0.08);
+    const portal = Brand.portal(mid, { w: px(400), h: px(400), steps: 3, dx: px(40), dy: -px(40), color: 'var(--cr-white)', pos: { left: W - M - px(560), top: px(240) } });
+    tl.fromTo(portal.steps, { opacity: [0, 1], x: [px(24), 0] }, { at: at(t0, 300), dur: sec(MS.base), ease: 'enter', stagger: sec(ST.base) });
+    tl.fromTo(portal.el, { breath: [0, t1 - t0] }, { at: at(t0, 1200), dur: t1 - t0, ease: 'linear', set: Brand.breathe(CAM.breathe_scale, CAM.breathe_period_s) });
+    // hero: the mark — no overshoot (ease enter), the largest, slowest move of the scene
+    const logo = Brand.logo(fg, { size: px(96), pos: { left: M, top: px(420) }, mark: 'var(--cr-black)', inner: 'var(--cr-green)' });
+    Brand.enter(tl, logo, { at: at(t0, 520), rise: px(EN.rise_hero_px), scale: 0.96, blur: px(6), dur: sec(MS.hero), ease: 'enter' });
+    // support: thanks + contacts follow through
+    const th = Brand.text(fg, 'Спасибо', 'cr-section', { left: M, top: px(600) });
+    const tw = Brand.words(th);
+    Brand.enter(tl, tw, { at: at(t0, 1000), rise: px(30), scale: 0.97, blur: px(4), dur: sec(MS.base), stagger: wordStagger });
+    const contacts = Brand.text(fg, 'cloud.ru · sales@cloud.ru', 'cr-body', { left: M, top: px(720) });
+    Brand.enter(tl, contacts, { at: at(t0, 1000) + sec(EN.follow_through_delay_ms) * 3, rise: px(12), scale: 1, dur: sec(MS.base) });
+    const dots = Brand.dots(fg, { cols: 40, rows: 2, size: px(4), gap: px(12), color: 'var(--cr-black)', pos: { left: M, top: H - M - px(28) } });
+    tl.fromTo(dots.cells, { opacity: [0, 1] }, { at: at(t0, 1500), dur: sec(MS.fast), ease: 'linear', stagger: 0.012 });
+    Brand.camera(tl, sc, t0, t1, { push: 1.03, dx: px(20), layers: [{ el: bg, depth: 0.3 }, { el: mid, depth: 0.6 }, { el: fg, depth: 1 }] });
+    // then: complete stillness (texture drift only) to the end
+  });
+
+  document.fonts.ready.then(function () {
+    scenes.forEach(function (s) { s.el.style.display = ''; s.build(s.el, s.t0); });
+    tl.duration = T;
+    Motion.mount(tl, { controls: true, autoplay: true });
+  });
+})();
+</script>
+</body>
+</html>

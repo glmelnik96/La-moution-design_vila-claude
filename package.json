@@ -1,9 +1,19 @@
 {
   "name": "ae-motion-live",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "tokens": "node scripts/build-tokens.js",
+    "tokens:check": "node scripts/build-tokens.js --check",
+    "lint": "node scripts/lint-jsx.js",
+    "serve": "node html/render/serve.js . 8093",
+    "render:sheet": "node html/render/render.js html/templates/showreel.html --out out/showreel --scale 0.5 --beats auto --sheet out/showreel/sheet.png",
+    "render:video": "node html/render/render.js html/templates/showreel.html --out out/showreel --beats none --video out/showreel.mp4"
+  },
+  "description": "Cloud.ru motion design: live After Effects (ExtendScript over CDP) + HTML motion engine + AI asset generation",
+  "engines": {
+    "node": ">=22"
   }
 }

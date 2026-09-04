@@ -52,13 +52,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BOXES = os.path.join(HERE, "boxes.json")
 
 VER = 1
-for a in ("--v2", "--v3", "--v4", "--v5"):
+for a in ("--v2", "--v3", "--v4", "--v5", "--v6"):
     if a in sys.argv:
         VER = int(a[-1])
 COMP_NAME = {1: "Comp 1", 2: "Comp 2", 3: "Comp 3",
-             4: "Comp 4", 5: "Comp 5"}[VER]
+             4: "Comp 4", 5: "Comp 5", 6: "Comp 6"}[VER]
 OUTNAME = {1: "cloud.jsx", 2: "cloud_v2.jsx", 3: "cloud_v3.jsx",
-           4: "cloud_v4.jsx", 5: "cloud_v5.jsx"}[VER]
+           4: "cloud_v4.jsx", 5: "cloud_v5.jsx", 6: "cloud_v6.jsx"}[VER]
 IS3D = (VER >= 3)
 RICH = (VER >= 2)          # gather-in, ripple, marker, counter, motion blur
 GROW = (VER >= 4)          # words climb the type scale as votes arrive
@@ -67,12 +67,19 @@ GROW = (VER >= 4)          # words climb the type scale as votes arrive
 # word to hold a mathematically perfect slot after every one of 72 events, and
 # the price is 221 separate flights - each individually short, collectively
 # fidgety. v5 trades a few pixels of packing rigour for stillness.
-CALM = (VER == 5)
+CALM = (VER in (5, 6))
+
+# v6 is v5 plus a closing act: 10 more seconds in which the cloud migrates into
+# the silhouette of the letter "Ya". The target layout is NOT computed here -
+# it is read from ya_layout.json, which form_ya.py wrote and the client signed
+# off. The pack is a greedy search over a numpy grid, so re-deriving it at build
+# time would let a one-line change silently reshuffle an approved frame.
+FORM = (VER == 6)
 
 FPS = 25.0
 W, H = 4096, 2160
 CX, CY = W // 2, H // 2
-DUR_F = 750                      # 30 s
+DUR_F = 1125 if FORM else 750    # 45 s: 40 s to the letter, then the sign-off
 
 # ---- brand palette (sampled from the brandbook swatch card) ----
 NAVY   = [0.00784, 0.05490, 0.11765]   # #02101E  ground
@@ -191,8 +198,70 @@ if CALM:
     F_LAST = 470
     F_HERO = 250
 F_LOGO    = 0      # the logo holds from the first frame
-F_SWEEP   = 636    # v3 light sweep crosses just before the sign-off
+# v3 light sweep crosses just before the sign-off. In v6 the held cloud is no
+# longer the sign-off - it is the halfway point - so a sweep at f636 spends
+# itself on a frame the viewer is about to leave. It moves onto the finished
+# letter instead, which also solves the tail: everything else is done by f900
+# and the last 4 s would otherwise be a dead frame.
+F_SWEEP   = 912 if FORM else 636
 SPAN = F_LAST - F_FIRST
+
+# ---- v6: the closing act ----
+# The cloud is still reflowing at f690 - measured, not assumed (endstate.py
+# walks every word's state list and reports the last frame anything moves). A
+# closing beat scheduled before that would collide with the tail of the vote,
+# so the migration waits for real stillness first.
+F_SETTLE = 690           # last cloud activity
+F_FORM0  = 720           # first word departs - 1.2 s of held frame before it
+F_SPREAD = 70            # stagger window: heroes leave first, fill last
+F_FLIGHT = 110           # one word's travel, 4.4 s. Long on purpose: the brief
+                         # is "плавно", and a slow drift of 100 words reads as
+                         # one motion, where a fast one reads as 100 events.
+F_FORM1 = F_FORM0 + F_SPREAD + F_FLIGHT      # f900, everything has landed
+F_REP0, F_REP1 = 800, 900   # the repeat instances fade up under the arrivals
+F_QOUT = 715             # question and rule clear before the figure needs the
+                         # top of the frame
+
+# ---- v6: from the letter of words to the mark ----
+# The figure is NOT congruent with the logo's glyph, which was the whole question
+# here. form_ya's win() clips its test window to the grid and then computes `need`
+# from the CLIPPED indices, so a box hanging off the letterform is only tested on
+# the part still on the grid and passes: 32 of the 112 boxes are not fully on the
+# glyph, the worst 68% off, and some of those sit across the letter's internal
+# counters. No uniform scale of the glyph contains them - scaling the letter
+# scales its holes too - so a true match cut is not available at any size.
+# mark_probe.py has the measurement.
+#
+# What rescues it is the artwork. The mark is a blue ring and disc with the Я
+# KNOCKED OUT to transparency, not printed in a second colour. So the disc is its
+# own mask: fade it up over the compacted figure and every word that overhangs
+# the letterform is covered by opaque blue, while the words inside show through
+# the hole. The 32 bad boxes stop being a defect and become the thing that is
+# hidden. The beat is therefore: the figure compacts onto where the letter will
+# be, the ring closes around it in the same gesture, and the last of the words
+# dissolves away inside the counter, leaving the mark.
+#
+# Nothing here is legible by design. At the collapse scale the 370 pt hero is
+# about 28 pt in a 4096 frame, so no word can be caught half-under the disc edge
+# and read as a clipping error - which is what licenses the overlap below.
+# The overlap below is the whole trick and it was arrived at on the render. The
+# first pass ran the collapse alone, then brought the mark in afterwards, and
+# f1025 came back as a small clump of type in an otherwise empty navy field -
+# the corner lockup had already gone and the centre mark had not arrived, so
+# there was a second of the spot with nothing in it. The two gestures have to
+# run TOGETHER: the mark starts resolving while the figure is still twice the
+# size of the counter, and they finish on the same frame.
+F_COLL0, F_COLL1 = 975, 1055     # the figure compacts onto the mark's letterform
+F_MARK0, F_MARK1 = 1008, 1062    # the ring resolves around it as it comes down
+F_REPF0, F_REPF1 = 1022, 1052    # fill releases, biggest away first
+F_BASF0, F_BASF1 = 1036, 1066    # then the answers, KOLLEKTIV last of all
+F_FADE_LEN = 20                  # one word's dissolve
+F_LOGOUT = 982                   # the corner lockup hands over to the centre
+# 1150 px is 53% of frame height. 860 was tried first and read as timid: the end
+# card is the only frame in 45 s with a single object in it, and at 40% the mark
+# left a ring of empty navy wider than itself. It also sets the collapse - the
+# counter is 47% of the artwork, so a bigger mark is a shorter fall for the type.
+MARK_D = 1150.0
 
 # v4: the voting window. The brief is explicit - sizes must still be changing
 # up to 0:25 (f625) - and now it is the hero that carries that last change.
@@ -590,6 +659,23 @@ def place(i, p, r=1.0):
             round(z, 1))
 
 
+def place_flat(i, p, r=1.0):
+    """place() with the depth compensation removed - the word lies on z = 0.
+
+    The closing figure is packed to a 10 px tolerance, and depth would eat it.
+    Over the migration the camera travels 410 units in z plus ~95 px laterally;
+    across the z span of -520..+520 that is ~17 px of differential drift between
+    the near and far tiers. Every word is therefore flown home to z = 0 while
+    the camera returns square-on, so the letter is rendered exactly as packed
+    rather than as packed-plus-parallax. It is the right picture as well as the
+    right geometry: a sign-off card should read flat and graphic.
+    """
+    b = BOX[i]
+    return (round(p[0] - r * (b["lf"] + b["wd"] / 2.0), 1),
+            round(p[1] - r * (b["tp"] + b["ht"] / 2.0), 1),
+            0.0)
+
+
 def gather_from(i, p):
     """Where a word starts its entrance: a little further out along its own
     radius, so the cloud visibly draws itself together instead of blinking on."""
@@ -916,6 +1002,183 @@ if GROW:
         ops.sort(key=lambda o: o[0])
         OPA[i] = [[round(o[0], 2), o[1]] for o in ops]
 
+
+# ========================= v6: THE CLOSING ACT ==============================
+# The cloud migrates into the silhouette of the letter "Ya". The figure itself
+# is NOT computed here - form_ya.py packed it, the client signed it off, and it
+# is frozen in ya_layout.json. Re-deriving it at build time would let an
+# unrelated edit reshuffle an approved frame without anyone noticing.
+#
+# 41 words cannot fill a letterform, so the pack repeats them: the first slot
+# for each word is flown there by the word's own layer, and the remaining 71
+# are new layers that fade up underneath the arrivals. That is exactly what the
+# client's own reference does, and it is why the type sizes range 19-150 pt.
+REPS = []
+BASE = {}
+FORM_DX = FORM_DY = 0.0
+
+
+def rep_colour(pt):
+    """Colour for a REPEAT instance - by size, not by the word's cloud colour.
+
+    Two things break if repeats simply inherit: red stops being an accent, and
+    the silhouette stops reading.
+
+    Red was tuned to be sparse across 41 words. Repeat a red word five times and
+    the frame gets ten scattered red marks, which is a rash rather than an
+    accent - and the eye chases them instead of tracing the letterform. Base
+    words keep their own colour, so red survives at exactly the density it was
+    designed for.
+
+    Sizing the colour instead gives the figure tonal recession: the fill sinks
+    toward the ground and lets the big type carry the shape. That is also what
+    the client's reference does, and what the preview the layout was approved
+    from looked like.
+
+    The ramp stops one rung BELOW white deliberately. White at the top rung was
+    tried and rejected on the render: the packer's 78 pt fill happens to land
+    mostly in the right-hand stem, so a white top rung lit that stem and left
+    the bowl mumbling - the letter went lopsided in tone even though it was
+    correct in geometry. Keeping white for the 41 answer words is also the
+    honest reading: white means "this is a word someone voted for".
+    """
+    return BLUE_L if pt >= 70 else BLUE if pt >= 42 else BLUE_D
+
+
+if FORM:
+    with open(os.path.join(HERE, "ya_layout.json"), encoding="utf-8") as fh:
+        _lay = json.load(fh)
+
+    # The pack was solved in the MASK's frame, and the mask is the logo's Ya -
+    # a glyph with a leg, so its ink is not centred on its own bounding disc.
+    # Dropped in as packed it lands ~200 px right of comp centre, which reads as
+    # a mistake and leaves the rightmost words 14 px off the logo lockup. A
+    # rigid translation is the safe correction: every gap the pack was checked
+    # against is preserved exactly, which re-solving it would not be.
+    _bx = [(s["x"] - BOX[s["i"]]["wd"] * s["pt"] / float(WORDS[s["i"]][2]) / 2.0,
+            s["x"] + BOX[s["i"]]["wd"] * s["pt"] / float(WORDS[s["i"]][2]) / 2.0,
+            s["y"] - BOX[s["i"]]["ht"] * s["pt"] / float(WORDS[s["i"]][2]) / 2.0,
+            s["y"] + BOX[s["i"]]["ht"] * s["pt"] / float(WORDS[s["i"]][2]) / 2.0)
+           for s in _lay["slots"]]
+    FORM_DX = round(CX - (min(b[0] for b in _bx) + max(b[1] for b in _bx)) / 2.0, 1)
+    FORM_DY = round(CY - (min(b[2] for b in _bx) + max(b[3] for b in _bx)) / 2.0, 1)
+    for s in _lay["slots"]:
+        s["x"] += FORM_DX
+        s["y"] += FORM_DY
+    # The packer seats every word once before it starts repeating, so the FIRST
+    # slot carrying a given index is that word's own - and it is the one nearest
+    # its resting place in the cloud, which makes it the shortest flight too.
+    for s in _lay["slots"]:
+        if s["i"] in BASE:
+            REPS.append(s)
+        else:
+            BASE[s["i"]] = s
+    assert len(BASE) == N, "layout is missing words: %d of %d" % (len(BASE), N)
+
+    # Departure order: biggest first. WORDS is already in size order, so the
+    # hero leads and the 63 pt tail brings up the rear. The alternative - all
+    # 41 leaving together - was rejected on the brief ("плавно"): a synchronised
+    # exit is a cut, a staggered one is a drift.
+    def dep(i):
+        return F_FORM0 + F_SPREAD * (i / float(N - 1))
+
+    for i in range(N):
+        st = STATES[i]
+        t0 = dep(i)
+        assert t0 > st[-1][0], "word %d still moving at f%.0f" % (i, t0)
+        p, r = st[-1][1], st[-1][2]
+        g = BASE[i]
+        tgt = (float(g["x"]), float(g["y"]))
+        r1 = g["pt"] / float(WORDS[i][2])
+        z, kk = depth(i)
+        omax = OPMAX[WORDS[i][1]]
+
+        st.append([t0, p, r])
+        st.append([t0 + F_FLIGHT, tgt, r1])
+        st.append([float(DUR_F), tgt, r1])
+
+        # The flight starts in depth-compensated space and ends flat, so the
+        # two ends use DIFFERENT placements - place() at the cloud pose,
+        # place_flat() at the figure. AE interpolates z from the tier's own
+        # value down to 0 in between, which is the flattening made visible.
+        KEYS[i].append([round(t0, 2)] + list(place(i, p, r)))
+        KEYS[i].append([round(t0 + F_FLIGHT, 2)] + list(place_flat(i, tgt, r1)))
+        KEYS[i].append([float(DUR_F)] + list(place_flat(i, tgt, r1)))
+        SCL[i].append([round(t0, 2), round(100.0 * r * kk, 3)])
+        SCL[i].append([round(t0 + F_FLIGHT, 2), round(100.0 * r1, 3)])
+        SCL[i].append([float(DUR_F), round(100.0 * r1, 3)])
+        # atmospheric perspective has to end when the depth does: the far tier
+        # sits at 86% to look far away, and a word that is no longer far away
+        # but still dimmer than its neighbours just looks like a mistake.
+        OPA[i].append([round(t0, 2), omax])
+        OPA[i].append([round(t0 + F_FLIGHT, 2), 100])
+
+    # Repeats resolve largest-first, so the figure gains structure before it
+    # gains texture. Fading them in size order also hides the smallest type in
+    # the busiest frame, where it is least likely to be read as a new event.
+    REPS.sort(key=lambda s: -s["pt"])
+    for n, s in enumerate(REPS):
+        i = s["i"]
+        t0 = F_REP0 + (F_REP1 - F_REP0) * (n / float(max(len(REPS) - 1, 1)))
+        tgt = (float(s["x"]), float(s["y"]))
+        r1 = s["pt"] / float(WORDS[i][2])
+        a = place_flat(i, tgt, r1 * 0.96)
+        b = place_flat(i, tgt, r1)
+        # ...and they release biggest-first, for the same reason the base words do
+        # (see the OPA loop below): whatever is still inside the knock-out when the
+        # mark goes opaque gets cropped by it, so it has to be too small to read.
+        # The figure loses its structure before it loses its texture.
+        last = float(max(len(REPS) - 1, 1))
+        tf = F_REPF0 + (F_REPF1 - F_REPF0) * (n / last)
+        REPS[n] = [WORDS[i][0], WORDS[i][2], rep_colour(s["pt"]), round(t0, 2),
+                   a[0], a[1], round(96.0 * r1, 3),
+                   b[0], b[1], round(100.0 * r1, 3), round(tf, 2)]
+
+    # ---- where the figure has to end up -------------------------------------
+    # Measured off the artwork, not off form_ya's chain: mark_fit.py finds the
+    # letter's bbox as a FRACTION of the mark image, so the numbers survive any
+    # change to MARK_D. The knock-out is not concentric with the artwork - the
+    # leg pulls it down and left - so the figure has to travel those ~16 px as
+    # well as shrink, or it collapses onto the disc's centre and sits visibly
+    # high in its own counter.
+    with open(os.path.join(HERE, "mark_fit.json"), encoding="utf-8") as fh:
+        _mf = json.load(fh)
+    LET_CX = CX + (_mf["lf_cx"] - 0.5) * MARK_D
+    LET_CY = CY + (_mf["lf_cy"] - 0.5) * MARK_D
+    _lw = (_mf["lf_x1"] - _mf["lf_x0"]) * MARK_D
+    _lh = (_mf["lf_y1"] - _mf["lf_y0"]) * MARK_D
+
+    # The ink is already centred on (CX, CY) - that is what FORM_DX/DY did - so
+    # a rig anchored there scales the figure about its own centre and the only
+    # other move needed is the offset to the letter. min() of the two ratios,
+    # because the figure's aspect (1.24) is wider than the letter's (1.06): the
+    # packed overhangs stretch its bbox sideways. Fitting on height instead would
+    # push those overhangs well outside the counter, and while the disc would
+    # still cover them, the words that remain visible would no longer fill it.
+    INK_W = max(b[1] for b in _bx) - min(b[0] for b in _bx)
+    INK_H = max(b[3] for b in _bx) - min(b[2] for b in _bx)
+    COLL_S = round(min(_lw / INK_W, _lh / INK_H), 5)
+
+    for i in range(N):
+        # BIGGEST FIRST, and this is the one ordering decision in the beat that is
+        # not a matter of taste. The words end up behind the mark, so the knock-out
+        # crops them - which is fine, type cut to a letterform is an old and good
+        # device, but only while the type reads as texture. KOLLEKTIV at the
+        # collapse scale is still a 92 px cap in a 4096 frame: legible. Held to the
+        # end, as it was on the first pass, the shoulder of the Ya sliced the brand's
+        # hero word mid-stroke at full opacity and f1062 read as a masking bug.
+        # Retiring the legible words first leaves only the small ones inside the
+        # letter, and nobody reads a truncated word they could not read anyway.
+        #
+        # (The counter cannot simply be made big enough to contain them. The
+        # knock-out is not the solid block it looks like - it carries the mark's
+        # internal blue strokes, so the centre of its own bounding box is ON blue:
+        # coll_fit.py finds no scale, down to 2%, at which the packed figure is
+        # fully clear of it. Cropping is not avoidable, so it has to be dressed.)
+        tf = F_BASF0 + (F_BASF1 - F_BASF0) * (i / float(N - 1))
+        OPA[i].append([round(tf, 2), 100])
+        OPA[i].append([round(tf + F_FADE_LEN, 2), 0])
+
 for i in ([] if GROW else range(N)):
     k0 = ARRIVE.index(i)
     fr = FRAME[i]
@@ -974,6 +1237,12 @@ for (var ci = 1; ci <= app.project.numItems; ci++){
   if (it0 instanceof CompItem && it0.name === TARGET){ comp = it0; break; }
 }
 if (!comp) comp = app.project.items.addComp(TARGET, %d, %d, 1, %.4f, %.4f);
+// ...and re-assert the duration on a comp that already existed. addComp only
+// runs the first time, so for six versions the length here was whatever the
+// FIRST build happened to set - v6 extended the spot to 45 s and the timeline
+// silently stayed at 40, which does not fail, it just renders the closing act
+// past the end of the comp and hands back the last frame six times.
+comp.duration = %.4f;
 var FD = 1 / comp.frameRate;
 function f(n){ return n * FD; }
 
@@ -987,7 +1256,7 @@ for (var i = comp.numLayers; i >= 1; i--)
 var made = [];
 function keep(L){ L.comment = "CLOUD_FX"; made.push(L); return L; }
 """ % ("" if VER == 1 else " --v%d" % VER, js(COMP_NAME),
-       W, H, DUR_F / FPS, FPS, "v%d" % VER))
+       W, H, DUR_F / FPS, FPS, DUR_F / FPS, "v%d" % VER))
 
 w("""
 var W = %d, H = %d, CX = %d, CY = %d;
@@ -999,13 +1268,14 @@ var KEYS = %s;
 var OPA = %s;
 var SCL = %s;
 var INF = %s;
-var F_LOGO = %d, F_Q_IN = %d, F_Q_FULL = %d;
+var REPS = %s;
+var F_LOGO = %d, F_Q_IN = %d, F_Q_FULL = %d, F_QOUT = %d;
 """ % (W, H, CX, CY, DUR_F,
        "true" if IS3D else "false", "true" if RICH else "false",
        "true" if GROW else "false",
        FONT, jsonjs(WORDS), jsonjs(KEYS), jsonjs(OPA), jsonjs(SCL),
-       jsonjs([round(FRAME[i], 2) for i in range(N)]),
-       F_LOGO, F_Q_IN, F_Q_FULL))
+       jsonjs([round(FRAME[i], 2) for i in range(N)]), jsonjs(REPS),
+       F_LOGO, F_Q_IN, F_Q_FULL, F_QOUT))
 
 w("""
 // ---------- helpers ----------
@@ -1029,6 +1299,17 @@ function reveal(p){ easeKey(p, 1, 16, 88); easeKey(p, 2, 16, 88); }
 // every key is both a soft arrival and a brisk departure
 function easeAll(p){
   for (var k = 1; k <= p.numKeys; k++) easeKey(p, k, 16, 88);
+}
+// Symmetric ease, for the one gesture that must NOT depart briskly. easeAll's
+// 16/88 split is deliberately front-loaded - it is what makes an entrance feel
+// decisive - but on the closing contraction it puts most of a 4x shrink into
+// the first second, and the figure reads as being sucked away rather than
+// compacted. Measured on the render: at 55% of the beat it was already down to
+// 28% of its width. Equal influence both ends gives the slow start the brief
+// asks for. (Emitted JSX stays ASCII - the brief's own word for this beat is
+// spelled out in gen_cloud.py, which does not have to be.)
+function easeSym(p){
+  for (var k = 1; k <= p.numKeys; k++) easeKey(p, k, 70, 70);
 }
 // straight travel: auto-bezier spatial tangents make words swoop and overshoot
 function straighten(p){
@@ -1083,12 +1364,47 @@ var ns = nul.property("Transform").property("Scale");
 ns.setValueAtTime(0, [99, 99]);
 ns.setValueAtTime(f(END), [104, 104]);
 nul.enabled = false;
+var rig = null;
 """)
-else:
+elif not FORM:
     w("""
 // in 3D the camera does the push, so there is no rig null to parent to
 var nul = null;
+var rig = null;
 """)
+else:
+    w("""
+// ---------- v6 form rig: the collapse, as ONE object ----------
+// The closing beat contracts 112 layers onto a point. Doing that per layer means
+// 112 independently eased shrinks, and any drift between them shows up as the
+// figure boiling rather than compacting - the letter would come apart at exactly
+// the moment it is meant to become solid. A single parent guarantees the figure
+// stays rigid: whatever the ease does, it does to all of it at once.
+//
+// Anchor == Position == [CX, CY, 0], so the parent matrix is identity while it
+// sits at 100%% and every packed value below stays a plain comp coordinate.
+// Scaling then pivots on (CX, CY), which is where FORM_DX/DY already centred the
+// ink, so the figure shrinks onto its own centre and the Position key carries it
+// the rest of the way to the letter.
+//
+// The camera is irrelevant here even though these are 3D layers: the rig is only
+// a transform, and it is disabled so it never renders.
+STEP_ = "null";
+var nul = null;
+var rig = keep(comp.layers.addNull(comp.duration));
+rig.name = "FORM RIG";
+rig.threeDLayer = true;
+rig.property("Transform").property("Anchor Point").setValue([CX, CY, 0]);
+var rgp = rig.property("Transform").property("Position");
+var rgs = rig.property("Transform").property("Scale");
+rgp.setValueAtTime(f(%d), [CX, CY, 0]);
+rgp.setValueAtTime(f(%d), [%.2f, %.2f, 0]);
+rgs.setValueAtTime(f(%d), [100, 100, 100]);
+rgs.setValueAtTime(f(%d), [%.3f, %.3f, %.3f]);
+easeSym(rgp); straighten(rgp); easeSym(rgs);
+rig.enabled = false;
+""" % (F_COLL0, F_COLL1, LET_CX, LET_CY,
+       F_COLL0, F_COLL1, COLL_S * 100, COLL_S * 100, COLL_S * 100))
 
 w("""
 // ---------- the words: create, parent, then animate the reflow ----------
@@ -1099,6 +1415,10 @@ for (var i = 0; i < WORDS.length; i++){
   if (THREE){
     L.threeDLayer = true;
     L.property("Transform").property("Anchor Point").setValue([0, 0, 0]);
+    // BEFORE any key, always. Setting .parent on a layer that already has keys
+    // makes AE rewrite every value to preserve the world transform, which would
+    // silently undo the packed figure.
+    if (rig) L.parent = rig;
   } else {
     L.property("Transform").property("Anchor Point").setValue([0, 0]);
     L.parent = nul;
@@ -1144,6 +1464,40 @@ for (var i3 = 0; i3 < lays.length; i3++){
 }
 """)
 
+if FORM:
+    w("""
+// ---------- v6: the repeat instances that fill the letterform ----------
+// These have no life in the cloud at all - they exist only to give the figure
+// density, so they are born flat on z = 0 where the pack put them and simply
+// resolve into view. No flight: 41 words are already travelling, and another
+// 71 in motion would turn the arrival into noise.
+STEP_ = "repeats";
+for (var ri = 0; ri < REPS.length; ri++){
+  var R = REPS[ri];
+  var RL = txt("R " + ri + " " + R[0], R[0], R[1], R[2]);
+  RL.threeDLayer = true;
+  RL.property("Transform").property("Anchor Point").setValue([0, 0, 0]);
+  if (rig) RL.parent = rig;          // before any key - see the words loop
+  var rp = RL.property("Transform").property("Position");
+  var rc = RL.property("Transform").property("Scale");
+  // The anchor is the text origin, so the ink centre sits at scale * offset
+  // from Position: the 96 -> 100 settle has to re-derive the position on the
+  // SAME keys, or the word slides as it resolves.
+  rp.setValueAtTime(f(R[3]),      [R[4], R[5], 0]);
+  rp.setValueAtTime(f(R[3] + 18), [R[7], R[8], 0]);
+  rc.setValueAtTime(f(R[3]),      [R[6], R[6], 100]);
+  rc.setValueAtTime(f(R[3] + 18), [R[9], R[9], 100]);
+  easeAll(rp); straighten(rp); easeAll(rc);
+  var ro = RL.property("Transform").property("Opacity");
+  ro.setValueAtTime(f(R[3]), 0);
+  ro.setValueAtTime(f(R[3] + 14), 100);
+  ro.setValueAtTime(f(R[10]), 100);
+  ro.setValueAtTime(f(R[10] + %d), 0);
+  easeAll(ro);
+  RL.inPoint = f(R[3]);
+}
+""" % F_FADE_LEN)
+
 if IS3D:
     w("""
 // ---------- camera: the slow move that replaces v1's flat scale-up ----------
@@ -1158,10 +1512,25 @@ try { copt.property("ADBE Camera Depth of Field").setValue(0); } catch (eD) {}
 cam.property("Transform").property("Point of Interest").setValue([CX, CY, 0]);
 var cp = cam.property("Transform").property("Position");
 cp.setValueAtTime(0,      [CX - 95, CY + 50, -(CAMD + 300)]);
-cp.setValueAtTime(f(END), [CX + 75, CY - 40, -(CAMD - 110)]);
+cp.setValueAtTime(f(%d), [CX + 75, CY - 40, -(CAMD - 110)]);
+""" % (CAMD, F_FORM0 if FORM else DUR_F))
+    if FORM:
+        w("""
+// The push has to come HOME for the closing act. At [CX, CY, -CAMD] the camera
+// renders the z = 0 plane 1:1 and dead centre, which is the one view in which
+// the packed figure is drawn exactly as it was packed - and the words are
+// flying to z = 0 over the same window, so the two land together. Leaving the
+// camera where the cloud left it would put the letter off-centre and shear the
+// 10 px clearances the pack was checked against.
+cp.setValueAtTime(f(%d), [CX, CY, -CAMD]);
+// ...and then it stops. A camera still drifting under a settled sign-off frame
+// makes the type crawl.
+cp.setValueAtTime(f(END), [CX, CY, -CAMD]);
+""" % F_FORM1)
+    w("""
 easeAll(cp);
 straighten(cp);
-""" % CAMD)
+""")
 
 w("""
 // ---------- the question, held for the whole spot ----------
@@ -1187,6 +1556,23 @@ rs.setValueAtTime(f(F_Q_IN + 4), [0, 100]);
 rs.setValueAtTime(f(F_Q_FULL + 8), [100, 100]); reveal(rs);
 rule.inPoint = f(F_Q_IN + 4);
 """ % (js(QUESTION), QSIZE, BLUE[0], BLUE[1], BLUE[2]))
+
+if FORM:
+    w("""
+// The figure needs the top of the frame: its highest word sits at y ~ 164 and
+// the question's rule is at 258. So the question leaves, and it leaves BEFORE
+// the first word departs rather than being pushed out by an arrival - the poll
+// closes, then the answer is drawn. Both fade over 30 frames; a cut would be
+// the only hard edit in a spot the brief asked to keep smooth.
+STEP_ = "q-out";
+qo.setValueAtTime(f(F_QOUT), 100);
+qo.setValueAtTime(f(F_QOUT + 30), 0);
+easeAll(qo);
+var ruo = rule.property("Transform").property("Opacity");
+ruo.setValueAtTime(f(F_QOUT), 100);
+ruo.setValueAtTime(f(F_QOUT + 30), 0);
+easeAll(ruo);
+""")
 
 if IS3D:
     w("""
@@ -1237,6 +1623,72 @@ try {
 } catch (eL) { logoNote = "ERR " + eL.toString(); }
 """ % js(LOGO))
 
+if FORM:
+    w("""
+// The corner lockup has been the sender for 40 s. It cannot stay for the end
+// card: two logos in one frame makes the centre one look like a duplicate
+// rather than the destination, and the eye has nowhere to settle. It leaves
+// before the mark starts arriving, so there is a beat with no logo at all -
+// which is what makes the centre one read as new.
+STEP_ = "logo-out";
+try {
+  if (typeof lo !== "undefined" && lo){
+    lo.setValueAtTime(f(%d), 100);
+    lo.setValueAtTime(f(%d), 0);
+    easeAll(lo);
+  }
+} catch (eLO) {}
+
+// ---------- the mark: the figure resolves into the real thing ----------
+// 2D on purpose. The camera is parked at [CX, CY, -CAMD] where it renders z = 0
+// at 1:1, so a 3D mark would land in the same place - but only as long as the
+// camera never moves again, and that is a dependency the end card should not
+// carry. A 2D layer is drawn in comp coordinates by definition.
+//
+// The artwork is imported as PNG: After Effects will not import the WEBP the
+// brand pack ships, and it fails at import rather than at render, so the layer
+// is simply absent and the shot looks finished-but-empty.
+STEP_ = "mark";
+var markNote = "skipped";
+try {
+  var mf = new File("%s");
+  if (mf.exists){
+    var mit = app.project.importFile(new ImportOptions(mf));
+    var mk = keep(comp.layers.add(mit));
+    mk.name = "CLOUD MARK";
+    var mw = mit.width, mh = mit.height;
+    var k3 = %.1f / mw * 100;
+    mk.property("Transform").property("Anchor Point").setValue([mw / 2, mh / 2]);
+    mk.property("Transform").property("Position").setValue([CX, CY]);
+    var ms = mk.property("Transform").property("Scale");
+    // 105 -> 100 is the ring closing IN on the words, the same direction the
+    // figure is travelling. An overshoot would have it spring back out, which
+    // reads as a bounce - and the brand titles in this spot never bounce.
+    ms.setValueAtTime(f(%d), [k3 * 1.05, k3 * 1.05]);
+    ms.setValueAtTime(f(%d), [k3, k3]);
+    // Scale is easeSym: the ring closing and the figure falling are one gesture
+    // that finishes on one frame, and a front-loaded ease would have the ring
+    // settled while the type was still coming down - two events that merely
+    // overlap instead of one that resolves.
+    easeSym(ms);
+    // Opacity is NOT, and that is a correction. easeSym held it near zero across
+    // the crossover: at f1032, 44%% into the beat, the render showed a ghost of a
+    // ring around a dark block of type, with the disc - the entire mechanism of
+    // this shot - not yet reading as a surface. easeAll's brisk departure gets the
+    // disc established early and spends the rest of the beat settling it, so the
+    // last third is type sinking into a mark that is already solid.
+    var mo = mk.property("Transform").property("Opacity");
+    mo.setValueAtTime(f(%d), 0);
+    mo.setValueAtTime(f(%d), 100);
+    easeAll(mo);
+    mk.inPoint = f(%d);
+    markNote = "ok " + mw + "x" + mh;
+  } else { markNote = "missing"; }
+} catch (eM) { markNote = "ERR " + eM.toString(); }
+""" % (F_LOGOUT, F_LOGOUT + 30,
+       js(os.path.join(HERE, "mark_ya.png")), MARK_D,
+       F_MARK0, F_MARK1, F_MARK0, F_MARK1, F_MARK0))
+
 w("""
 STEP_ = "window";
 for (var m = 0; m < made.length; m++)
@@ -1248,6 +1700,7 @@ app.endUndoGroup();
 STEP_ = "done";
 JSON.stringify({ step: STEP_, comp: comp.name, made: made.length,
                  words: WORDS.length, posKeys: nkeys, logo: logoNote,
+                 mark: (typeof markNote === "undefined" ? "n/a" : markNote),
                  total: comp.numLayers });
 } catch (e) {
   JSON.stringify({ step: STEP_, error: e.toString(), line: e.line });

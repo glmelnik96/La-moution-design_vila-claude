@@ -1,3 +1,11 @@
 node_modules/
 *.png
 __pycache__/
+out/
+*.mp4
+*.webm
+
+# *.png above is for stills and previews. These PNGs are INPUTS - a generator reads them or a
+# page cannot render without them - so they are tracked explicitly.
+!_build/mark_ya.png
+!html/templates/cn-assets/*.png

@@ -1,114 +1,177 @@
 ---
 name: ae-motion-live
-description: Use when the user wants to do motion design in a live, already-open After Effects — creating/animating layers, keyframes, easing, expressions, effects, 3D, masks — or to generate AI assets (image/video/upscale/voice) and place them into the active composition. Drives AE via the open CEP panel over CDP (port 8092) and the Phygital sidecar.
+description: Cloud.ru motion design in two engines — a live, already-open After Effects (ExtendScript over CDP, port 8092, with the cloudru-motion.jsx library) and a dependency-free HTML motion engine rendered with headless Chrome — plus AI asset generation via the Phygital sidecar. Use for any brand animation, title/KPI/divider/scheme/logo scenes, explainer spots, web motion, or AE scripting. Triggers on "анимация", "моушен", "After Effects", "AE", "заставка", "ролик Cloud.ru", "HTML-анимация", "motion".
 ---
 
-# ae-motion-live
+# ae-motion-live — Cloud.ru motion, in After Effects and in HTML
 
 ## 1. What this does / mental model
 
-You (Claude) are a hands-on motion-design buddy for an After Effects session that is **already open** on the user's machine. You do real work by writing **arbitrary ExtendScript (ES3)** and running it live inside the AE panel, plus generating AI assets on demand.
+You (Claude) are a hands-on motion designer for **Cloud.ru**. Two engines produce the work,
+one language governs it:
 
-Two channels:
+| Channel | What | Entry point |
+|---|---|---|
+| **Brand** | the Cloud.ru motion language: eases, durations, stagger, type, colour, geometry, scene choreography, stop-list | `brand/cloudru-motion-brand.md` · tokens `brand/cloudru-motion-tokens.json` |
+| **AE channel** | arbitrary ExtendScript (ES3) executed in the live CEP panel over CDP (port 8092); the `M.*` library builds brand scenes in a few calls | `node scripts/ae.js --lib '@file.jsx'` · `scripts/lib/cloudru-motion.jsx` · `reference/ae-cloudru-recipes.md` |
+| **HTML channel** | deterministic, seekable timeline + brand DOM primitives; headless-Chrome render to stills / beat sheet / video; also shippable as a web asset | `html/engine/*` · `html/templates/showreel.html` · `node html/render/render.js` · `reference/html-engine.md` |
+| **Generation** | AI image/video/upscale/voice through the Phygital sidecar (`127.0.0.1:8765`), imported into the comp | `node scripts/gen.js <cmd>` · `reference/generation-recipes.md` |
 
-- **AE channel** — `node scripts/ae.js '<jsx>'` or `node scripts/ae.js '@file.jsx'`. This executes ExtendScript inside the live CEP panel over CDP (port 8092). The jsx's **LAST expression must be `JSON.stringify(result)`** so a value comes back. `es-json.jsx` (an ES3 JSON polyfill) is auto-prepended by `ae.js`, so `JSON.stringify`/`JSON.parse` are always available.
-- **Generation channel** — `node scripts/gen.js <cmd>`. Talks to the Phygital sidecar at `http://127.0.0.1:8765` for AI image/video/upscale/voice generation.
+Both engines share the **same tokens** (`node scripts/build-tokens.js` regenerates
+`scripts/lib/tokens.jsx`, `html/engine/tokens.js|css`) and the **same exact bezier → AE
+`KeyframeEase` mapping** (`reference/motion-design-principles.md` §2b), so a scene
+prototyped in HTML ports to AE beat for beat.
 
-This is **not a one-prompt autopilot**. It is a buddy for real motion work: think in small, verifiable steps, read the comp, mutate it, read it back, and stay in a tight loop with the user. When in doubt, look before you leap and confirm intent.
+This is **not a one-prompt autopilot**. Work in small, verifiable steps: write the beat
+sheet, build, capture the beats, look at them, fix the worst defect, repeat. When in doubt,
+look before you leap and confirm intent.
 
-## 2. Preflight (run every session, before acting)
+## 2. Preflight (every session)
 
-Before doing anything, verify the channels you need.
+**Brand + tests (always):**
+```bash
+node --test            # 57 tests: lib against the AE mock, lint, tokens in sync, HTML core, renderer CLI
+```
 
-**AE channel (always):**
-
+**AE channel (when AE work is requested):**
 ```bash
 node scripts/ae.js 'JSON.stringify({ok:true, comp: (app.project.activeItem instanceof CompItem)? app.project.activeItem.name : null})'
+node scripts/ae.js --lib 'JSON.stringify({v: M.VERSION, green: CR.HEX.GREEN})'
 ```
+- `comp: null` → ask the user to select/open a composition.
+- **"AE panel CDP target not found on port 8092"** → ask the user to open **After Effects** and
+  **Window → Extensions → LLM Chat**, then re-run.
+- First local session after the cloud work: run `reference/live-verify-checklist.md` and
+  record results in `reference/ae-quirks.md`.
 
-- Success → you get `{"ok":true,"comp":"<name or null>"}`. If `comp` is `null`, ask the user to select/open a composition.
-- If it errors with **"AE panel CDP target not found on port 8092"** → After Effects or the panel is not ready. Ask the user to: open **After Effects**, then open the **Extensions LLM Chat** panel via **Window → Extensions → LLM Chat**. Re-run the preflight after they confirm.
-
-**Generation channel (only when you actually need to generate assets):**
-
+**HTML channel (when HTML/video/web output is requested):**
 ```bash
-node scripts/gen.js start
-node scripts/gen.js health
+node html/render/render.js html/templates/showreel.html --out out/check --beats 1.4 --scale 0.5
 ```
+- Fails to find Chrome/ffmpeg → set `CHROME_PATH` / `FFMPEG_PATH`.
 
-- If `health` reports no active session → go to **§5 Auth**.
+**Generation channel (only when generating assets):** `node scripts/gen.js start && node scripts/gen.js health` → if no session, §6 Auth.
 
-## 3. AE workflow rules
+## 3. Workflow: brand first, then the engine
 
-- **Small, verifiable steps.** Read the comp → mutate → read back. Never fire a large opaque script and hope. Confirm each meaningful change reflected what you intended.
-- **Undo discipline.** Wrap **every** mutation in a single `app.beginUndoGroup(label)` / `app.endUndoGroup()` pair so one Cmd+Z / Ctrl+Z reverts the whole action cleanly. See `reference/ae-quirks.md` **#10**.
-- **Record every discovery — unprompted.** Any time you hit an undocumented AE/ExtendScript behaviour, an API trap, or land a construction pattern worth reusing, append it to `reference/ae-quirks.md` (numbered, marked LIVE-VERIFIED, with WRONG vs RIGHT code) or the matching `reference/*.md` **in the same session, before reporting back**. Don't ask permission; just state in one line what you recorded. The AE channel is full of behaviour that is expensive to rediscover — pay for each fix once.
-- **Prefer temp files for non-trivial jsx.** Write the payload to a temp `.jsx` file and run it with `node scripts/ae.js '@file.jsx'`. This avoids shell-escaping hell on Windows bash. Remember: the payload's **LAST expression must be `JSON.stringify(result)`**.
-- **HOST_BRIDGE shortcut.** Inside the panel context, `window.HOST_BRIDGE.executeToolCall(name, args)` is available for vetted, higher-level ops where raw jsx would be riskier — notably `import_file` and `capture_comp_frame`. Prefer it for those two operations.
-- **Easing is the #1 quality lever.** Never ship linear motion for physical moves.
-  Before keyframing anything non-trivial, consult `reference/motion-design-principles.md`
-  for the cubic-bezier→AE influence cheat-sheet, overshoot/spring, stagger, and
-  timing heuristics. The go-to "premium" reveal ease is `0.16,1,0.3,1` (start-key
-  low influence, land-key ~90).
-- **Consult the reference docs on demand:**
-  - `reference/motion-design-principles.md` — easing/bezier→AE mapping, spring/overshoot, Disney principles, stagger, timing. **Read before designing any animation.**
-  - `reference/expression-library.md` — proven, copy-ready expressions (wiggle, loops, inertia, etc.).
-  - `reference/extendscript-patterns.md` — scripting recipes (layer/keyframe/effect manipulation).
-  - `reference/ae-quirks.md` — read this **before** debugging weird ES3 errors; AE/ExtendScript has many traps.
+1. **Read the brand** (`brand/cloudru-motion-brand.md`) and pick the scene types from §3 there;
+   then `reference/motion-best-practices.md` — the market baseline (premium entrance triple,
+   three motion layers, holds, follow-through, springs ζ ≥ 0.8, hidden-cut transitions) that the
+   brand adapts. Non-Cloud.ru showcase work only: `reference/motion-art-direction.md`.
+2. **Write the beat sheet** before any code: `t (ms) | element | action | ease | dur | note`.
+   Durations/staggers are tokens (`base`, `slow`, `tight`…); eases are tokens (`enter`,
+   `exit`, `move`, `wipe`, `count`). Sum the holds against the target length.
+3. **Choose the engine.** Deliverable is an AE project / the user is in AE → AE channel.
+   Deliverable is video/web/quick prototype, or AE is not open → HTML channel (seconds per
+   iteration; port later with `reference/html-engine.md` §6).
+4. **Build in small steps** using the library/primitives, not raw keyframes.
+5. **Capture the beats and look at them** (`M.capture` / `render.js --beats auto --sheet`).
+   Judge with `brand/cloudru-motion-brand.md` §9 and `reference/motion-vocabulary.md` §D.
+6. **Fix the worst defect, re-render only what changed, repeat.** Present only frames you
+   have seen.
 
-## 4. Generation workflow
+## 4. AE channel rules
 
-To create AI assets and place them in the comp:
+- **`--lib` for brand work.** `node scripts/ae.js --lib '@_build/x.jsx'` prepends
+  `es-json.jsx` + `tokens.jsx` (`CR`) + `cloudru-motion.jsx` (`M`). Payload shape:
+  `JSON.stringify(M.run("label", function () { …; return {…}; }))` — one undo group, a STEP
+  marker on failure, `warnings[]` for silent problems (font fallback etc.).
+- **Lint is mandatory and automatic.** `ae.js` refuses payloads that would raise a modal in
+  AE (ES5+ syntax, reserved-word keys, non-ASCII identifiers). `node scripts/lint-jsx.js
+  file.jsx` runs it standalone. Never `--no-lint` a payload you have not linted.
+- **Temp files, not inline jsx**, for anything beyond a one-liner (Windows shell escaping).
+- **Small, verifiable steps.** Read → mutate → read back (`M.summary`, `M.exprErrors`,
+  `M.visibleWindow`, `M.bounds`). Idempotent rebuilds: `M.clean()` removes only the lib's
+  tagged layers.
+- **On `CDP timeout`, STOP calling AE** — a modal is blocking the host; ask the user to
+  dismiss it (quirk #25). Never run AE calls concurrently.
+- **Easing is the #1 quality lever**, and it is exact now: `M.tween(prop, ms0, ms1, v0, v1,
+  "enter")` = keys + bezier ease + flattened path. Never ship linear physical motion.
+- **Record every discovery — unprompted.** Undocumented AE behaviour, API traps, reusable
+  construction patterns → append to `reference/ae-quirks.md` (numbered, LIVE-VERIFIED, WRONG
+  vs RIGHT) in the same session, before reporting back. State in one line what you recorded.
+- Render out of process with `aerender` (quirk #33); capture full-res (`M.capture`);
+  PNG writes are asynchronous — poll file sizes (quirks #27/#40).
+- Market-practice helpers: `M.premiumIn`, `M.springBake` (same spring math as the HTML
+  engine), `M.blurIn`, `M.wordCascade`, `M.cameraPush`, `M.followThrough`, `M.exitOut`.
+- Reference docs on demand: `reference/ae-cloudru-recipes.md` (scenes), `reference/extendscript-patterns.md`
+  (text animators, masks/mattes, shape paths/trim, camera, precompose, markers, rigs),
+  `reference/expression-library.md`, `reference/ae-quirks.md` (**read before debugging any weird ES3 error**).
 
-1. **Discover params.** Query the sidecar for available nodes/params (`GET /nodes*` via `gen.js`) so you know what the chosen generator accepts. Verify supported aspect ratios / required slots up front — a wrong ratio or missing slot is a deterministic, avoidable failed generation.
-2. **Author the prompt well.** Use the skeletons in `reference/generation-recipes.md` (image and video). For assets destined for AE layers, prompt for a keyable/transparent background and generate with margin. Match the asset's aspect/resolution to the comp.
-3. **Cost.** Run `node scripts/gen.js cost ...` to get the credit cost of the intended job.
-4. **Confirm with the user.** Show one compact block — model + settings · estimated cost · what it produces — and get explicit confirmation before spending credits.
-5. **Draft low → final high.** Prove the composition with the cheapest settings first (short/low-res/cheap node), judge it, *then* re-run once at hero quality. Never spend on final quality first.
-6. **Generate.** Run `node scripts/gen.js generate ...` (or `submit` + `wait` for long jobs; batch independent jobs in parallel).
-7. **Import.** Bring the result into the **active composition** via the AE channel — `ae.js` with `window.HOST_BRIDGE.executeToolCall('import_file', {...})` or an equivalent import jsx.
+## 5. HTML channel rules
 
-**Re-roll guardrails** (avoid silent credit burn): branch by failure cause — content-policy trip → reword, don't blind-retry the same input; never silently fall back from a ref/init-frame scenario to plain `t2v` (you lose the anchor); reuse the seed of a kept take so tweaks vary controllably. See `reference/generation-recipes.md` → **Credit discipline**.
+- Author pages against `html/engine/*` (see `reference/html-engine.md`): `Brand.canvas` →
+  `Brand.scene` → primitives → `tl.fromTo(...)` with token eases → `Motion.mount(tl)` after
+  `document.fonts.ready`.
+- Every animation must be **seekable**: no CSS transitions/animations, no wall-clock code —
+  the renderer screenshots `__motion.seek(t)`.
+- Review with stills first (`--beats auto --sheet`), video last (`--video`), a single scene via
+  `?scene=`; formats via `?format=story|square|4k`.
+- Logo: the placeholder lockup is for prototyping; deliverables use the real SVG
+  (`Brand.logo({ svg })`), undistorted, green/black/white only.
+- Fonts: SB Sans Display ships in `html/engine/fonts/`; check `document.fonts` before judging type.
 
-Full parameter shapes, prompt-authoring, and credit discipline are in `reference/generation-recipes.md`.
+## 5b. Animating a supplied frame (PNG / Figma) — free mode
 
-## 5. §Auth (one-time)
+The input is a finished design; the job is **motion only**. Layout fidelity is not the
+deliverable — a plain rebuild of the frame's elements as DOM boxes is enough. The target level
+and the measured rhythm live in `reference/product-demo-motion.md`; its §5 says which brand
+rules still apply (all the motion ones; none of the visual stop-list).
 
-If `gen.js health` shows **no session**, the sidecar needs a browser login.
+1. **Read the frame.** PNG: Read it. Figma: export the frame as PNG (or elements as PNG + JSON
+   when the Figma MCP is connected). List the elements top-down — headline, cards, buttons,
+   inputs, lists, toggles, images. Each becomes a layer.
+2. **Find the story.** What is the user *doing* in this UI? Motion is the story: prompt →
+   result, click → state, list → progress. No story in the frame → pick the hero and build the
+   beat around it.
+3. **Beat sheet** on the measured rhythm: a hit every 0.3–0.5 s, a hold ≥ 0.3 s after each, a
+   scale-class change at least twice (macro element → full screen → environment), an exit or a
+   designed cut for every scene, unequal durations. Sum it against the target length.
+4. **Rebuild as boxes** in a page copied from `html/templates/demo-shipper.html`:
+   `Brand.box` / `Brand.text` per element, images as `<img>` or coloured plates, comp px.
+5. **Choreograph with `Demo.*`** (`html/engine/demo.js`): `wordsAccent` `letters` `type`
+   `cursor` `glow` `ripple` `expand` `checklist` `pill` `swap` `scroll` `toggle` `card3d`
+   `whip` `skeleton` `kinetic` `device` `dolly` `sparkles` — plus `Brand.enter` / `exit` /
+   `camera` / `scaleThrough`.
+6. **Render beats → look → fix → repeat** (`render.js` over `serve.js`, quirk #65), video last.
+   Pass the canvas size — `--w 1080 --h 1920` for `story` — or the renderer crops the frame to
+   its 1920×1080 default without a word (quirk #71); check the first still's pixel size.
+   Sample the *last quarter* of exits and the *second half* of whips (quirks #66, #69) —
+   ease-in moves are invisible at their midpoint. Judge full stills, not sheet thumbnails, before
+   calling a position wrong.
+7. **AE deliverable?** Port the approved beat sheet with `M.*`. The demo primitives have no AE
+   twins yet (pointer, typing, checklist, card3d, whip, device); build them from
+   `reference/extendscript-patterns.md`, or deliver the HTML render.
 
-**Token location — auto-probed.** The sidecar's token can live in either of two
-places depending on who launched it: `%USERPROFILE%\Documents\PhygitalStudio-data\PhygitalStudio\sidecar.token`
-(when Claude launches it via `gen.js start`, which overrides `LOCALAPPDATA` to that
-shared folder) **or** the *real* `%LOCALAPPDATA%\PhygitalStudio\sidecar.token`
-(when the standalone Phygital Studio app is already running — the common case).
-LIVE-VERIFIED: both files can exist with different tokens, so `gen.js` now **probes
-each candidate token against the sidecar and keeps whichever authenticates** — you
-no longer need to set `PHYGITAL_DATA_ROOT` by hand. If you ever need to read the
-live token yourself, prefer the one at `%LOCALAPPDATA%\PhygitalStudio\sidecar.token`.
+## 6. Generation workflow
 
-Ask the user to trigger the browser login, then call:
+1. Discover params (`GET /nodes*` via `gen.js`), match aspect/resolution to the comp.
+2. Author the prompt with `reference/generation-recipes.md` skeletons (keyable background, margin).
+3. `node scripts/gen.js cost …` → **show model + settings + credits and get confirmation**.
+4. Draft low → final high. Never spend on final quality first.
+5. `gen.js generate` (or `submit` + `wait`), copy the result to a non-virtualised folder
+   (MSIX trap), import via `ae.js` / `HOST_BRIDGE.executeToolCall('import_file', …)`.
+6. Re-roll guardrails: branch by failure cause; never silently fall back to plain `t2v`; reuse seeds.
 
-```bash
-curl -X POST http://127.0.0.1:8765/auth/recon -H "X-Phygital-Sidecar-Token: <token>"
-```
+**Auth (one-time):** if `gen.js health` shows no session, ask the user to trigger the browser
+login (`POST /auth/recon` with the sidecar token; `gen.js` probes both token locations
+automatically), then re-check `health`.
 
-A Chromium window opens; the user signs in. After sign-in the session persists, so
-this is a one-time step. Re-run `gen.js health` to confirm.
+## 7. Safety
 
-## 6. Safety
+- Mutate only the active comp; never delete/overwrite user assets unasked; the lib touches
+  only layers it tagged.
+- Always show generation cost and get confirmation before spending credits.
+- No git operations unless the user explicitly asks.
+- Prefer read-back verification and tight undo groups so one Ctrl+Z reverts an action.
 
-- **Mutate only the active comp.** Do not touch other comps or project items unless the user explicitly asks.
-- **Never delete or overwrite the user's project assets** without an explicit request.
-- **Always show generation cost and get confirmation** before spending credits.
-- **Do not commit anything** (no git operations) unless the user explicitly asks.
-- When a script could be destructive, prefer a read-back verification and keep the undo group tight so a single undo reverses it.
+## 8. Smoke checklist
 
-## 7. Smoke checklist
+Copy verbatim to self-verify in a fresh session:
 
-Copy this verbatim to self-verify the skill end-to-end in a fresh session:
-
-1. Read active comp summary (name, fps, layer count).
-2. Create a layer + two Position keyframes + temporal easing (apply the `0.16,1,0.3,1` reveal ease per `motion-design-principles.md`); one Cmd+Z reverts it entirely.
-3. **Verify the ae-quirks #5 correction:** on the Position keys, call `setSpatialTangentsAtKey(...)` and read back — confirm spatial tangents ARE settable from ExtendScript (proves the corrected quirk, not the old "impossible" claim).
-4. Apply a proven expression from `reference/expression-library.md` (e.g. `wiggle(3,30)`).
-5. Generate a draft-quality image (`gen.js cost` → confirm → `gen.js generate`) and import it into the active comp via `ae.js`.
+1. `node --test` is green; `node scripts/build-tokens.js --check` reports up to date.
+2. AE: preflight ok; `node scripts/ae.js --lib` returns `M.VERSION`; build
+   `reference/ae-cloudru-recipes.md` §1 (Title), `M.exprErrors()` empty, capture beats 15/30/45/75.
+3. AE: `M.tween` on Opacity 0→100 over 400 ms with `enter` reads back influence 16/70, out-speed ≈ 1562 (quirk-proof of the exact mapping).
+4. HTML: `render.js html/templates/showreel.html --beats auto --sheet` produces a sheet; each scene passes §9 of the brand doc.
+5. Generation: `gen.js cost` → confirm → draft-quality image → import into the active comp.

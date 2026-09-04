@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>A/B — naive vs library</title>
+<link rel="stylesheet" href="../engine/tokens.css">
+<link rel="stylesheet" href="../engine/brand.css">
+<script src="../engine/tokens.js"></script>
+<script src="../engine/motion.js"></script>
+<script src="../engine/brand.js"></script>
+</head>
+<body>
+<script>
+// Invented brief, used only as a test rig: a 5 s product beat.
+//   headline -> KPI counter -> support labels -> exit
+// Same layout, same duration, same content in both variants. ONLY the choreography
+// differs, so any difference in the stills is caused by the motion language and not
+// by the composition.
+//   ?v=naive  what an agent writes without this skill: one linear opacity fade,
+//             everything starting on frame 0, equal 2 s durations, no exit.
+//   ?v=lib    the library: premium entrance triple, word stagger, follow-through,
+//             count ease, hold, reverse-stagger exit, ambient texture, camera push.
+const V = (new URLSearchParams(location.search).get('v') || 'lib');
+const F = MotionTokens.format['1080p'];
+const DUR = 5.0;
+const canvas = Brand.canvas(document.body, '1080p');
+const tl = Motion.timeline({ fps: F.fps });
+const sc = Brand.scene(canvas, 'cr-tone-light');
+tl.scene('beat', 0, DUR, sc);
+
+document.fonts.ready.then(function () {
+  // ---- layout: identical in both variants -------------------------------------
+  const tex  = Brand.texture(sc, { kind: 'dots', gap: 26, size: 2, opacity: 0.07 });
+  const head = Brand.text(sc, 'Резервная копия за 8 секунд', 'cr-title', { left: F.margin, top: 300, width: 1240 });
+  const rule = Brand.rule(sc, { w: 1240, h: 4, origin: 'left', pos: { left: F.margin, top: 560 } });
+  const kpi  = Brand.text(sc, '0', 'cr-kpi', { left: F.margin, top: 620 });
+  const unit = Brand.text(sc, 'копий в час', 'cr-kpi-desc', { left: F.margin, top: 940 });
+  const cap  = Brand.text(sc, 'Без остановки продакшена', 'cr-subtitle', { left: F.margin, top: 980 });
+  const setN = Brand.counter({});
+
+  if (V === 'naive') {
+    // Everything at once, linear, opacity only, 2 s for every element, no exit.
+    const all = [head, rule, kpi, unit, cap, tex.el];
+    all.forEach(function (e) { tl.fromTo(e, { opacity: [0, 1] }, { at: 0, dur: 2, ease: 'linear' }); });
+    tl.fromTo(kpi, { n: [0, 12500] }, { at: 0, dur: 2, ease: 'linear', set: setN });
+  } else {
+    // 1. ambient tier: texture drifts the whole time, never cuts.
+    tl.fromTo(tex.el, { opacity: [0, 0.07] }, { at: 0, dur: 0.6, ease: 'enter' });
+    tl.fromTo(tex.el, { drift: [0, DUR] }, { at: 0, dur: DUR, ease: 'linear', set: tex.drift });
+
+    // 2. hero: the headline arrives word by word, premium triple + a blur that is gone
+    //    at rest. One word carries the green, its underline growing AFTER it lands.
+    const words = Brand.words(head);
+    Brand.enter(tl, words, { at: 0.20, rise: 34, scale: 0.96, blur: 5, stagger: 0.09, dur: 0.55 });
+    const lastWordAt = 0.20 + 0.09 * (words.length - 1) + 0.55;
+    const accent = words[words.length - 2];         // "8"
+    const acc2   = words[words.length - 1];         // "секунд"
+    [accent, acc2].forEach(function (w) { w.style.color = 'var(--cr-green)'; });
+    const u = Brand.highlight(acc2, { weight: 5, gap: 4 });
+    tl.set(u, { scaleX: 0 }, 0);
+    tl.fromTo(u, { scaleX: [0, 1] }, { at: lastWordAt + 0.24, dur: 0.34, ease: 'enter' });
+
+    // 3. support tier: the rule wipes, then the KPI lands, then its labels follow
+    //    60 ms apart. Offset, not delay - they start together and LAND in sequence.
+    tl.fromTo(rule, { scaleX: [0, 1] }, { at: 1.30, dur: 0.5, ease: 'wipe' });
+    Brand.enter(tl, kpi, { at: 1.52, rise: 30, scale: 0.94, ease: 'spring:m3_standard' });
+    tl.fromTo(kpi, { n: [0, 12500] }, { at: 1.52, dur: 1.4, ease: 'count', set: setN });
+    Brand.enter(tl, [unit, cap], { at: 1.90, rise: 22, scale: 1, blur: 3, stagger: 0.06, dur: 0.42 });
+
+    // 4. a 2 % camera push holds the frame alive through the stillness, and the beat
+    //    ends on a designed exit instead of a cut: reverse stagger, 7 frames.
+    Brand.camera(tl, sc, 0.2, DUR, { push: 1.02 });
+    Brand.exit(tl, [head, rule, kpi, unit, cap], { at: 4.42, dur: 0.28, drop: -26, stagger: 0.05, from: 'end' });
+  }
+
+  Motion.mount(tl);
+});
+</script>
+</body>
+</html>

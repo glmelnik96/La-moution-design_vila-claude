@@ -26,10 +26,12 @@ physical, convert to BEZIER and apply easing. Rule of thumb:
 
 ## 2. Cubic-bezier → AE influence cheat-sheet
 
-Web/GSAP eases are cubic-beziers `(x1,y1,x2,y2)`. AE can't take those handles
-directly (see quirk #5), but you approximate the *feel* with in/out influence.
-Convergent presets seen across sources, translated to AE `KeyframeEase.influence`
-(speed `0` at both ends unless noted):
+Web/GSAP eases are cubic-beziers `(x1,y1,x2,y2)`. AE keyframes do not take the
+handles as-is, but the mapping to `KeyframeEase(speed, influence)` is **exact** (see
+§2b) — use `M.bezierEase(prop, k, [x1,y1,x2,y2])` from `scripts/lib/cloudru-motion.jsx`
+and you get the same curve in AE and in the HTML engine. The table below is the
+zero-speed *shorthand* (good enough when both ends are at rest), translated to
+AE `KeyframeEase.influence`:
 
 | Feel | Web bezier | AE start-key outEase influence | AE end-key inEase influence |
 |---|---|---|---|
@@ -65,6 +67,41 @@ before applying ease.
 var e = new KeyframeEase(0, 90);
 pos.setTemporalEaseAtKey(2, [e], [e]);   // 1 element for non-separated Position
 ```
+
+### 2b. Exact bezier → KeyframeEase conversion (the math both engines share)
+
+AE's temporal curve between key `k` (time `t0`, value `v0`) and key `k+1` (`t1`, `v1`) is a
+cubic bezier in (time, value) space whose handles are expressed as **influence** (how far
+along the segment's time span the handle reaches, in %) and **speed** (the handle's slope,
+in value-units per second). A CSS `cubic-bezier(x1,y1,x2,y2)` is the same curve normalised
+to a unit square. With `Δt = t1 − t0` and `Δv = v1 − v0` (for multi-dimensional properties
+use the *length* of the delta — non-separated Position has one temporal ease):
+
+```
+key k   outInfluence = x1 · 100            outSpeed = y1 · Δv / (x1 · Δt)
+key k+1 inInfluence  = (1 − x2) · 100      inSpeed  = (1 − y2) · Δv / ((1 − x2) · Δt)
+```
+
+This is the inverse of what Bodymovin/Lottie does when it exports AE keys to web beziers,
+so the round trip is lossless. Practical clamps: AE requires `0.1 ≤ influence ≤ 100`, so
+`x1 = 0` becomes influence 0.1 with speed 0 (a genuinely linear start), and `x2 = 1`
+likewise. A `y > 1` (overshoot bezier) yields a speed larger than the average velocity — AE
+accepts it, but the Cloud.ru brand forbids overshoot, so the token set has none.
+
+Worked example — `enter` = `0.16, 1, 0.3, 1`, Position moving 40 px over 0.4 s:
+`Δv/Δt = 100 px/s` → key 1 out: influence 16, speed 625; key 2 in: influence 70, speed 0.
+That is the difference between the old "10 / 90 approximation" and the real curve: the real
+one leaves the first key *fast* (speed 625) and lands with a long, heavy 70 % deceleration.
+
+```jsx
+// scripts/lib/cloudru-motion.jsx
+M.bezierEase(pos, 1, CR.EASE.ENTER);   // eases the pair (key 1 → key 2)
+M.tween(pos, 0, 400, [960, 580], [960, 540], "enter");  // keys + ease + flattened path in one call
+```
+
+`speed` must be signed like `Δv` for 1-D properties (a value decreasing from 100 to 0 has a
+negative Δv, so the out-speed is negative). The lib handles that; do it by hand only if you
+are not using the lib.
 
 ### Spatial tangents (shaping the motion path)
 
