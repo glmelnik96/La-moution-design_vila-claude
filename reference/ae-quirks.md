@@ -933,3 +933,486 @@ scores clean. `gaps.py` reports the distribution of the *gap* instead.
 independently costs the constraint twice. And a checker that gates on a
 threshold cannot tell you how close you are to it — to see margin, measure
 margin.
+
+## 45. Read a logo's silhouette off its alpha, radially — never off the picture
+
+The YANOS mark looked like "a blue Я inside a ring". It is not. A radial profile
+of the alpha (`form_ya.py`, probe in `C:/dev/temp/probe_mark.py`) gives, as
+fractions of the mark's own diameter:
+
+| region | radius | opaque |
+|---|---|---|
+| outer ring | 0.90 .. 1.00 | yes — only **5% of D** thick |
+| gap | 0.82 .. 0.90 | no |
+| inner disc | 0.00 .. 0.82 | yes, with the letter **knocked out** |
+| letterform | < 0.75, bbox 0.473 × 0.447 D, area 0.1615 D² | (the knock-out) |
+
+Two decisions turned on numbers that eyeballing got backwards:
+
+* I first read the opaque region as "ring + letter" and built the whole packer
+  on it. It is "ring + disc − letter". That inverts what the pack *means*.
+  Two different arithmetic reconstructions both matched the opaque-pixel count,
+  so counting was not enough either — the only honest test was to render the
+  mask alone and look at it.
+* "The ring is ~13% of D, thick enough for small words" was a guess. It is 5%
+  (98 px at D=1960). That is why words never landed there on their own.
+
+**General shape:** a logo is a *measurement*, not an impression. Profile the
+alpha before writing anything that depends on its shape.
+
+## 46. Pack by ink AREA, not by type size
+
+Greedy shape-packing placed words biggest-point-size first. The long words —
+ОСНОВОПОЛАГАЮЩИЙ, ПРОФЕССИОНАЛЫ, ОБЪЕДИНЯЮЩИЙ — are *small type but wide*, so
+they sorted last, by which time every long horizontal run in the figure had been
+chopped up by earlier arbitrary placements. They then failed at all six shrink
+steps and fell out of the shot: 15 words auto-shrunk, several to 15–27 pt,
+unreadable.
+
+Sorting by `w*h` at the target size instead puts the long words in while the
+runs still exist. Letter mode went from 40/41 with 14 pathological shrinks to
+**41/41 with two mild ones**.
+
+Related: a search that walks a spiral and takes the **first** legal slot is not
+a packer, it is a random placer. Score *every* candidate with a summed-area
+table (`integral` / `all_on_ink`, O(1) per box) and take the legal slot nearest
+the word's anchor. Grid sampling instead of the integral is not just slower, it
+is **wrong** — an annulus or a letter's notch lets a box put every sample point
+on ink while straddling a hole between them.
+
+**General shape:** greedy order should rank by what is *scarce* (contiguous
+area), not by what is *conspicuous* (point size).
+
+## 47. A reserved region needs an explicit target, not a preference
+
+Nothing steers a word onto a 98 px ring when the objective is "nearest to where
+you already rest" and every resting place is central. The ring stayed empty and
+the mark read as a word blob inside a circle somebody else drew.
+
+Fix: reserve the N narrowest words whose ink height clears the band, give each
+an evenly spaced **angular target** on the ring, and restrict their candidates
+to `radius > 0.86`. They then form a rosette instead of clumping.
+
+Residual, and geometric rather than fixable: at 3 and 9 o'clock the band runs
+vertically, so a horizontal word crossing it needs band width ≥ word width.
+Ring words will always cluster near 12 and 6 unless they are set on a path.
+
+## 48. On a grid, round the *test* outward and the *mark* outward — both
+
+A packer that snaps candidates to a grid has two conversions from px to cells,
+and they must round in opposite senses from what feels natural:
+
+| operation | naive | correct | why |
+|---|---|---|---|
+| "is this box clear?" | `int(hw/SX)` | `ceil(hw/SX)` | the window tested must **contain** the box |
+| "mark this box taken" | `searchsorted(xs, x0)` | `searchsorted(xs, x0, "right") - 1` | the cells marked must **cover** the box |
+
+Both naive forms round *inward*. With `SX=8` and `PAD=5` the inward rounding ate
+the entire clearance, so `form_ya.py` reported a clean pack while neighbours
+touched. Rounded outward the test is conservative: it can refuse a legal slot,
+never accept an illegal one — which is the direction you want to be wrong in.
+
+Verify with a checker that does **not** share the packer's grid. `ya_gaps.py`
+reads the frozen layout and measures continuous-space gaps between ink boxes;
+re-using the packer's own `Field` to check the packer would only confirm its
+rounding back to itself.
+
+Related: the audit must strip `PAD` before measuring. The packer reserves pad
+around each word, and a check that keeps it is grading itself on its own
+reservation rather than on what the viewer sees.
+
+## 49. Repeated words need a minimum separation, or they read as a typo
+
+Filling a shape needs more instances than there are words, so words repeat —
+the client's own reference repeats freely. But the fill was greedy row-major,
+so two copies of СИЛА landed side by side in one line and ДОМ twice in the top
+bar. On screen that does not read as a device, it reads as a duplication bug.
+
+Fix: keep the centres of each word's existing instances and mask candidates
+within `MINSEP` (620 px at a 3860 px figure, ~16% of its width). Cost was zero —
+still 112 instances at 87% coverage, because the shape has plenty of alternative
+slots at that size.
+
+**General shape:** "how many did we fit" is a packing metric. Whether the result
+looks *authored* rather than *generated* needs its own constraint.
+
+## 50. `saveFrameToPng` returns before the file is closed
+
+The JSX finishes and reports the paths, but PIL opening the first PNG straight
+away raised `OSError: image file is truncated (0 bytes not processed)`. The file
+was not corrupt — at 4K a frame is ~5.5 MB and the write was still draining when
+the bridge handed control back. Listing the directory a moment later showed all
+six complete.
+
+Fix: poll `os.path.getsize` until it stops changing before opening. Do not
+"retry the open" — a retry loop on a still-growing file can succeed on a
+partially-written PNG and give you a half-rendered frame to review, which is
+worse than an exception.
+
+**General shape:** an async writer's return value tells you the *request*
+finished, not the *bytes*. Gate on the artifact, not on the call.
+
+## 51. A shape-cloud only passes if it passes the squint test
+
+Every offline check said the letter was correct — 0 overlaps, 0 pairs under
+12 px, ink bbox centred to the pixel, margins symmetric. None of those measure
+the one thing that matters: whether the silhouette reads as «Я». They measure
+the words, and the shape is made of the *gaps*.
+
+Fix: greyscale the rendered frame, downscale to ~160 px wide, scale back up
+nearest-neighbour. Type disappears and only mass remains, which is what a viewer
+gets in the first half-second. The bowl, the stem and the descending leg were
+all legible — and the same test exposed the ragged right edge of the stem, which
+is invisible at full resolution because the eye reads the words instead.
+
+**General shape:** validation at the resolution you author at will miss defects
+that only exist at the resolution the work is *seen* at.
+
+## 52. Extending a timeline strands the constants tuned for the old ending
+
+v6 pushed 750 frames to 1000 and added a closing act. Every timing constant kept
+working — the build was clean, no assertion fired — but `F_SWEEP = 636` had been
+placed "just before the sign-off" when f750 *was* the sign-off. At 1000 frames it
+fires into the middle of a hold the viewer is about to leave, and the last 100
+frames (4 s, 10% of the spot) were a completely dead frame.
+
+Nothing catches this: the sweep still renders, still eases, still crosses. It is
+correct code pointed at a moment that no longer means anything.
+
+Fix: `F_SWEEP = 912 if FORM else 636`. Two frames of the new tail were rendered
+to confirm the 9% ADD bar still reads over the finished letter without touching
+the type.
+
+**General shape:** when you extend a duration, audit every constant that was
+expressed relative to *the end* — they are now relative to the middle. A
+comment saying "just before the sign-off" is the flag to grep for.
+
+## 53. A glyph-shaped pack is not centred on its own bounding disc
+
+The Я pack was solved inside the mask's frame and looked centred there. Rendered
+into the comp it sat 200 px right of centre (margins L1155 R754) with only 14 px
+between the figure and the logo lockup. Я has a leg: its ink is not symmetric
+about the disc the packer works in.
+
+Fix: measure the ink bbox of the placed slots and apply a **rigid** translation
+(`FORM_DX = -200.5, FORM_DY = +11.1`), in memory, leaving the signed-off layout
+file untouched. Re-solving with a centring term would have been the obvious move
+and the wrong one — it invalidates every gap the audit already verified, for a
+correction a translation makes exactly.
+
+**General shape:** if the fix is a rigid transform, apply the transform. Do not
+re-run the solver, because a solver returns a *different* answer, not a shifted
+one.
+
+## 54. Repetition multiplies an accent colour past the point where it accents
+
+The 41 answer words carry brand colours assigned once; 7 are red. Filling the
+letter needs 112 instances, and inheriting each word's colour turned 7 red marks
+into ~15 scattered ones. Red stopped being the accent and became a texture — the
+palette was tuned for N instances and broke at 3N.
+
+Fix: base instances keep their word's colour; **repeats are coloured by size**
+(`BLUE_L / BLUE / BLUE_D`), never red. Size-keyed colour also buys tonal
+recession for free, which is what the fill needs anyway.
+
+Second finding from the same fix: the ramp stops one rung *below* white. A white
+top rung was tried and rejected on the render — the 78 pt fill happened to land
+mostly in the right-hand stem, so white lit that stem and left the bowl
+mumbling. Reserving white for the 41 real answers is also the honest reading:
+white means "somebody voted for this word".
+
+**General shape:** a colour rule written for a set stays correct per-item while
+becoming wrong in aggregate. Re-judge the palette at the final instance count,
+not the design-time one.
+
+## 55. Two previews of the same layout are two different reviews
+
+`form_ya.py` previews the pack with type coloured by size. That is a *geometry*
+review — it answers "is there a big word here, does it fit". It cannot answer
+"does this frame look right", because the comp gives every word the brand colour
+it has carried for 28 seconds and parks a logo lockup bottom-right.
+
+`ya_check.py` was written to draw the same frozen layout in the real palette
+with the logo's footprint outlined, and it immediately caught two defects the
+size-ramped preview had shown cleanly for days: the 200 px offset (#53) and the
+red saturation (#54).
+
+**General shape:** a diagnostic view and a composition view are not
+interchangeable, and the diagnostic one is the more persuasive of the two —
+it looks deliberate, so it gets trusted. Render the real thing before signing
+off.
+
+## 56. `addComp` runs once; anything set there is never re-applied
+
+The generated JSX finds the comp by name and only calls
+`app.project.items.addComp(name, w, h, par, dur, fps)` when it is missing. So
+`dur` — and `w`, `h`, `fps` — are whatever the **first** build happened to set,
+for the whole life of the project. v6 extended the spot from 40 s to 45 s, the
+generator emitted the new length, the build reported success, and the timeline
+stayed at 40 s.
+
+The failure is silent in the worst way: AE does not error on a `setValueAtTime`
+past the comp end, and `saveFrameToPng` past the end just hands back the last
+frame. Five seconds of new animation existed as keyframes and rendered as a
+freeze, six times.
+
+Fix: re-assert comp-level properties unconditionally, right after the
+find-or-create.
+
+```javascript
+if (!comp) comp = app.project.items.addComp(TARGET, W, H, 1, DUR, FPS);
+comp.duration = DUR;      // addComp only ran the first time
+```
+
+**General shape:** in an idempotent build script, `create-if-missing` silently
+turns every constructor argument into a write-once value. Anything that can
+change between runs has to be set on the object, not passed to its constructor.
+
+## 57. `setTemporalEaseAtKey(k, inEase, outEase)` — argument order bites
+
+The helper in `gen_cloud.py` is `easeKey(p, k, inf0, inf1)` and it calls
+`p.setTemporalEaseAtKey(k, eb, ea)` where `eb` carries `inf1` and `ea` carries
+`inf0`. So **`inf0` is the OUT influence and `inf1` is the IN influence** —
+the reverse of how the parameter names read.
+
+That makes the house default `easeAll(p) = easeKey(p, k, 16, 88)` a *front-
+loaded* curve: influence 16 leaving a key, 88 arriving at one. Brisk departure,
+soft arrival. It is exactly right for an entrance, which is why it was never
+questioned.
+
+It is wrong for a contraction. Applied to a 4x shrink it put most of the scale
+change into the first second: measured on the render, at 55% of the beat the
+figure was already down to 28% of its width, and it read as being sucked away
+rather than compacted. A symmetric `easeKey(p, k, 70, 70)` fixed it.
+
+But the same reasoning does *not* transfer to every property in the gesture.
+The mark's opacity was given the symmetric curve too, for consistency, and the
+crossover frame came back as a ghost of a ring around a block of type — the
+disc, the whole mechanism of the shot, had not yet become a surface. Opacity
+wanted the front-loaded curve: establish fast, spend the rest of the beat
+settling.
+
+**General shape:** "one gesture" does not mean "one curve". Scale wanted
+symmetric, opacity wanted front-loaded, in the same beat, on the same two
+frames. And check which end an influence number actually lands on before
+reasoning about it.
+
+## 58. The emitted JSX is written as ASCII
+
+`gen_cloud.py` writes the `.jsx` with a plain `open(...).write()`, so a single
+Cyrillic character anywhere in the template — including in a *comment* — raises
+`UnicodeEncodeError` at write time, tens of thousands of characters into the
+file. The generator itself is UTF-8 and Cyrillic is fine there; the constraint
+applies only to text that ends up inside the emitted script.
+
+Word content survives because it goes through `js()`, which escapes to `\uXXXX`.
+
+## 59. After Effects will not import WEBP
+
+The brand pack ships the mark as `.WEBP`. `app.project.importFile` fails on it,
+and it fails at *import* — so with a `try/catch` around the block the layer is
+simply absent and the shot renders looking finished but empty. Convert to PNG in
+the Python step (`mark_fit.py` does the crop and the write in one pass) and
+import that.
+
+## 60. A window-clipping containment test accepts boxes that hang off the mask
+
+`form_ya.py`'s `Field.legal()` tests a candidate slot with `win()`, which
+**clips the window to the grid** and then computes `need` from the clipped
+indices. A box hanging off the letterform is therefore only tested on the part
+still on the grid — and passes. `mark_probe.py` measured the result: 32 of 112
+packed boxes are not fully on the glyph, the worst 68% off, and some sit across
+the letter's internal counters.
+
+So the "figure packed into the shape of Я" is Я-*ish*, not congruent with the
+glyph, and no match cut to the real mark exists at any scale — scaling the
+letter scales its holes too.
+
+**General shape:** a containment predicate that clips its own test window is a
+predicate that always says yes at the boundary. Test the unclipped box, or test
+the mask, but do not let the clip decide the domain.
+
+## 61. Fit to the mask, not to the mask's bounding box — then find out you can't
+
+Having fitted the collapsed word figure bbox-to-bbox into the mark's knock-out,
+the render showed the brand's hero word both **legible and sliced** by the
+letter's shoulder. A word cut mid-stroke does not read as "behind the mark", it
+reads as a clipping bug.
+
+The obvious fix — shrink until nothing overhangs — turned out not to exist.
+`coll_fit.py` bisects from 0.60 down to 0.02 and never finds a clear scale,
+because the knock-out is not the solid slab it looks like: it carries the mark's
+internal blue strokes, so it is a thin branching shape and the centre of its own
+bounding box is *on* blue (`LETTER[lf_cx, lf_cy] == 0`). There is no useful
+rectangle inside a Я, and the figure is a rectangle of rectangles.
+
+Cropping was therefore unavoidable and had to be **dressed instead of removed**:
+retire the words in size order, biggest first, so that whatever is still inside
+the letter when the mark goes opaque is too small to read as a word at all.
+Nobody notices a truncated word they could not have read.
+
+**General shape:** when the geometric fix is impossible, the remaining lever is
+usually legibility — a defect that cannot be seen has been solved.
+
+## 62. `core.autocrlf=true` fails the token-sync check on Windows
+
+`node --test` comes back 56/57 and `build-tokens.js --check` reports three STALE files on a
+fresh clone. Nothing is stale: the generated token files are committed with CRLF, git hands
+them over unchanged, and the generator writes LF, so the byte-for-byte comparison in
+`tokens.test.js` fails on line endings alone.
+
+Running `node scripts/build-tokens.js` makes the tests green but then shows the three files as
+modified forever. The real fix is a `.gitattributes` pinning the generated files (they are
+compared byte-for-byte, so they must be `eol=lf`):
+
+```
+scripts/lib/tokens.jsx   text eol=lf
+html/engine/tokens.js    text eol=lf
+html/engine/tokens.css   text eol=lf
+```
+
+**General shape:** any test that compares generated text byte-for-byte is a line-ending test on
+Windows unless the file is pinned.
+
+## 63. `lint-jsx.js` false-positives on a correctly terminated payload
+
+The linter warns `last statement does not call JSON.stringify(...)` on payloads that do exactly
+that. It looks at the last *line*, and the house pattern
+
+```javascript
+JSON.stringify(M.run("label", function () {
+  …
+}));
+```
+
+ends on `}));`. The warning is harmless — the payload returns fine — but it fires on every
+correct file, which trains you to ignore the one case where it is real.
+
+## 64. An HTML page without an explicit `<body>` renders black, with working controls
+
+`Brand.canvas(document.body, '1080p')` at parse time in a page that omits `<head>`/`<body>`
+gets `document.body === null`. The canvas is built and never appended; `Motion.mount` runs
+later (after `document.fonts.ready`, when the implicit body exists) and adds the scrubber, so
+`window.__motion` reports a healthy 5.00 s / 125-frame timeline and `render.js` says
+`page ready`. Every still is black.
+
+The tell: `document.querySelector('.cr-canvas')` is null while `window.__motion` is true. Copy
+the `<html><head>…</head><body>` skeleton from `html/templates/showreel.html` rather than
+writing a bare fragment.
+
+## 65. `render.js` cannot take a query string on a file path
+
+`fileUrl()` passes `http(s)://` through but runs `path.resolve()` on anything else, which
+mangles `page.html?scene=kpi`. To render a parameterised page — `?scene=`, `?format=`, or your
+own switch — serve it and give the renderer an http URL:
+
+```bash
+node html/render/serve.js . 8093 &
+node html/render/render.js "http://localhost:8093/html/templates/x.html?v=lib" --out out/x --beats 0.4,1.0,2.4
+```
+
+## 66. An exit only reads in its last four frames — and can silently overrun the comp
+
+`M.exitOut` defaults to `CR.ENTRANCE.EXIT_FRAMES_MAX / fps` = 400 ms on the `exit` ease
+`[0.7, 0, 0.84, 0]`. That ease is deliberately ease-IN, and it is steep: measured on the
+build, opacity is **99.6 % at 33 % of the tween** and only collapses over the last ~4 frames.
+Judging an exit on a frame sampled at its midpoint therefore shows a fully present element and
+reads as "the exit is not working". Sample the last quarter.
+
+The second half of the trap: a reverse-stagger exit chain adds up. `M.followThrough(layers,
+4420, …, 50)` over five layers starts the last one at 4620 ms, which needs until 5020 ms — past
+the end of a 5 s comp. Nothing errors; the last element is simply cut off mid-exit at 96 %
+opacity, which looks like a broken exit rather than an overrun.
+
+**General shape:** `t0 + offset·(n−1) + dur ≤ comp.duration` is a check the library does not do
+for you. It is the "sum the holds against the target length" step of the workflow, and skipping
+it produces a defect that looks like an easing bug.
+
+## 67. Long JS/HTML written through a Bash heredoc can die on quoting — use the Write tool
+
+Two files written with `cat > file << 'EOF'` — a 230-line JS module and a 150-line HTML page —
+both failed with `unexpected EOF while looking for matching '` at a line well inside the
+content, while a 100-line Markdown heredoc in the same session went through. Both failing files
+mixed `'` and `"` heavily (SVG strings, `"You'll …"`). A quoted heredoc *should* be literal, so
+the cause is somewhere in the shell wrapper rather than in bash itself; not verified, and not
+worth the time. The Write tool has no shell in the path and took both files first time.
+
+Rule: source files with mixed quotes go through Write; heredocs are for short, plain text.
+
+## 68. The timeline's state contract, and the two setter patterns it forces
+
+`Motion.stateAt` (html/engine/motion.js): per element and per prop, **the latest tween that
+has started wins; before any has started the first tween's `from` holds**. Custom setters are
+deduplicated per element and each is called with the element's *merged* state.
+
+Two consequences that bit while building `Demo.*`:
+
+- An element whose only tween is an exit (`opacity: [0.9, 0]` at t) is **visible from t = 0**,
+  because its `from` holds until the tween starts. Anything that appears only briefly (a click
+  ripple, a swapped-in pill) needs `tl.set(el, { opacity: 0 }, 0)` first — and a second set
+  after, or it holds its last `to`.
+- Never let a setter and the engine write the same style. A blinking caret driven by a setter on
+  `style.opacity` fights the engine's own opacity write on every seek. Drive it through a prop
+  the engine does not own (`visibility`), and gate it with a custom `show` prop set by
+  zero-length tweens: `show 0 @0 → 1 @t0 → 0 @t1`. Same setter on all four tweens is fine —
+  it is deduplicated.
+
+## 69. Ease-in beats read as "nothing happened" at their midpoint — sample the last third
+
+Same family as #66, seen on the whip this time. `Demo.whip` is 6 frames on the `exit` ease
+`[0.7, 0, 0.84, 0]`. A still at 40 % of it showed the card sitting in place with no blur and
+looked like a broken whip; at 68 % the card was a full-width smear leaving the frame, and at 88 %
+the next card was already flying in behind it. Nothing was wrong — ease-in spends its first half
+almost still by definition.
+
+Corollary for anything with a tail: a stagger × n or a particle life must fit inside the scene
+window. `tl.scene` cuts with `display: none` on the frame, so a sparkle burst whose fade starts
+after the scene ends is simply never seen — the first pass of the demo's sparkles had 2 of 12
+visible for exactly that reason.
+
+## 70. Two helpers that tween the same prop on the same element cancel each other — camera on a wrapper
+
+`Brand.camera(tl, sceneEl, …)` tweens `scale` on the scene root for the whole scene; 
+`Brand.scaleThrough(tl, outEl, inEl, at)` tweens `scale` on the same roots for 0.3–0.44 s at
+the cut. Under the `stateAt` contract (#68: latest-started tween owns the prop, and keeps
+owning it after it ends) that means:
+
+- **incoming scene**: the scale-through starts *after* the push, wins, and after it settles at
+  1.0 its final value holds for the rest of the scene — the 2 % push never happens;
+- **outgoing scene**: the push has reached 1.02 when the scale-through starts at 1.0 — the frame
+  pops back 2 % on the cut, which reads as a glitch.
+
+Neither helper errors and neither warns. Fix by separating the layers: the scene root takes the
+transition, an inner full-size wrapper takes the content and the push
+(`cn-packshots.html: scene()` returns the wrapper with `.root` attached). General rule: before
+handing an element to a second choreography helper, check which props the first one already
+owns on it.
+
+## 71. `render.js` defaults to a 1920×1080 viewport — a story page is silently cropped
+
+Rendering a `Brand.canvas(…, 'story')` page (1080×1920) without `--w 1080 --h 1920` produces
+960×540 stills of the **top 1080 px of the frame with black padding on the right**, and a beat
+sheet of square thumbnails. Nothing warns: `page ready` prints duration, fps and scale, not the
+viewport, and every still "looks like a frame". The whole lower half — text blocks, buttons,
+QR labels — is simply never reviewed.
+
+Pass the canvas size explicitly (`--w`/`--h` match `MotionTokens.format[key]`), and check the
+first still's pixel size against the format before judging anything.
+
+## 72. CJK text and the line mask: split per character, and give the mask room
+
+Two findings from the Cloud.ru China packshots (`html/templates/cn-packshots.html`):
+
+- **`Brand.lines` cannot see line breaks inside Chinese.** It splits on whitespace and reads
+  `offsetTop` per word span; a run of CJK with no spaces is one span that wraps *inside* itself,
+  so its second and third lines are never detected and the reveal moves the whole paragraph as
+  one line. `cjkLines()` in the page tokenises per character (Latin words kept whole), measures
+  each span, and rebuilds the same `.cr-line-mask > .cr-line` structure — and it must add the
+  `cr-lines` class to the container, because `brand.css` scopes `overflow: hidden` under it.
+- **`line-height: 1` is smaller than a YaHei CJK glyph box.** With the mask the height of the
+  line box (48 px at 48 px), the glyph bottoms are clipped for good, and ~7 px of the glyph tops
+  stay visible *before* the reveal — a faint ghost line on the still. Designed at 1.0 in
+  PingFang, rendered in YaHei it needs ≥ 1.25 (or a mask `pad`).
+
+**General shape:** a line mask is only as good as the line box; check both the split and the
+box against the font that is actually rendering, not the one in the design.

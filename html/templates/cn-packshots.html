@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Cloud.ru CN packshots — motion</title>
+<link rel="stylesheet" href="../engine/tokens.css">
+<link rel="stylesheet" href="../engine/brand.css">
+<script src="../engine/tokens.js"></script>
+<script src="../engine/motion.js"></script>
+<script src="../engine/brand.js"></script>
+<script src="../engine/demo.js"></script>
+<style>
+  /* PingFang SC is the designed face; it does not exist on Windows. YaHei carries the body copy,
+     the hero headlines are rendered layers from Figma so they keep the real face. */
+  .cn, .cn .cr-text { font-family: "PingFang SC", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans CJK SC", sans-serif; font-weight: 600; }
+  .cn-label { font-size: 40px; line-height: 1.2; color: #fff; }
+  .cn-body  { font-size: 60px; line-height: 1.2; color: #26d07c; }
+  .cn-g40   { font-size: 40px; line-height: 1.2; color: #26d07c; }
+  /* line-height 1 (as designed) is SMALLER than a YaHei CJK glyph box: the line mask would clip
+     the glyph bottoms for good and let 7 px of their tops show before the reveal. 1.25 covers it. */
+  .cn-lock  { font-size: 48px; line-height: 1.25; color: #fff; font-weight: 700; white-space: nowrap; }
+  img.layer { position: absolute; display: block; }
+</style>
+</head>
+<body>
+<script>
+// Cloud.ru China-market packshots (Figma: Gleb's boards, 3955:*), animated per SKILL.md §5b.
+// Six of the nine frames are screens: packshot 5 (matryoshka), 6 (flag), 2 (3D headline +
+// presenter), 1080x1920 (presenter + paragraph + button), 1 (logo lockup + QR), 1080x1920 (QR
+// column). Frames 3955:82 and :77 are style-variant sheets, not screens, and are not used.
+// Every element sits at its Figma position; assets are the exported layers in cn-assets/.
+// Brand motion rules apply in full (Cloud.ru): decisive ease-out entrances, ease-in exits,
+// holds, one moving subject, hidden-cut transitions, no bounce on brand marks.
+(function () {
+  const F = MotionTokens.format['story'];                 // 1080×1920 @ 30 fps
+  const canvas = Brand.canvas(document.body, 'story');
+  canvas.classList.add('cn');
+  const tl = Motion.timeline({ fps: F.fps });
+  const box = Brand.box, el = Brand.el, A = Object.assign;
+  const BG = '#222222', GREEN = '#26d07c', AS = 'cn-assets/';
+
+  // Returns the CAMERA wrapper: content and the 2 % push live here. The scene root is `.root`,
+  // and transitions (scale-through) scale the root — so they never fight the push for `scale`.
+  // stateAt lets the latest-started tween own a prop: a push on the root would be silently
+  // overridden by the transition on the incoming scene, and pop back 2 % at the cut on the
+  // outgoing one.
+  function scene(name, t0, t1) {
+    const root = Brand.scene(canvas, 'cr-tone-dark');
+    root.style.background = BG; root.style.overflow = 'hidden';
+    tl.scene(name, t0, t1, root);
+    const cam = box(root, '', { left: 0, top: 0, width: 1080, height: 1920 });
+    cam.style.transformOrigin = '50% 50%';
+    cam.root = root;
+    return cam;
+  }
+  function img(parent, file, pos, origin) {
+    const i = el('img', 'layer', null, parent);
+    i.src = AS + file;
+    Object.keys(pos).forEach(function (k) { i.style[k] = typeof pos[k] === 'number' ? pos[k] + 'px' : pos[k]; });
+    if (origin) i.style.transformOrigin = origin;
+    return i;
+  }
+  function text(parent, str, cls, pos) { const t = box(parent, 'cr-text ' + cls, pos); t.textContent = str; return t; }
+  // the designed text block: label + body, #222 plate, 40/20 padding, 40 gap, 960 wide
+  function textBlock(parent, pos, bodyStr) {
+    const b = box(parent, '', A({ width: 960 }, pos));
+    A(b.style, { background: BG, padding: '40px 20px', boxSizing: 'border-box' });
+    const label = el('div', 'cr-text cn-label', { position: 'relative' }, b); label.textContent = '我们是谁';
+    const body = el('div', 'cr-text cn-body', { position: 'relative', marginTop: 40 }, b); body.textContent = bodyStr;
+    return { el: b, label: label, body: body };
+  }
+  // Line split that survives CJK: Brand.lines splits on whitespace, and a run of Chinese with no
+  // spaces wraps INSIDE one span, so its lines are never seen. Measure per character instead.
+  function cjkLines(elm) {
+    const raw = elm.textContent; elm.textContent = '';
+    const toks = raw.match(/[A-Za-z0-9.+\-]+|\s+|./g) || [];
+    const spans = toks.map(function (t) { const s = document.createElement('span'); s.textContent = t; elm.appendChild(s); return s; });
+    const rows = []; let last = null;
+    spans.forEach(function (s) {
+      const top = s.offsetTop;
+      if (last === null || Math.abs(top - last) > 1) { rows.push([]); last = top; }
+      rows[rows.length - 1].push(s.textContent);
+    });
+    elm.textContent = '';
+    elm.classList.add('cr-lines');                 // brand.css scopes the mask under .cr-lines
+    return rows.map(function (r) {
+      const mask = el('div', 'cr-line-mask', null, elm);
+      const line = el('div', 'cr-line', null, mask);
+      line.textContent = r.join('');
+      return line;
+    });
+  }
+  function reveal(lines, at, each, dur) {
+    lines.forEach(function (l, i) { tl.fromTo(l, { y: [Brand.lineHeight(l), 0] }, { at: at + (each || 0.07) * i, dur: dur || 0.6, ease: 'enter' }); });
+    return at + (each || 0.07) * (lines.length - 1) + (dur || 0.6);
+  }
+  // inline an exported SVG so its paths can draw on (trim-path); optional rotation as designed
+  async function inlineSvg(parent, file, pos, rot) {
+    const svgText = await (await fetch(AS + file)).text();
+    const w = box(parent, '', pos);
+    w.innerHTML = svgText;
+    const s = w.querySelector('svg');
+    s.setAttribute('width', '100%'); s.setAttribute('height', '100%'); s.style.display = 'block';
+    if (rot) w.style.transform = 'rotate(' + rot + 'deg)';
+    return { el: w, paths: Array.from(s.querySelectorAll('path')) };
+  }
+  function drawOn(paths, at, each, dur) {
+    paths.forEach(function (p, i) { tl.fromTo(p, { draw: [0, 1] }, { set: Brand.drawOn(p), at: at + (each || 0.1) * i, dur: dur || 0.8, ease: 'move' }); });
+    return at + (each || 0.1) * (paths.length - 1) + (dur || 0.8);
+  }
+
+  document.fonts.ready.then(async function () {
+    const LINE1 = 'Cloud.ru 是俄罗斯 IaaS 和 PaaS 市场收入排名第';
+    const PARA = 'Cloud.ru 是俄罗斯 IaaS 和 PaaS 市场收入排名第一的云服务商, 为 40+ 中国领先企业提供云服务, 涵盖汽车、电子、智能设备、软件开发及高科技领域.';
+
+    // ===== S1+S2 · HOOK → CONTEXT · 0–7.4 (one scene: the headline and copy stay, the object swaps) =====
+    const s1 = scene('hook', 0, 8.0);
+    const doll = img(s1, 'matryoshka.png', { left: -110, top: 766, width: 1365, height: 1365 });
+    const flag = img(s1, 'flag.png', { left: -158, top: 765, width: 1321, height: 1321 }, '30% 50%');
+    const head1 = img(s1, 'head_sticker.png', { left: 104, top: 138, width: 937, height: 632 });
+    const tb1 = textBlock(s1, { left: 60, top: 1602 }, LINE1);
+    Brand.enter(tl, head1, { at: 0.10, rise: 40, scale: 0.96, blur: 4, dur: 0.6 });
+    tl.fromTo(doll, { opacity: [0, 1], y: [260, 0], scale: [0.94, 1] }, { at: 0.25, dur: 1.0, ease: 'enter' });
+    // the block's plate arrives WITH its label — an empty #222 plate over the artwork reads as a hole
+    tl.fromTo(tb1.el, { opacity: [0, 1] }, { at: 0.95, dur: 0.25, ease: 'enter' });
+    Brand.enter(tl, tb1.label, { at: 1.0, rise: 16, scale: 1, dur: 0.3 });
+    reveal(cjkLines(tb1.body), 1.15);
+    // the swap: the doll drops away, and only then the flag comes in from the left with a little turn
+    tl.fromTo(doll, { opacity: [1, 0], y: [0, 180], scale: [1, 0.97] }, { at: 3.8, dur: 0.36, ease: 'exit' });
+    tl.fromTo(flag, { opacity: [0, 1], x: [-320, 0], rotateY: [22, 0] }, { at: 4.1, dur: 0.9, ease: 'enter' });
+    Brand.camera(tl, s1, 0.2, 7.4, { push: 1.02 });
+
+    // ===== S3 · BODY 1 · 7.4–11.6 (3D headline + presenter) — scale-through in =====
+    const s3 = scene('body1', 7.4, 11.6);
+    const h3a = img(s3, 'head3d_a.png', { left: 18, top: 29, width: 1044, height: 701 });
+    const h3b = img(s3, 'head3d_b.png', { left: 38, top: 68, width: 900, height: 564 });
+    // the presenter is Figma's render of the photo node clipped by the frame (1080×1543 from
+    // y = 377); it sits ABOVE the headline, as in the design
+    // 1546, not 1543: the render's last pixel row is a light edge artefact; 3 px taller puts it
+    // just past the frame bottom, where the scene's overflow clips it
+    const pres1 = img(s3, 'presenter_jacket.png', { left: 0, top: 377, width: 1080, height: 1546 }, '50% 100%');
+    const tb3 = textBlock(s3, { left: 60, top: 1582 }, LINE1);
+    Brand.scaleThrough(tl, s1.root, s3.root, 7.4);
+    // scale from the bottom edge, not a rise: the photo is clipped at the frame bottom, and a
+    // rise would drag an empty band up with it
+    tl.fromTo(pres1, { opacity: [0, 1], scale: [1.08, 1] }, { at: 7.55, dur: 0.9, ease: 'enter' });
+    Brand.enter(tl, h3a, { at: 7.70, rise: 30, scale: 0.97, blur: 3, dur: 0.55 });
+    Brand.enter(tl, h3b, { at: 7.76, rise: 30, scale: 0.97, blur: 3, dur: 0.55 });   // 60 ms follow-through
+    tl.fromTo(tb3.el, { opacity: [0, 1] }, { at: 8.45, dur: 0.25, ease: 'enter' });
+    Brand.enter(tl, tb3.label, { at: 8.5, rise: 16, scale: 1, dur: 0.3 });
+    reveal(cjkLines(tb3.body), 8.65);
+    Brand.camera(tl, s3, 7.4, 11.6, { push: 1.02 });
+
+    // ===== S4 · BODY 2 · 11.6–16.2 (drawn clouds, presenter, paragraph, button) — green wipe in =====
+    const s4 = scene('body2', 11.6, 16.2);
+    const ellA = await inlineSvg(s4, 'cloud_ellipse_a.svg', { left: 0, top: 404, width: 431, height: 262 });
+    const ellB = await inlineSvg(s4, 'cloud_ellipse_b.svg', { left: 631, top: 462, width: 563, height: 342 });
+    const spA = await inlineSvg(s4, 'spark_a.svg', { left: -19, top: 90, width: 264, height: 268 }, -90);
+    const spB = await inlineSvg(s4, 'spark_b.svg', { left: 185, top: 29, width: 165, height: 167 }, -90);
+    // the presenter sits ABOVE the line art, as in the design (Figma order: outlines, then photo)
+    const pres2 = img(s4, 'presenter_turtleneck.png', { left: -228, top: 72, width: 1365, height: 1848 }, '50% 100%');
+    const tb4 = textBlock(s4, { left: 60, top: 1105 }, PARA);
+    const btn = box(s4, '', { left: 60, top: 1659, width: 960, height: 224 });
+    A(btn.style, { background: GREEN, transformOrigin: '50% 50%' });
+    const btnLabel = text(btn, '扫码联系中文客户经理', '', { left: 0, right: 0, top: 0, bottom: 0 });
+    A(btnLabel.style, { fontSize: '70px', lineHeight: '224px', textAlign: 'center', color: '#222' });
+    // already rising while the plate uncovers him, so the wipe never reveals an empty frame
+    tl.fromTo(pres2, { opacity: [0, 1], scale: [1.06, 1] }, { at: 11.55, dur: 1.0, ease: 'enter' });
+    drawOn(ellA.paths.concat(ellB.paths), 12.0, 0.12, 0.8);
+    drawOn(spA.paths.concat(spB.paths), 12.3, 0.12, 0.6);
+    tl.fromTo(tb4.el, { opacity: [0, 1] }, { at: 12.85, dur: 0.25, ease: 'enter' });
+    Brand.enter(tl, tb4.label, { at: 12.9, rise: 16, scale: 1, dur: 0.3 });
+    reveal(cjkLines(tb4.body), 13.05);
+    tl.set(btn, { clipR: 100 }, 0);
+    tl.fromTo(btn, { clipR: [100, 0] }, { at: 14.4, dur: 0.4, ease: 'wipe' });
+    tl.fromTo(btnLabel, { opacity: [0, 1] }, { at: 14.6, dur: 0.25, ease: 'enter' });
+    // the press is what motivates the cut to the QR screen
+    tl.fromTo(btn, { scale: [1, 0.98] }, { at: 15.9, dur: 0.12, ease: 'ui' });
+    tl.fromTo(btn, { scale: [0.98, 1] }, { at: 16.02, dur: 0.16, ease: 'enter' });
+    Brand.camera(tl, s4, 11.6, 16.2, { push: 1.02 });
+
+    // ===== S5 · PAYOFF · 16.2–20.2 (logo lockup, drawn cloud, QR) — hard cut, motivated by the press =====
+    const s5 = scene('payoff', 16.2, 20.8);
+    const cloud = await inlineSvg(s5, 'cloud_group.svg', { left: 167, top: 384, width: 746, height: 420 });
+    const LW = 39.43 + 340.5 + 39.43, TW = 39.43 + 8 * 48 + 39.43, TOTAL = LW + 1 + TW, LX = 540 - TOTAL / 2;
+    const logoBox = box(s5, '', { left: LX, top: 900, width: LW, height: 120 });
+    const logo = img(logoBox, 'logo_color.svg', { left: 39.43, top: 28.5, width: 340.5, height: 63 });
+    const divider = box(s5, '', { left: LX + LW, top: 900, width: 1, height: 120 });
+    A(divider.style, { background: '#646464', transformOrigin: '50% 50%' });
+    const lockText = text(s5, '中国友好云提供商', 'cn-lock', { left: LX + LW + 1 + 39.43, top: 930 });
+    const qr1 = img(s5, 'qr_union.svg', { left: 293, top: 1300, width: 450, height: 450 }, '50% 50%');
+    const qr1t = text(s5, '企业微信', 'cn-g40', { left: 293, top: 1770 });
+    drawOn(cloud.paths, 16.25, 0.1, 0.7);
+    tl.fromTo(logo, { opacity: [0, 1], x: [-24, 0] }, { at: 16.9, dur: 0.5, ease: 'enter' });
+    tl.fromTo(divider, { scaleY: [0, 1] }, { at: 17.0, dur: 0.3, ease: 'enter' });
+    reveal(cjkLines(lockText), 17.1, 0.07, 0.5);
+    tl.fromTo(qr1, { opacity: [0, 1], scale: [0.96, 1] }, { at: 17.6, dur: 0.4, ease: 'enter' });
+    Brand.enter(tl, qr1t, { at: 17.75, rise: 14, scale: 1, dur: 0.3 });
+    Brand.camera(tl, s5, 16.2, 20.2, { push: 1.02 });
+
+    // ===== S6 · CTA · 20.2–24.6 (QR column) — scale-through in, then hold =====
+    const s6 = scene('cta', 20.2, 24.6);
+    const t1 = text(s6, '扫码联系中文客户经理', 'cn-g40', { left: 315, top: 353, width: 450 });
+    const qrA = img(s6, 'qr_wecom.svg', { left: 315, top: 461, width: 450, height: 450 }, '50% 50%');
+    const t2 = text(s6, '获取俄罗斯市场准入与云方案咨询', 'cn-g40', { left: 315, top: 931, width: 450 });
+    const qrB = img(s6, 'qr_wechat.svg', { left: 315, top: 1049, width: 450, height: 450 }, '50% 50%');
+    const t3 = text(s6, '企业微信', 'cn-g40', { left: 315, top: 1519, width: 450 });
+    Brand.scaleThrough(tl, s5.root, s6.root, 20.2);
+    reveal(cjkLines(t1), 20.35, 0.07, 0.5);
+    tl.fromTo(qrA, { opacity: [0, 1], scale: [0.96, 1] }, { at: 20.5, dur: 0.4, ease: 'enter' });
+    reveal(cjkLines(t2), 20.7, 0.07, 0.5);
+    tl.fromTo(qrB, { opacity: [0, 1], scale: [0.96, 1] }, { at: 20.85, dur: 0.4, ease: 'enter' });
+    reveal(cjkLines(t3), 21.0, 0.07, 0.5);
+    Brand.camera(tl, s6, 20.2, 24.6, { push: 1.015 });
+
+    // ===== the green wipe between BODY 1 and BODY 2 — on top of everything, only while it runs =====
+    const plate = Brand.plate(canvas, { pos: { left: 0, top: 0, width: 1080, height: 1920 }, color: GREEN });
+    tl.scene('wipe', 11.3, 11.9, plate);
+    tl.fromTo(plate, { clipB: [100, 0] }, { at: 11.3, dur: 0.3, ease: 'wipe' });
+    tl.fromTo(plate, { clipT: [0, 100] }, { at: 11.6, dur: 0.3, ease: 'wipe' });
+
+    Motion.mount(tl);
+  });
+})();
+</script>
+</body>
+</html>
