@@ -1,0 +1,5 @@
+# Compared byte-for-byte by scripts/build-tokens.js --check and scripts/tokens.test.js,
+# so they must not be CRLF-converted on Windows checkouts (quirk #62).
+scripts/lib/tokens.jsx   text eol=lf
+html/engine/tokens.js    text eol=lf
+html/engine/tokens.css   text eol=lf
