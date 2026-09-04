@@ -111,6 +111,38 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
   (`Brand.logo({ svg })`), undistorted, green/black/white only.
 - Fonts: SB Sans Display ships in `html/engine/fonts/`; check `document.fonts` before judging type.
 
+## 5b. Animating a supplied frame (PNG / Figma) — free mode
+
+The input is a finished design; the job is **motion only**. Layout fidelity is not the
+deliverable — a plain rebuild of the frame's elements as DOM boxes is enough. The target level
+and the measured rhythm live in `reference/product-demo-motion.md`; its §5 says which brand
+rules still apply (all the motion ones; none of the visual stop-list).
+
+1. **Read the frame.** PNG: Read it. Figma: export the frame as PNG (or elements as PNG + JSON
+   when the Figma MCP is connected). List the elements top-down — headline, cards, buttons,
+   inputs, lists, toggles, images. Each becomes a layer.
+2. **Find the story.** What is the user *doing* in this UI? Motion is the story: prompt →
+   result, click → state, list → progress. No story in the frame → pick the hero and build the
+   beat around it.
+3. **Beat sheet** on the measured rhythm: a hit every 0.3–0.5 s, a hold ≥ 0.3 s after each, a
+   scale-class change at least twice (macro element → full screen → environment), an exit or a
+   designed cut for every scene, unequal durations. Sum it against the target length.
+4. **Rebuild as boxes** in a page copied from `html/templates/demo-shipper.html`:
+   `Brand.box` / `Brand.text` per element, images as `<img>` or coloured plates, comp px.
+5. **Choreograph with `Demo.*`** (`html/engine/demo.js`): `wordsAccent` `letters` `type`
+   `cursor` `glow` `ripple` `expand` `checklist` `pill` `swap` `scroll` `toggle` `card3d`
+   `whip` `skeleton` `kinetic` `device` `dolly` `sparkles` — plus `Brand.enter` / `exit` /
+   `camera` / `scaleThrough`.
+6. **Render beats → look → fix → repeat** (`render.js` over `serve.js`, quirk #65), video last.
+   Pass the canvas size — `--w 1080 --h 1920` for `story` — or the renderer crops the frame to
+   its 1920×1080 default without a word (quirk #71); check the first still's pixel size.
+   Sample the *last quarter* of exits and the *second half* of whips (quirks #66, #69) —
+   ease-in moves are invisible at their midpoint. Judge full stills, not sheet thumbnails, before
+   calling a position wrong.
+7. **AE deliverable?** Port the approved beat sheet with `M.*`. The demo primitives have no AE
+   twins yet (pointer, typing, checklist, card3d, whip, device); build them from
+   `reference/extendscript-patterns.md`, or deliver the HTML render.
+
 ## 6. Generation workflow
 
 1. Discover params (`GET /nodes*` via `gen.js`), match aspect/resolution to the comp.
