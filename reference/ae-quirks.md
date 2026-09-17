@@ -1885,3 +1885,13 @@ fills, a 24 px version number) are not worth rebuilding layer by layer — the s
 bitmaps hint at blend tricks the API does not expose. Draw the stroke natively (so it can draw on)
 and cut the interior from the 1:1 render as one PNG; skip every node inside the pill.
 Same idea as film 1's s17 chips.
+
+## 113. A plate with a bitmap on it must be ONE layer, or the plate shows through
+
+A QR code on its white square, a screenshot on its light card: built as two layers with their own
+entrance and exit keys, they are never in phase — the code drifts off the plate on the exit, and at
+50 % opacity the plate is a grey square with the background showing through the code. The user
+spotted it at once ("квадрат за qr-кодами"). Precompose the pair into a comp of the plate's size
+(plate at 1,1, bitmap at its offset), add that comp as one layer, anchor it to its centre and give
+it a single settle-in and a single fade-out. Two layers cross-fading is not a group fading: alpha
+multiplies, the group is what the viewer sees as an object.

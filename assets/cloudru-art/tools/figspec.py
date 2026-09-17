@@ -63,7 +63,7 @@ BULLET = "\u2022"
 # content timing for these films: card texts fan left-to-right inside a row
 INTRA_FILMS = {"cardTitle": (300, 700, 120), "cardBody": (440, 560, 120), "text": (300, 700, 120),
                "icon": (400, 500, 120), "pill": (150, 500, 120), "line": (60, 600, 60), "arrow": (420, 520, 0),
-               "qr": (80, 900, 0), "chip": (300, 600, 110)}
+               "qr": (80, 900, 0), "chip": (300, 600, 110), "unit": (0, 1000, 0)}
 
 
 # ---------------------------------------------------------------- node dumps
@@ -598,12 +598,19 @@ def build_slide(sid, nodes, geo):
             add(FR(nm("plate"), x, y, w, h, min(n.get("cr", 0), h / 2), solid(n), sw=0, fill=solid(n)))
             continue
 
-    # a QR bitmap and the white plate under it form one unit: the plate carries the flag, the bitmap its own kind
+    # a bitmap placed at exact geometry (QR code, screenshot) and the filled plate under it are ONE object:
+    # the plate absorbs the bitmap and becomes a "unit" (precomposed in AE, one entrance, one exit)
+    drop = []
     for _, _, el in content:
-        if el["kind"] == "icon" and el.get("fit", True) is False and el["scale"] < 60:
+        if el["kind"] == "icon" and el.get("fit", True) is False:
             for _, _, pl in content:
-                if pl["kind"] == "frame" and pl.get("fill") and pl["x"] <= el["x"] and pl["y"] <= el["y"] and pl["x"] + pl["w"] >= el["x"] + 10:
-                    el["kind"] = "qr"; pl["qr"] = True
+                if (pl["kind"] == "frame" and pl.get("fill") and pl["x"] - 2 <= el["x"] and pl["y"] - 2 <= el["y"]
+                        and pl["x"] + pl["w"] >= el["x"] + 10 and pl["y"] + pl["h"] >= el["y"] + 10):
+                    pl["kind"] = "unit"
+                    pl["bitmap"] = dict(file=el["file"], x=el["x"], y=el["y"], scale=el["scale"], name=el["name"])
+                    drop.append(el)
+                    break
+    content = [t for t in content if t[2] not in drop]
     # role names only when unique on the slide (three stacked glowW panels on b03 stay separate)
     for role in ("glowW", "glowR"):
         same = [e for _, _, e in content if e["name"] == role]
