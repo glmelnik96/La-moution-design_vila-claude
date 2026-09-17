@@ -145,38 +145,63 @@ def planet_pose(n):
 
 
 def svg_paths(fn):
-    """Sub-paths of a Figma SVG export as AE Shape data in node-local px (open, tangents relative)."""
-    s = (SRC / fn).read_text(encoding="utf-8")
-    d = re.search(r'\sd="([^"]+)"', s).group(1)
-    toks = re.findall(r"[MCLZmclz]|-?[\d.]+(?:e-?\d+)?", d)
-    paths, cur = [], None
-    verts, tin, tout = [], [], []
+    """Sub-paths of a Figma SVG export as AE Shape data in node-local px (tangents relative).
+
+    Absolute M / L / H / V / C / Z with implicit repeats, which is what Figma writes for both the
+    orbit flowers (cubics) and the line icons (H/V runs). Closed sub-paths carry c=True."""
+    src = Path(fn).read_text(encoding="utf-8") if Path(fn).is_absolute() else (SRC / fn).read_text(encoding="utf-8")
+    d = " ".join(re.findall(r'\sd="([^"]+)"', src))
+    toks = re.findall(r"[MLHVCZmlhvcz]|-?[\d.]+(?:e-?\d+)?", d)
+    paths = []
+    verts, tin, tout, closed = [], [], [], False
+    cur = (0.0, 0.0)
+    cmd = None
 
     def flush():
-        if verts:
+        if len(verts) >= 2 or (verts and closed):
             paths.append(dict(v=[[round(x - SVG_INSET, 2), round(y - SVG_INSET, 2)] for x, y in verts],
                               i=[[round(x, 2), round(y, 2)] for x, y in tin],
-                              o=[[round(x, 2), round(y, 2)] for x, y in tout]))
+                              o=[[round(x, 2), round(y, 2)] for x, y in tout], c=closed))
 
     i = 0
     while i < len(toks):
         t = toks[i]
-        if t == "M":
+        if t.isalpha():
+            cmd = t.upper()
+            i += 1
+            if cmd == "Z":
+                closed = True
+                flush()
+                verts, tin, tout, closed = [], [], [], False
+                cmd = None
+            continue
+        if cmd is None:
+            i += 1
+            continue
+        if cmd == "M":
             flush()
-            cur = (float(toks[i + 1]), float(toks[i + 2]))
-            verts, tin, tout = [cur], [(0, 0)], [(0, 0)]
-            i += 3
-        elif t == "C" or re.match(r"-?[\d.]", t):
-            j = i + 1 if t == "C" else i
-            c1 = (float(toks[j]), float(toks[j + 1])); c2 = (float(toks[j + 2]), float(toks[j + 3])); p3 = (float(toks[j + 4]), float(toks[j + 5]))
+            cur = (float(toks[i]), float(toks[i + 1]))
+            verts, tin, tout, closed = [cur], [(0, 0)], [(0, 0)], False
+            i += 2
+            cmd = "L"                                   # implicit repeats after M are linetos
+        elif cmd == "L":
+            pt = (float(toks[i]), float(toks[i + 1]))
+            verts.append(pt); tin.append((0, 0)); tout.append((0, 0)); cur = pt
+            i += 2
+        elif cmd == "H":
+            pt = (float(toks[i]), cur[1])
+            verts.append(pt); tin.append((0, 0)); tout.append((0, 0)); cur = pt
+            i += 1
+        elif cmd == "V":
+            pt = (cur[0], float(toks[i]))
+            verts.append(pt); tin.append((0, 0)); tout.append((0, 0)); cur = pt
+            i += 1
+        elif cmd == "C":
+            c1 = (float(toks[i]), float(toks[i + 1])); c2 = (float(toks[i + 2]), float(toks[i + 3])); p3 = (float(toks[i + 4]), float(toks[i + 5]))
             tout[-1] = (c1[0] - cur[0], c1[1] - cur[1])
             verts.append(p3); tin.append((c2[0] - p3[0], c2[1] - p3[1])); tout.append((0, 0))
             cur = p3
-            i = j + 6
-        elif t == "L":
-            p = (float(toks[i + 1]), float(toks[i + 2]))
-            verts.append(p); tin.append((0, 0)); tout.append((0, 0)); cur = p
-            i += 3
+            i += 6
         else:
             i += 1
     flush()
@@ -188,8 +213,82 @@ def orbit_pose(n):
     starts = np.array([p["v"][0] for p in paths])
     cx, cy = starts.mean(axis=0)                    # where the loops converge: the rays' origin
     R = rot_mat(n["rot"])
-    p = R @ np.array([cx, cy]) + np.array([n["x"], n["y"]])
-    return dict(ax=float(cx), ay=float(cy), px=float(p[0]), py=float(p[1]), rot=-n["rot"], sw=n["sw"]), paths
+    F = np.diag([1, -1]) if n.get("flip") else np.eye(2)   # a mirrored node: Figma flips, then rotates
+    p = R @ F @ np.array([cx, cy]) + np.array([n["x"], n["y"]])
+    return dict(ax=float(cx), ay=float(cy), px=float(p[0]), py=float(p[1]), rot=-n["rot"], sw=n["sw"],
+                sy=-100 if n.get("flip") else 100), paths
+
+
+def _ridge(sid):
+    """Thin bright lines of the render (the rings) as a clipped high-pass map."""
+    from PIL import ImageFilter
+    im = Image.open(ASSETS / f"{sid}_full.png").convert("L")
+    r = np.asarray(im).astype(float) - np.asarray(im.filter(ImageFilter.GaussianBlur(4))).astype(float)
+    return np.clip(r, 0, 40)
+
+
+def _samples(paths, per=200):
+    pts = []
+    for pth in paths:
+        v, i, o = pth["v"], pth["i"], pth["o"]
+        for k in range(len(v) - 1):
+            p0 = np.array(v[k]) + SVG_INSET; p3 = np.array(v[k + 1]) + SVG_INSET
+            p1 = p0 + np.array(o[k]); p2 = p3 + np.array(i[k + 1])
+            t = np.linspace(0, 1, per)[:, None]
+            pts.append((1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t ** 2 * p2 + t ** 3 * p3)
+    return np.concatenate(pts)
+
+
+def refine_pose(sid, pose, paths):
+    """Fit the layer pose to the render: the mirrored node's dump geometry places its rings ~10 px off
+    (the reported box does not match w/h under any rotation), so search shift, rotation and scale about
+    the anchor for the best overlap of the paths with the render's ridge map. Same transform as the layer:
+    world = R_ae(rot) . diag(sx, sy) . (q - anchor) + pos."""
+    ridge = _ridge(sid)
+    P = _samples(paths) - np.array([pose["ax"], pose["ay"]])
+    sy = pose.get("sy", 100) / 100.0
+    r0 = math.radians(pose["rot"])
+    M0 = np.array([[math.cos(r0), -math.sin(r0)], [math.sin(r0), math.cos(r0)]]) @ np.diag([1, sy])
+    Q0 = (M0 @ P.T).T + np.array([pose["px"], pose["py"]])
+    near = (Q0[:, 0] > -200) & (Q0[:, 0] < 2120) & (Q0[:, 1] > -200) & (Q0[:, 1] < 1280)
+    P = P[near]                                        # only the part of the drawing that can reach the frame
+    if len(P) > 8000:
+        P = P[np.random.default_rng(0).choice(len(P), 8000, replace=False)]
+
+    def score(dx, dy, dth, sc):
+        r = math.radians(pose["rot"] + dth)
+        c, s_ = math.cos(r), math.sin(r)
+        M = np.array([[c, -s_], [s_, c]]) @ np.diag([sc, sy * sc])
+        Q = (M @ P.T).T + np.array([pose["px"] + dx, pose["py"] + dy])
+        ins = (Q[:, 0] >= 0) & (Q[:, 0] < 1920) & (Q[:, 1] >= 0) & (Q[:, 1] < 1080)
+        if ins.sum() < 300:
+            return -1.0
+        q = Q[ins].astype(int)
+        return float(ridge[q[:, 1], q[:, 0]].mean())
+
+    base = score(0, 0, 0, 1)
+    best = (base, (0, 0, 0.0, 1.0))
+    for dth in np.arange(-0.6, 0.61, 0.15):
+        for sc in np.arange(0.9925, 1.00751, 0.0025):
+            for dx in range(-16, 17, 4):
+                for dy in range(-16, 17, 4):
+                    v = score(dx, dy, dth, sc)
+                    if v > best[0]:
+                        best = (v, (dx, dy, float(dth), float(sc)))
+    bx, by, bth, bsc = best[1]
+    for dth in np.arange(bth - 0.1, bth + 0.101, 0.05):
+        for sc in np.arange(bsc - 0.002, bsc + 0.00201, 0.001):
+            for dx in range(bx - 3, bx + 4):
+                for dy in range(by - 3, by + 4):
+                    v = score(dx, dy, dth, sc)
+                    if v > best[0]:
+                        best = (v, (dx, dy, float(dth), float(sc)))
+    dx, dy, dth, sc = best[1]
+    print("  refine %s orbit: ridge %.1f -> %.1f  shift (%d, %d) rot %+.2f scale %.4f" % (sid, base, best[0], dx, dy, dth, sc))
+    out = dict(pose)
+    out["px"] += dx; out["py"] += dy; out["rot"] += dth
+    out["sx"] = 100 * sc; out["sy"] = sy * 100 * sc
+    return out
 
 
 # ---------------------------------------------------------------- glow fields
@@ -233,6 +332,7 @@ function planet(m, name, path, pose, tIn, tOut, first, TX, omega, vt) {
   var s0 = pose.sc;
   lin(P(l).property("ADBE Rotate Z"), a, pose.rot + omega * (a - vt), b, pose.rot + omega * (b - vt));
   keys(scl(l), [[a, [s0 * 0.97, s0 * 0.97]], [a + lead, [s0, s0]], [tOut - TX, [s0, s0]], [b, [s0 * 1.04, s0 * 1.04]]]);
+  scl(l).expression = "var k = 1 + 0.025 * (time - " + vt + ") / " + (b - a) + "; [value[0] * k, value[1] * k]";   // slow push, exact at vt
   keys(opa(l), [[a, 0], [a + lead, 100], [tOut - TX, 100], [b, 0]]);
   var fx = l.property("ADBE Effect Parade").addProperty("ADBE Gaussian Blur 2");
   try { fx.property("ADBE Gaussian Blur 2-0003").setValue(true); } catch (e0) {}
@@ -246,6 +346,7 @@ function orbits(m, name, paths, pose, tIn, tOut, first, TX, omega, vt, drawAt, d
   S.name = name;
   P(S).property("ADBE Anchor Point").setValue([pose.ax, pose.ay]);
   pos(S).setValue([pose.px, pose.py]);
+  scl(S).setValue([pose.sx === undefined ? 100 : pose.sx, pose.sy === undefined ? 100 : pose.sy]);   // sy -100: mirrored in Figma
   var a = first ? tIn : tIn - TX, b = tOut + TX, lead = first ? 0.9 : 2 * TX;
   S.inPoint = a; S.outPoint = b;
   var g = S.property("ADBE Root Vectors Group").addProperty("ADBE Vector Group");
@@ -267,6 +368,7 @@ function orbits(m, name, paths, pose, tIn, tOut, first, TX, omega, vt, drawAt, d
   try { trim.property("ADBE Vector Trim Type").setValue(1); } catch (e1) {}
   tw(trim.property("ADBE Vector Trim End"), drawAt * 1000, (drawAt + drawDur) * 1000, 0, 100, "in");
   lin(P(S).property("ADBE Rotate Z"), a, pose.rot + omega * (a - vt), b, pose.rot + omega * (b - vt));
+  scl(S).expression = "var k = 1 + 0.04 * (time - " + vt + ") / " + (b - a) + "; [value[0] * k, value[1] * k]";      // the rays breathe out, exact at vt
   keys(opa(S), [[a, 0], [a + lead, 100], [tOut - TX, 100], [b, 0]]);
   var fx = S.property("ADBE Effect Parade").addProperty("ADBE Gaussian Blur 2");
   try { fx.property("ADBE Gaussian Blur 2-0003").setValue(true); } catch (e0) {}
@@ -330,6 +432,8 @@ def art_js(sid, t_in, t_out, first, TX, vt):
                  % (json.dumps("PLANET " + sid), json.dumps(pose), t_in, t_out, "true" if first else "false", TX, a["w_planet"], vt))
     if a["orbit"]:
         pose, paths = orbit_pose(a["orbit"])
+        if a["orbit"].get("flip"):
+            pose = refine_pose(sid, pose, paths)
         draw_at = t_in + 0.3 if first else t_in - TX + 0.2
         o.append('orbits(m, %s, %s, %s, %.4f, %.4f, %s, %.3f, %.3f, %.4f, %.4f, %.2f);'
                  % (json.dumps("ORBITS " + sid), json.dumps(paths, separators=(",", ":")), json.dumps(pose), t_in, t_out,
@@ -347,5 +451,7 @@ if __name__ == "__main__":
                   % (sid, p["ax"], p["ay"], p["px"], p["py"], p["sc"], p["rot"], p["ring_r"]))
         if a["orbit"]:
             p, paths = orbit_pose(a["orbit"])
+            if a["orbit"].get("flip"):
+                p = refine_pose(sid, p, paths)
             print("%s orbits: %d loops, %d verts, centre (%.0f,%.0f) -> pos (%.0f,%.0f) rot %.2f"
                   % (sid, len(paths), sum(len(q["v"]) for q in paths), p["ax"], p["ay"], p["px"], p["py"], p["rot"]))

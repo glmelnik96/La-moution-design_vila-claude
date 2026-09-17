@@ -1895,3 +1895,56 @@ spotted it at once ("квадрат за qr-кодами"). Precompose the pair 
 (plate at 1,1, bitmap at its offset), add that comp as one layer, anchor it to its centre and give
 it a single settle-in and a single fade-out. Two layers cross-fading is not a group fading: alpha
 multiplies, the group is what the viewer sees as an object.
+
+## 114. Text animator range selectors do not count line breaks
+
+Units = Index, Based On = Characters: the index runs over rendered characters only. A `\r` in
+the source text is not an index — "AB\rCD" gives End = 4, "AB\r\rCD" gives 4 as well, spaces
+do count ("AB CD" = 5). A colour range taken from Figma's `getStyledTextSegments` (string
+offsets, where the line separator is one character) lands one character late per preceding
+break: "ИИ-проекты —\rбольше" with the white range [13, 30) painted the "б" violet. Convert
+every string offset p to `p - text[:p].count("\r")` before writing `ADBE Text Index
+Start/End`. `TextDocument.characterRange()` (per-character font or tracking) stays
+string-based. Probe: the End index's default value right after `addProperty("ADBE Text
+Selector")` equals the counted characters — read `sel.property("ADBE Text Index End").value`;
+`maxValue` is 99999 and says nothing.
+
+## 115. A mirrored Figma node: the dump hides the flip, the bounding box reveals it
+
+The plugin dump (x, y, w, h, rotation) cannot express a flip, but `absoluteBoundingBox` can:
+rebuild the box from the rotation alone and from rotation·diag(1, −1) — the one that
+reproduces the reported box is the transform. The s11 orbit vector (rot 50.886) was mirrored;
+placed as a rotation it landed entirely off-frame (zero of its sampled points inside
+1920×1080) and the slide simply had no rings. In AE the flip is scale [100, −100] set before
+the rotation (AE applies scale, then rotation — Figma's order for R·F), and the position is
+R·F·anchor + (x, y). SVG exports keep the node's local, unmirrored geometry, so the flip goes
+on the layer, never into the path data.
+
+## 116. Matching raw exports to image nodes: silhouette, not colour, not aspect
+
+`download_assets` for a slide's images returns duplicates at several sizes and variants (one
+logo as 403×125, 1024², 512² on white…) in download order, not node order. Aspect alone
+confuses same-shape logos (GigaChat 3.22 vs Qwen 3.31 for a 3.35 node) and every square icon
+(globe vs Z-logo). Colour comparison fails too: a black export composited on the chip ground
+scores worse than a wrong violet logo when Figma shows that black art as white (blend tricks
+the API does not expose). What works: the render's ink mask (pixels off the local median
+ground) against each candidate's alpha silhouette (for an opaque export, its pixels off its
+own median colour); take the best IoU among candidates within 0.35 of the best aspect score.
+Then honour a CROP image fill (`imageTransform` ≠ identity): it shows a window of the bitmap,
+so crop the export to that window and place the crop.
+
+## 117. Ink measurement: a dash hanging past the block's edge
+
+Component-based measurement keeps only components touching the dense core plus small marks
+over the core's own columns. An em dash ending the longest line ("друг друга —") is a separate
+component outside the core's columns and larger than a mark, so it vanished from the reference
+line width (1603 instead of 1773) and from the expected box — and the fitter then chooses
+breaks for the wrong widths. Keep components at most 0.2·size tall that lie within the core's
+rows and within 1.3·size of the block's horizontal extent.
+
+## 118. Wrapping at a run of spaces
+
+Figma wraps "друга —  они" (two spaces) rendering neither space; replacing the first space by
+`\r` leaves the second one at the start of the next line, shifting that line by a space width
+(35 px at 136 px). Swallow the whole run around an inserted break and shift later character
+indices accordingly (a deletion list next to the hyphen-insert list), then apply #114.

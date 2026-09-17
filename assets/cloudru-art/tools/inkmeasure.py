@@ -54,6 +54,9 @@ def own_mask(m, core, size):
         if (h <= 0.28 * size and w <= 0.6 * size and sl[1].start >= sx0 - 2 and sl[1].stop <= sx1 + 3
                 and sl[0].start >= y0 - 0.4 * size and sl[0].stop <= y1 + 0.15 * size):   # marks above; only hanging punctuation below
             extra.append(i + 1)
+        elif (h <= 0.2 * size and w <= 1.1 * size and sl[0].start >= y0 and sl[0].stop <= y1
+              and sl[1].start >= sx0 - 1.3 * size and sl[1].stop <= sx1 + 1.3 * size):    # a dash hanging past the block's edge
+            extra.append(i + 1)
     if extra:
         own |= np.isin(lab, extra)
     return own

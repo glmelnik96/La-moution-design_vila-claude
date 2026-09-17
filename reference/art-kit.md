@@ -66,6 +66,18 @@ Verified on p01/h01/b01 by re-rendering in Python against Figma's PNGs: mean 0.8
 and `tools/inkmeasure.py` is the one ink-measurement used by builder and verifier (connected
 glyph components around a dense core, quirks #106-#108). Copies live in `assets/cloudru-art/tools/`.
 
+### A mirrored orbit node (film 1, s11 — quirk #115)
+
+The plugin dump gives x/y/w/h/rotation, which cannot express a flip. Rebuild the node's bounding box
+from the rotation alone and from rotation·diag(1, −1): the one that reproduces `absoluteBoundingBox`
+is the real transform (`figspec.node_flip`). A mirrored orbit is placed with scale [100, −100] set
+before the rotation and position R·F·anchor + (x, y) (`orbit_pose(..., flip=True)`); the SVG export
+stays in the node's local, unmirrored geometry. Even so the dump's w/h disagree with the box by ~20 px
+for that node, so `artkit.refine_pose` fits shift / rotation / scale about the anchor against the
+render's ridge map (thin bright lines minus a 4 px blur) — for s11 the fit moved the rings by
+(13, 1) px, 0.2° and 0.15 %, taking the ridge overlap from 6.8 to 30.8 (a correctly placed
+unmirrored orbit scores ~44).
+
 ## How it moves (every curve passes through the Figma pose at the slide's rest time `vt`)
 
 - **planet** — `rotation = pose.rot + ω·(t − vt)` (two linear keys, ω ≈ ±0.8°/s: the arc glides

@@ -29,6 +29,7 @@ import json
 import re
 from pathlib import Path
 
+import hashlib
 import shutil
 
 import numpy as np
@@ -40,19 +41,25 @@ ROOT = Path(__file__).resolve().parents[1]
 FIG = ROOT / "_build" / "fig"
 ASSETS = ROOT / "assets"
 
-FILMS = {"2": ["p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08", "p09"],
+FILMS = {"1": ["s%02d" % i for i in range(1, 19)],
+         "2": ["p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08", "p09"],
          "3": ["h01", "h02", "h03", "h04", "h05", "h06"],
          "4": ["b01", "b02", "b03", "b04", "b05"],
          "5": ["e01", "e02", "e03", "e04", "e05", "e06", "e07", "e08", "e09"]}
 # slides dumped from the "final" section (node 4206:321) with the segment-level inspector
 FIG2 = {"Slide 91": "p08", "Slide 92": "p09", "Slide 107": "e01", "Slide 104": "e02", "Slide 105": "e03", "Slide 106": "e04",
-        "Slide 111": "e05", "Slide 112": "e06", "Slide 108": "e07", "Slide 109": "e08", "Slide 110": "e09"}
-TITLE_SLIDES = ("p01", "h01", "b01", "e01")
-DIVIDERS = ("p06", "h04", "b04", "e07", "e08", "e09")
+        "Slide 111": "e05", "Slide 112": "e06", "Slide 108": "e07", "Slide 109": "e08", "Slide 110": "e09",
+        "Slide 66": "s01", "Slide 74": "s02", "Slide 73": "s03", "Slide 75": "s04", "Slide 76": "s05", "Slide 77": "s06",
+        "Slide 78": "s07", "Slide 79": "s08", "Slide 80": "s09", "Slide 81": "s10", "Slide 82": "s11", "Slide 83": "s12",
+        "Slide 72": "s13", "Slide 71": "s14", "Slide 67": "s15", "Slide 68": "s16", "Slide 69": "s17", "Slide 70": "s18"}
+TITLE_SLIDES = ("p01", "h01", "b01", "e01", "s01")
+DIVIDERS = ("p06", "h04", "b04", "e07", "e08", "e09", "s02", "s13")
+ORBIT_SVG = {4040: "s01_vec.svg", 5782: "s09_vec.svg", 6125: "s11_vec.svg"}     # the flower by its node width
+GLOW_STROKE_GRAD = (153, 133, 251)                                            # s18: a linear-gradient stroke, 40 % looks right
 AUTO_LH = 1.28            # SB Sans Display "auto" line height, measured on e03 (41 px pitch at 32 px)
 CHIP_STROKE = (89, 89, 89)
-SEMI, MED, REG = "SBSansDisplay-Semibold", "SBSansDisplay-Medium", "SBSansDisplay-Regular"
-STYLE = {"Semibold": SEMI, "Medium": MED, "Regular": REG}
+SEMI, MED, REG, BOLD = "SBSansDisplay-Semibold", "SBSansDisplay-Medium", "SBSansDisplay-Regular", "SBSansDisplay-Bold"
+STYLE = {"Semibold": SEMI, "Medium": MED, "Regular": REG, "Bold": BOLD}
 WHITE = (255, 255, 255)
 PURPLE = (116, 89, 249)
 INK = (10, 6, 0)
@@ -63,7 +70,7 @@ BULLET = "\u2022"
 # content timing for these films: card texts fan left-to-right inside a row
 INTRA_FILMS = {"cardTitle": (300, 700, 120), "cardBody": (440, 560, 120), "text": (300, 700, 120),
                "icon": (400, 500, 120), "pill": (150, 500, 120), "line": (60, 600, 60), "arrow": (420, 520, 0),
-               "qr": (80, 900, 0), "chip": (300, 600, 110), "unit": (0, 1000, 0)}
+               "qr": (80, 900, 0), "chip": (300, 600, 110), "unit": (0, 1000, 0), "svgicon": (400, 500, 120)}
 
 
 # ---------------------------------------------------------------- node dumps
@@ -164,7 +171,7 @@ def c3(rgb):
 
 
 FONT_FILES = {SEMI: "C:/Windows/Fonts/SBSansDisplay-SemiBold.otf", MED: "C:/Windows/Fonts/SBSansDisplay-Medium.otf",
-              REG: "C:/Windows/Fonts/SBSansDisplay-Regular.otf"}
+              REG: "C:/Windows/Fonts/SBSansDisplay-Regular.otf", BOLD: "C:/Windows/Fonts/SBSansDisplay-Bold.otf"}
 _fonts = {}
 
 
@@ -412,9 +419,9 @@ def IMG(name, file, x, y, w, h, scale, thr=60, fit=True, key=None):
                 key=c3(key) if key else None, rect=(int(x) - 3, int(y) - 3, int(w) + 7, int(h) + 7))
 
 
-def GLOW(name, x, y, w, h, r, sw=1, scol=PURPLE, thr=60):
-    return dict(name=name, kind="glow", x=x, y=y, w=w, h=h, r=r, g=None, k=0, dark=False, sw=sw,
-                scol=c3(scol), sop=100, thr=thr, center=False,
+def GLOW(name, x, y, w, h, r, sw=1, scol=PURPLE, thr=60, dark=False, sop=100, center=False):
+    return dict(name=name, kind="glow", x=x, y=y, w=w, h=h, r=r, g=None, k=0, dark=dark, sw=sw,
+                scol=c3(scol), sop=sop, thr=thr, center=center,
                 rect=(int(x) - 3, int(y) - 3, int(w) + 7, int(h) + 7))
 
 
@@ -435,19 +442,21 @@ def solid(n):
 
 
 def text_kind(size, style, y, title_slide, divider, in_panel=False):
-    if divider:
+    if divider and size >= 60:
         return "statement"
-    if size <= 14:
+    if size <= 20 or (y > 980 and size <= 24):
         return "note"
     if style == "Semibold" and size == 32 and y < 100 and not in_panel:
         return "kicker"
-    if title_slide and size >= 100:
+    if size >= 100 and not in_panel:
         return "block"
-    if style == "Semibold" and size >= 60 and y < 270 and not in_panel:
-        return "hero"
     if size >= 100:
         return "text"
-    if style in ("Semibold", "Medium") or size >= 40:
+    if style == "Semibold" and size >= 60 and y < 270 and not in_panel:
+        return "hero"
+    if style == "Regular" and size >= 54 and not in_panel:
+        return "lead"
+    if style in ("Semibold", "Medium", "Bold") or size >= 40:
         return "cardTitle"
     return "cardBody"
 
@@ -477,29 +486,43 @@ def build_slide(sid, nodes, geo):
 
     def clip_below(b):
         """Top of the nearest text node below b that shares its columns (a growth limit)."""
-        tops = [t["b"][1] for t in nodes if t["t"] == "TEXT" and t["b"] is not b and t["b"][1] >= b[1] + b[3] - 2
+        tops = [t["b"][1] for t in nodes if t["t"] == "TEXT" and t["b"] is not b and t["b"][1] > b[1] + b[3] * 0.5
                 and t["b"][0] < b[0] + b[2] and t["b"][0] + t["b"][2] > b[0]]
         return min(tops) if tops else 1080
 
     # --- background art (planet / rays) into the art kit
     art = None
+    idx = int(sid[1:])
     for n in nodes:
         if n["n"].startswith("image 22") and n["i"] in geo:
             g = geo[n["i"]]
-            art = dict(planet=dict(x=g["x"], y=g["y"], w=g["w"], h=g["h"], rot=g["rot"], tr=g["fill"]["tr"]), orbit=None,
-                       w_planet=0.8 if sid[0] != "h" else -0.8, w_orbit=0)
-        if n["t"] == "VECT" and n["n"] == "Vector" and n["b"][2] > 5000 and n["i"] in geo:
+            art = art or dict(planet=None, orbit=None, w_planet=0, w_orbit=0)
+            art["planet"] = dict(x=g["x"], y=g["y"], w=g["w"], h=g["h"], rot=g["rot"], tr=g["fill"]["tr"])
+            art["w_planet"] = 0.8 if idx % 2 else -0.8
+        if n["t"] == "VECT" and n["n"] == "Vector" and n["b"][2] > 4000 and n["i"] in geo:
             g = geo[n["i"]]
-            art = dict(planet=None, orbit=dict(x=g["x"], y=g["y"], w=g["w"], h=g["h"], rot=g["rot"], svg="s09_vec.svg", sw=1.1395),
-                       w_planet=0, w_orbit=0.5 if sid[0] != "h" else -0.5)
+            art = art or dict(planet=None, orbit=None, w_planet=0, w_orbit=0)
+            svg = min(ORBIT_SVG.items(), key=lambda kv: abs(kv[0] - g["w"]))[1]
+            art["orbit"] = dict(x=g["x"], y=g["y"], w=g["w"], h=g["h"], rot=g["rot"], svg=svg, sw=g.get("sw", 1.1395),
+                                flip=node_flip(n, g))
+            art["w_orbit"] = (0.5 if idx % 2 else -0.5) if not art["planet"] else -0.35
     if art:
         artkit.ART[sid] = art
 
-    chip_frames = [n for n in nodes if n["t"] == "FRAM" and n.get("sk") and tuple(n["sk"].get("c") or ()) == CHIP_STROKE
-                   and n["b"][2] < 200 and n.get("cr", 0) >= 20]
+    def grey_stroke(n):
+        c = n["sk"].get("c") if n.get("sk") else None
+        return isinstance(c, list) and len(c) == 3 and c[0] == c[1] == c[2] and 70 <= c[0] <= 120 and n["sk"].get("w", 1) <= 1.5
+
+    def holds_logo(fr):                                # an image fill at least 50 px wide inside: a logo lockup
+        return any(t["t"] == "RECT" and t.get("fl") and t["fl"][0].get("t") == "I" and t["b"][2] >= 50 and inside(t["b"], fr["b"])
+                   for t in nodes)
+
+    chip_frames = [n for n in nodes if n["t"] == "FRAM" and n.get("cr", 0) >= 20 and
+                   ((n.get("sk") and tuple(n["sk"].get("c") or ()) == CHIP_STROKE and n["b"][2] < 200) or
+                    (grey_stroke(n) and n["b"][2] < 320 and n["b"][3] < 120 and holds_logo(n)))]
     white_plates = [n for n in nodes if n["t"] in ("FRAM", "RECT") and solid(n) == WHITE and n.get("cr", 0) >= 24]
     pills = [n for n in white_plates if n["b"][3] <= 60 and n["b"][2] < 600]
-    PLATES[sid] = [tuple(n["b"]) for n in white_plates]
+    PLATES[sid] = [tuple(n["b"]) for n in nodes if n["t"] in ("FRAM", "RECT", "VECT") and solid(n) and n["b"][2] >= 30 and n["b"][3] >= 30]
     TAKEN[sid] = np.zeros((1080, 1920), bool)
     light_plates = [n for n in nodes if n["t"] in ("FRAM", "RECT") and solid(n) and min(solid(n)) > 200 and n["b"][2] > 100]
     EXCL[sid] = [tuple(n["b"]) for n in white_plates + light_plates] + \
@@ -517,7 +540,7 @@ def build_slide(sid, nodes, geo):
             if t is not ch and inside(t["b"], ch["b"]):
                 used.add(t["i"])
         sw = ch["sk"].get("w", 1)
-        add(FR(nm("chipf"), x, y, w, h, min(ch.get("cr", 0), h / 2), CHIP_STROKE, sw=sw, align=ch["sk"].get("al", "C")))
+        add(FR(nm("chipf"), x, y, w, h, min(ch.get("cr", 0), h / 2), tuple(ch["sk"]["c"]), sw=sw, align=ch["sk"].get("al", "C")))
         ins = int(sw) + 2
         cx, cy, cw, chh = int(x) + ins, int(y) + ins, int(w) - 2 * ins, int(h) - 2 * ins
         fn = nm("chip") + ".png"
@@ -541,10 +564,24 @@ def build_slide(sid, nodes, geo):
         if n.get("off") or n["t"] == "GROU" or n["i"] in used:
             continue
         b = n["b"]; x, y, w, h = b
-        if n["n"].startswith("image 22") or (n["t"] == "VECT" and n["n"] == "Vector" and w > 5000):
+        if n["n"].startswith("image 22") or (n["t"] == "VECT" and n["n"] == "Vector" and w > 4000):
+            continue
+        if y >= 1080 or n["t"] == "INST":
             continue
         fills = n.get("fl") or []
         sk = n.get("sk")
+        if sk and n["t"] == "VECT" and w <= 40 and h <= 40 and not fills:          # a line icon: its own SVG as a shape
+            paths = svg_icon_paths(sid, w, h)
+            if paths:
+                add(dict(name=nm("ic"), kind="svgicon", x=x, y=y, paths=paths, color=c3(tuple(sk["c"])), sw=sk.get("w", 1),
+                         g=None, k=0, thr=60, rect=(int(x) - 3, int(y) - 3, int(w) + 7, int(h) + 7)))
+                continue
+        if sk and sk.get("w") == "mix" and n["t"] == "RECT":                          # Figma per-side strokes: top border only here
+            col = tuple(sk["c"])
+            inner = [t for t in nodes if t["t"] == "TEXT" and t["s"].strip() and inside(t["b"], b, 6)]
+            name = ("hl_" + hashlib.md5(inner[0]["s"].strip().encode("utf-8")).hexdigest()[:6]) if inner else nm("h")
+            add(LN(name, x, y + 0.5, x + w, y + 0.5, col, sw=1))
+            continue
         if n["t"] == "TEXT":
             if not n["s"].strip() or n["s"].strip() == "QR":            # the QR placeholder sits under the bitmap
                 continue
@@ -568,9 +605,20 @@ def build_slide(sid, nodes, geo):
             add(LN(nm("h"), x, y + h / 2, x + w, y + h / 2, col, sw=max(1, h)))
             continue
         if fills and fills[0].get("t") == "I":
-            raw = match_raw(n, raw_dims)
+            if any(e[2]["kind"] in ("icon", "qr", "chip") and abs(e[2]["x"] - x) < 4 and abs(e[2]["y"] - y) < 4 for e in content):
+                continue                                   # the same image stacked twice
+            raw = match_raw(n, raw_dims, sid)
+            raw = cropped_raw(sid, n, raw)
             if w >= 200:                                   # QR bitmap: exact geometry, nothing to fit
                 add(IMG(nm("qr"), "f/" + raw, x, y, w, h, 100 * w / raw_dims[raw][0], fit=False))
+            elif raw_dark(raw):                            # a dark source rendered light by Figma: cut the render instead
+                cx, cy, cw, chh = int(x) - 2, int(y) - 2, int(round(w)) + 4, int(round(h)) + 4
+                fn = nm("chip") + ".png"
+                Image.open(ASSETS / f"{sid}_full.png").convert("RGB").crop((cx, cy, cx + cw, cy + chh)).save(ASSETS / "gen" / fn)
+                shutil.copy2(ASSETS / "gen" / fn, Path("C:/dev/gct-pres/gen") / fn)
+                el = IMG(fn[:-4], "gen/" + fn, cx, cy, cw, chh, 100, fit=False)
+                el["kind"] = "chip"
+                add(el)
             else:
                 add(IMG(nm("ic"), "f/" + raw, x, y, w, h, 50))
             continue
@@ -583,18 +631,32 @@ def build_slide(sid, nodes, geo):
                 name = "glowR"
             elif w > 1700:
                 name = "glowW"
-            add(GLOW(name, x, y, w, h, min(n.get("cr", 50), h / 2), sw=sk.get("w", 1) if sk else 0))
+            gr = [f for f in fills if f.get("t") == "GR"][0]
+            dark = tuple(gr["st"][0][1]) == (10, 6, 0) and gr["st"][0][2] >= 0.99
+            scol, sop = PURPLE, 100
+            if sk and isinstance(sk.get("c"), list):
+                scol = tuple(sk["c"])
+            elif sk:
+                scol, sop = GLOW_STROKE_GRAD, 40
+            add(GLOW(name, x, y, w, h, min(n.get("cr", 50), h / 2), sw=sk.get("w", 1) if sk else 0, scol=scol, dark=dark, sop=sop,
+                     center=(sk.get("al") == "C") if sk else False))
             continue
         if sk and n["t"] in ("VECT", "RECT", "FRAM"):
             col = tuple(sk["c"]) if isinstance(sk.get("c"), list) else PURPLE
             name = nm("f")
-            if x < 70 and 870 <= w <= 890 and y < 320:
+            inner = [t for t in nodes if t["t"] == "TEXT" and t["s"].strip() and inside(t["b"], b, 4)]
+            if inner:
+                inner.sort(key=lambda t: (t["b"][1], t["b"][0]))
+                cand = "f_" + hashlib.md5(inner[0]["s"].strip().encode("utf-8")).hexdigest()[:6]
+                if not any(e[2]["name"] == cand for e in content):
+                    name = cand
+            if sid[0] != "s" and x < 70 and 870 <= w <= 890 and y < 320:
                 name = "fTask"
-            elif x < 70 and 870 <= w <= 890 and y > 540:
+            elif sid[0] != "s" and x < 70 and 870 <= w <= 890 and y > 540:
                 name = "fSol"
             add(FR(name, x, y, w, h, min(n.get("cr", 0), h / 2), col, sw=sk.get("w", 1), align=sk.get("al", "I"), fill=solid(n)))
             continue
-        if solid(n) and n["t"] in ("RECT", "FRAM"):
+        if solid(n) and n["t"] in ("RECT", "FRAM", "VECT") and w >= 20 and h >= 20:
             add(FR(nm("plate"), x, y, w, h, min(n.get("cr", 0), h / 2), solid(n), sw=0, fill=solid(n)))
             continue
 
@@ -640,17 +702,102 @@ def build_slide(sid, nodes, geo):
     return spec
 
 
-def match_raw(n, raw_dims):
-    """The raw export whose aspect matches the node (icons at 2x, QR bitmaps ~2.5x)."""
+def svg_icon_paths(sid, w, h):
+    """AE shape data for the SVG asset whose viewBox matches a w x h vector node of this slide."""
+    import artkit
+    for f in sorted(ASSETS.glob("f/%s_svg*.svg" % sid)):
+        t = f.read_text(encoding="utf-8")
+        m = re.search(r'viewBox="([^"]+)"', t)
+        if not m:
+            continue
+        vw, vh = [float(v) for v in m.group(1).split()[2:4]]
+        if abs(vw - w) <= 2.5 and abs(vh - h) <= 2.5 and "<path" in t:
+            return artkit.svg_paths(str(f))
+    return None
+
+
+_dark = {}
+
+
+def raw_dark(name):
+    """True when the export's visible pixels are all dark (a black logo Figma shows in white)."""
+    if name not in _dark:
+        im = np.asarray(Image.open(ASSETS / "f" / name).convert("RGBA")).astype(int)
+        lum = (im[:, :, :3].max(axis=2) * im[:, :, 3] // 255)
+        _dark[name] = lum.max() < 80
+    return _dark[name]
+
+
+def node_flip(n, g):
+    """The dumps carry x/y/w/h/rot only; a mirrored node shows as a bounding box the rotation alone cannot produce."""
+    import math
+    th = math.radians(g["rot"])
+    c, s = math.cos(th), math.sin(th)
+    R = np.array([[c, s], [-s, c]])
+
+    def aabb(M):
+        pts = [M @ np.array(p) + np.array([g["x"], g["y"]]) for p in ((0, 0), (g["w"], 0), (0, g["h"]), (g["w"], g["h"]))]
+        xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+        return np.array([min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)])
+
+    b = np.array(n["b"], float)
+    return bool(np.abs(aabb(R @ np.diag([1, -1])) - b).max() < np.abs(aabb(R) - b).max())
+
+
+def match_raw(n, raw_dims, sid=None):
+    """The raw export for an image node: by aspect, and among close aspects by content against the render."""
     w, h = n["b"][2], n["b"][3]
-    best = None
+    fl = (n.get("fl") or [{}])[0]
+    tr = fl.get("tr") or [[1, 0, 0], [0, 1, 0]]
+    cands = []
     for name, (rw, rh) in raw_dims.items():
         if rw > 3000:
             continue
-        score = abs(rw / rh - w / h) + (0 if (w >= 200) == (rw >= 800) else 10)
-        if best is None or score < best[0]:
-            best = (score, name)
+        ew, eh = rw * tr[0][0], rh * tr[1][1]              # the part of the bitmap the node shows
+        score = abs(ew / eh - w / h) + (0 if (w >= 200) == (rw >= 800) else 10)
+        cands.append((score, name))
+    cands.sort()
+    close = [c for c in cands if c[0] <= cands[0][0] + 0.35]
+    if len(close) <= 1 or sid is None:
+        return cands[0][1]
+    # several exports share the aspect (logo variants, square icons): the silhouette decides - the render's ink
+    # (pixels off the local ground) against each export's alpha, colour-blind, so a black export Figma shows white still wins
+    x, y = int(round(n["b"][0])), int(round(n["b"][1]))
+    iw, ih = max(1, int(round(w))), max(1, int(round(h)))
+    crop = np.asarray(Image.open(ASSETS / f"{sid}_full.png").convert("RGB").crop((x, y, x + iw, y + ih))).astype(int)
+    ground = np.median(crop.reshape(-1, 3), axis=0)
+    ink = np.abs(crop - ground).max(axis=2) > 40
+    best = None
+    for _, name in close:
+        im = Image.open(ASSETS / "f" / name).convert("RGBA")
+        rw, rh = im.size
+        im = im.crop((int(round(tr[0][2] * rw)), int(round(tr[1][2] * rh)),
+                      int(round((tr[0][2] + tr[0][0]) * rw)), int(round((tr[1][2] + tr[1][1]) * rh))))
+        px = np.asarray(im.resize((iw, ih), Image.LANCZOS)).astype(int)
+        a = px[:, :, 3] > 64
+        if a.mean() > 0.9:                                 # an opaque export: its own plate is not ink
+            g2 = np.median(px[:, :, :3][a].reshape(-1, 3), axis=0)
+            a = np.abs(px[:, :, :3] - g2).max(axis=2) > 40
+        union = (a | ink).sum()
+        iou = (a & ink).sum() / union if union else 0.0
+        if best is None or iou > best[0]:
+            best = (iou, name)
     return best[1]
+
+
+def cropped_raw(sid, n, raw):
+    """A CROP image fill shows part of its bitmap: write that part as its own file and use it."""
+    fl = (n.get("fl") or [{}])[0]
+    tr = fl.get("tr")
+    if not tr or (abs(tr[0][0] - 1) < 0.01 and abs(tr[1][1] - 1) < 0.01 and abs(tr[0][2]) < 0.01 and abs(tr[1][2]) < 0.01):
+        return raw
+    im = Image.open(ASSETS / "f" / raw).convert("RGBA")
+    rw, rh = im.size
+    box = (int(round(tr[0][2] * rw)), int(round(tr[1][2] * rh)), int(round((tr[0][2] + tr[0][0]) * rw)), int(round((tr[1][2] + tr[1][1]) * rh)))
+    fn = "%s_crop_%s.png" % (sid, n["i"].replace(":", "_"))
+    im.crop(box).save(ASSETS / "f" / fn)
+    shutil.copy2(ASSETS / "f" / fn, Path("C:/dev/gct-pres/f") / fn)
+    return fn
 
 
 def segments_of(n, raw):
@@ -668,11 +815,13 @@ def text_elements(sid, n, title_slide, divider, overlaps_glow, nm, art, clip_bel
     segs = segments_of(n, raw)
     x, y, w, h = n["b"]
     line_box = max(s[3] for s in segs) * 1.15
-    # Figma boxes are often smaller than their content (a 51 px box holding two 44 px lines): look up to
-    # three line boxes down, stopping above the next text node, and let the ink decide
+    if "\r" not in raw and "\n" not in raw:              # one line of text: its box may still hold empty line slots
+        h = min(h, 1.6 * line_box)
+    # Figma boxes are often smaller than their content (a 51 px box holding two 44 px lines): look down,
+    # stopping above the next text node, and let the ink decide
     if h < line_box:
         y, h = y - (line_box - h) / 2, line_box
-    h = max(h, min(3 * line_box, clip_below(n["b"]) - 6 - y))
+    h = max(h, min(8 * line_box, clip_below(n["b"]) - 6 - y))
     box = (x - 4, y - 6, w + 12, h + 12)
     styles = {(s[3], s[4]) for s in segs}
     paras = raw.split("\n")
@@ -741,7 +890,7 @@ def one_text(sid, n, text, seg, segs, offset, rect, title_slide, divider, overla
     colours = [color] + [tuple(int(round(v * 255)) for v in r[2]) for r in ranges]
     colours = list(dict.fromkeys(colours))
     key = colours[0] if len(colours) == 1 else colours          # the verifier keys on the same colours
-    plate = on_plate(sid, n["b"]) if color == INK else None      # by the node box: the grown rect may leave the plate
+    plate = on_plate(sid, n["b"]) if max(color) < 100 else None    # dark text lives on a plate: measure inside it
     if plate:
         rect = clip_rect(rect, plate)
     if "\r" not in text and "\n" not in text and text.strip():   # one line: measure only where its glyphs can be
