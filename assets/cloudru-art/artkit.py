@@ -115,16 +115,33 @@ def ring_centre():
     return _ring_centre
 
 
-def planet_pose(n):
-    """AE layer transform for the planet bitmap under Figma node n."""
+def planet_affine(n):
+    """image px -> frame px for the bitmap under Figma node n: frame = A . img + b.
+
+    Figma maps node-normalized coords through the CROP transform M (2x3) into image-normalized
+    coords, so img = diag(BW, BH) . (M_lin . node/(W, H) + t); inverted and composed with the
+    node's rotation about its origin (rot_mat) this gives the layer's similarity transform.
+    Checked against the s01/p01/h01/b01 renders: mean |diff| <= 1.5/255 over the artwork."""
     im = Image.open(PLANET_PNG)
     BW, BH = im.size
-    u0, v0 = n["tr"][0][2] * BW, n["tr"][1][2] * BH
-    k = n["w"] / (n["tr"][0][0] * BW)               # bitmap px -> frame px (uniform, checked)
-    uc, vc, rr = ring_centre()
+    M = np.array([[n["tr"][0][0], n["tr"][0][1]], [n["tr"][1][0], n["tr"][1][1]]], float)
+    t = np.array([n["tr"][0][2], n["tr"][1][2]], float)
     R = rot_mat(n["rot"])
-    p = R @ np.array([k * (uc - u0), k * (vc - v0)]) + np.array([n["x"], n["y"]])
-    return dict(ax=uc, ay=vc, px=float(p[0]), py=float(p[1]), sc=100 * k, rot=-n["rot"], ring_r=rr * k)
+    D = np.diag([n["w"], n["h"]])
+    Mi = np.linalg.inv(M)
+    A = R @ D @ Mi @ np.diag([1 / BW, 1 / BH])
+    b = np.array([n["x"], n["y"]]) - R @ D @ Mi @ t
+    return A, b
+
+
+def planet_pose(n):
+    """AE layer transform for the planet bitmap under Figma node n (anchor = ring centre)."""
+    A, b = planet_affine(n)
+    k = float(np.linalg.norm(A[:, 0]))                # uniform scale (columns agree to 1e-4)
+    rot = math.degrees(math.atan2(A[1][0], A[0][0]))  # screen-space angle = AE rotation
+    uc, vc, rr = ring_centre()
+    p = A @ np.array([uc, vc]) + b
+    return dict(ax=uc, ay=vc, px=float(p[0]), py=float(p[1]), sc=100 * k, rot=rot, ring_r=rr * k)
 
 
 def svg_paths(fn):

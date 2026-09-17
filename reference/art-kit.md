@@ -44,6 +44,28 @@ edge: bitmap (1892.5, 2076.7), inner r 534.5); the orbits' pivot is the centroid
 start points (where they converge). SVG exports are the node box grown by half the stroke —
 subtract `strokeWeight/2` from the SVG coordinates to get node-local px.
 
+### General case: any CROP transform (films 2-4, quirk #101)
+
+The formula above assumes a diagonal `imageTransform`. With rotation/shear inside the crop
+(p01: `[[0.6417,0.1793,0.1596],[-0.2133,0.5148,0.4693]]`) use the full affine, now in
+`artkit.planet_affine()` / `planet_pose()`:
+
+```
+A = R(θ) · diag(W,H) · M_lin⁻¹ · diag(1/BW, 1/BH)       # image px -> frame px, linear part
+b = (x, y) − R(θ) · diag(W,H) · M_lin⁻¹ · t
+scale = |A[:,0]| (columns agree to 1e-4), AE rotation = atan2(A[1][0], A[0][0])
+position = A · pivot + b, anchor = pivot (the ring centre)
+```
+
+Verified on p01/h01/b01 by re-rendering in Python against Figma's PNGs: mean 0.8-1.5/255.
+
+### Spec from the plugin dump (films 2-4)
+
+`gct-presentation/tools/figspec.py` turns the per-frame plugin-API dumps into deck.py elements
+(text roles, frames, glow panels, pills, QR plates, icons, hairlines, KPI count-ups, list bullets)
+and `tools/inkmeasure.py` is the one ink-measurement used by builder and verifier (connected
+glyph components around a dense core, quirks #106-#108). Copies live in `assets/cloudru-art/tools/`.
+
 ## How it moves (every curve passes through the Figma pose at the slide's rest time `vt`)
 
 - **planet** — `rotation = pose.rot + ω·(t − vt)` (two linear keys, ω ≈ ±0.8°/s: the arc glides

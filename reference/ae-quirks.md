@@ -1761,3 +1761,93 @@ A 2913-frame capture in five scripts returned `ok` within seconds each while the
 out at 1–4 fps for ~12 minutes (a 4001-px bitmap at 2.3× + blur renders at ~1 fps). Anything
 that reads the frames must poll for the LAST index, not trust the script result; a strip built
 too early shows black tiles for the missing frames and looks like a broken build.
+
+## 100. Figma soft line breaks are U+2028 — and they break the Figma MCP transport (the real cause of #96)
+
+Every "EOF while parsing a string at column 19xxx" from `get_metadata` / `use_figma` traced
+to ONE thing: a text node containing U+2028 (LINE SEPARATOR — what Figma stores for a
+Shift+Enter soft break; hard breaks are `\n`, and some come through as U+000B). The MCP
+server serialises it raw (JSON.stringify does not escape U+2028), the SSE layer splits on
+it as a line end, and the client sees a truncated frame. Size was a red herring: an 8-node
+dump with two U+2028 failed, a 26-node dump without any succeeded.
+Fix inside `use_figma`: sanitise every string you return with a char-code loop
+(`{133,8232,8233,11,12}` → `<hex>` markers) — NOT a regex literal: the tool call is JSON, so
+a `\u2028` typed into the code arrives as the raw character and ExtendScript/V8 rejects
+"unexpected line terminator in regexp". Convert the markers back to `\r` on the AE side
+(a soft break is still a line break for the layout).
+
+## 101. Figma's rotated CROP image fill is one affine map — derive it, don't fit it
+
+A bitmap fill in CROP mode maps node-normalized coords through the 2×3 `imageTransform` M into
+image-normalized coords: `img = diag(BW,BH)·(M_lin·node/(W,H) + t)`. Inverting and composing with
+the node's rotation about its origin gives the layer transform in one shot:
+`A = R·diag(W,H)·M_lin⁻¹·diag(1/BW,1/BH)`, `b = (x,y) − R·diag(W,H)·M_lin⁻¹·t`. For a similarity
+transform the columns of A agree to 1e-4; scale = |A[:,0]|, AE rotation = atan2(A[1][0], A[0][0])
+(screen space, clockwise positive). A crop that looks "hand-placed" (p01: M has off-diagonal terms,
+scale 0.525, ~19° extra turn) comes out exact — Python re-render vs Figma's own PNG: mean
+≤ 1.5/255 over the artwork, for all four planet placements.
+
+## 102. Vertical tab (U+000B) inside Figma text renders as NOTHING
+
+Some Figma texts carry U+000B between words ("ИИ-ассистента\x0bв региональном"). It is not a
+soft break and not a space: the render shows the words joined ("ассистентав"). Reproduce it by
+deleting the character (and shifting any character-indexed colour ranges after it). U+2028 is a
+real soft break; `\n` a paragraph break. Treat each separately.
+
+## 103. Figma list paragraphs draw bullets that are not in `characters`
+
+`getRangeListOptions(start, end).type === "UNORDERED"` (with `getRangeIndentation` 1) marks
+paragraphs Figma renders with a "•" and a hanging indent; the characters contain neither.
+Nothing in `get_metadata`/`get_design_context` shows it — only the plugin API or the render.
+Rebuild as a separate "•" text layer (SB Sans Display has U+2022, 0.36 em) plus the item's text
+starting at the indent, both placed from the render; paragraph boundaries of such nodes come from
+line starts (a paragraph's first line begins near the node's left edge, continuation lines at the
+indent), not from the gap between lines.
+
+## 104. Missing glyphs: AE swaps the WHOLE layer's font, Figma swaps only the glyph
+
+"ⓒ" (U+24D2) is not in SB Sans Display. Figma renders that one glyph from a fallback face and
+keeps the rest; AE's TextDocument reports the layer font as "MS-Gothic" and a strict
+`font-applied` check throws. Map to a glyph the font has ("©") or set the one character with
+`TextDocument.characterRange(i, i+1).font` (AE 24+; the same API sets `tracking` per character —
+ABSOLUTE, replacing the layer's tracking, not added to it). Figma's arrow "→" is another case:
+its own glyph exists but Figma's render used a thin long fallback arrow (97×32 px at 140 px, no
+installed face matches); at 26 px Inter-Regular's arrow is within 1.3 px, at 140 px a native
+shape path (shaft + open barbs, Trim Paths so it shoots out) measured from the render was the
+only way to hit ≤2 px.
+
+## 105. A count-up on Source Text keeps its style through the expression `style` API
+
+`text.sourceText.style.setText(s)` returns the layer's base style with new text; chain
+`.setFont("Inter-Regular", i, 1)` for per-character fonts inside the counting string. Plain
+string returns lose per-character styling. Keep the number on its own layer when the digits
+sit next to a non-text arrow: the layer's left edge is the anchor, so digit-width changes while
+counting don't move anything else.
+
+## 106. Ink measurement must be by connected components, not by a tight rect
+
+A rect tightened to the dense rows of a text (its cap band) clips sparse extremes — the ascender
+of "б", the descender of "у" — and an alignment from that box lands the whole text 7 px low
+(p01's title: AE put the ascender at the clipped edge). The reverse fails too: a generous rect
+picks up a neighbour's descenders or the dot of the next line. Measure the text as the union of
+glyph components (scipy.ndimage.label, 8-connected) that touch its *core* — the dense rect —
+plus small detached marks (≤0.28·size tall) within its span and within 0.4·size above / 0.15·size
+below, never a component clipped by the rect edge. Builder and verifier must share one
+implementation (tools/inkmeasure.py), or "both wrong the same way" passes the check
+(a 2-line text drawn on one line passed the bbox check; only the per-line extent check caught it).
+
+## 107. Line bands: threshold per run, not per element
+
+Rows holding ≥8 % of the element's PEAK row lose a short label line next to long body lines
+("Что сделали:" 65 px/row beside 341 px/row lines): its thinner rows fall under the threshold,
+the band fragments, and the paragraph's body is never wrapped. Find coarse runs first (rows ≥3 %
+of the peak, ≥2 px), then keep rows ≥8 % of THAT run's peak. Two lines whose descenders meet the
+next ascenders still part at the sparse valley.
+
+## 108. Figma text boxes lie about their height (and INK text needs its plate)
+
+Boxes are routinely smaller than their content: a 23 px box holding two 44 px lines, a 51 px box
+holding two lines — the render simply overflows. Grow the measurement box downward (up to three
+line boxes, stopping above the next text node that shares its columns) and let the ink decide the
+line count. Dark text on a white pill/bar (#0a0600) needs the rect clipped to the plate, because
+the black ground around the plate is within the colour tolerance of the ink.
