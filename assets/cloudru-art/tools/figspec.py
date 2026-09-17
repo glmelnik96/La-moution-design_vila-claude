@@ -850,7 +850,9 @@ def text_elements(sid, n, title_slide, divider, overlaps_glow, nm, art, clip_bel
     # down to the nearest visible node when small, and let the ink decide
     if h < line_box:
         y, h = y - (line_box - h) / 2, line_box
-    content_max = (n_est + (0.6 if n_est == 1 else 1.2)) * line_box   # the text plus slack for a misjudged wrap
+    lead = max(line_box, pct(big[5] if len(big) > 5 and big[5] not in (None, "mix") else n.get("lh"), big[3]))
+    content_max = (n_est * lead + (0.6 if n_est == 1 else 1.2) * line_box      # the text plus slack for a misjudged wrap
+                   + (n.get("ps") or 0) * raw.count(chr(10)))                    # and the paragraph spacing between hard returns
     if h > content_max * 1.15:
         # a box far taller than its text (a centred divider statement; a 925 px box over four lines that reaches
         # the planet): keep the window of content height holding the most ink of the text's own colours
