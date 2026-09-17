@@ -1416,3 +1416,348 @@ Two findings from the Cloud.ru China packshots (`html/templates/cn-packshots.htm
 
 **General shape:** a line mask is only as good as the line box; check both the split and the
 box against the font that is actually rendering, not the one in the design.
+
+## 73. `app.project.activeItem` is read-only — open the comp instead of assigning it
+
+LIVE-VERIFIED 2026-09-08. `app.project.activeItem = someComp` throws
+`Unable to set “activeItem”. It is a readOnly attribute.` Capture/mutate a named
+comp with `M.use(comp)` (and `comp.openInViewer()` if the panel must show it).
+Do not assign `activeItem`.
+
+WRONG:
+```javascript
+app.project.activeItem = slow;
+M.active();
+M.capture([25, 50], "logoA", dir);
+```
+
+RIGHT:
+```javascript
+try { slow.openInViewer(); } catch (e0) {}
+M.use(slow);
+M.capture([25, 50], "logoA", dir);
+```
+
+## 74. Pixel art on a web stage: measure the on-screen pixel, render at size, land 1:1
+
+From unifying the gct-runner sprites (a 1080 HTML stage) into one 8-bit style. The complaint
+was "pixels of different sizes"; measured, the on-screen pixel ranged from ~1 px (a smooth
+heart icon) and 2 px (hero, mic, calendar) to 10 px (clouds) - and the clouds alone ran
+7.7-12.4 px, because each puff CSS-scaled one PNG by its own factor.
+
+- **Measure it, don't eyeball it.** On-screen pixel = native block x display scale. The block
+  is the peak of the autocorrelation of the colour-edge signal along x and y; it works for
+  hand-drawn nearest-upscaled art and for AI "pixel art" with noisy blocks alike. A weak peak
+  (< ~0.3) means the asset is not pixel art at all.
+- **A non-integer CSS scale changes the pixel size**, so "size variety" by scaling a sprite is
+  incompatible with a shared grid. Get variety by rasterising at the size shown (the runner
+  now draws each cloud puff per size on a canvas at art resolution, then upscales x8).
+- **Write sprites pre-upscaled to exactly the box they are drawn in.** `object-fit: contain`
+  then lands on scale 1.0 and the browser never resamples. A box wider than the image because
+  a caption stretched the grid track is harmless - contain is height-limited at 1.0.
+- `image-rendering: pixelated` on everything, including the canvas and the 1:1 images: the
+  recorder bakes at `device_scale_factor=2`, which is itself a 2x upscale.
+- Particles and glows are pixels too: snap FX to the grid (whole grid pixels, no rotation,
+  blink out instead of alpha fade), and replace a blurred `drop-shadow` glow with four
+  chained zero-blur `drop-shadow`s at +/-8 px - a hard one-grid-pixel ring.
+
+## 75. An AE mask is in LAYER space, so it travels with the layer
+
+The classic "the line rises from behind its own line box" reveal needs a window that stays
+put in COMP space while the content slides up through it. A mask cannot be that window by
+itself: mask vertices are layer coordinates, so animating `position` carries the mask along
+and it clips nothing. The first build of the Cloud.ru deck therefore turned every headline
+reveal into the headline popping in 90 px below its place at full opacity — the keyframes
+were all correct and the result was wrong.
+
+Three ways out, in order of preference:
+- **Counter-animate the mask.** If the layer is offset by `dy(t)`, the mask rect must be
+  `y in [-dy, h-dy]` in layer space to hold a fixed comp-space window. Both properties
+  take the same ease so they stay in register.
+- **Precompose** the moving layer and mask the precomp layer.
+- **Don't translate.** Reveal a static layer by animating the mask shape only; that is
+  always safe and is what panels and table rows use.
+
+**General shape:** in AE, "mask" and "matte" are not the same tool. A mask belongs to the
+layer it is drawn on and inherits every transform on it.
+
+## 76. Figma's `contentsOnly` export crops to rendered ink, not to the node's box
+
+`get_screenshot(nodeId, contentsOnly: true)` on a text node returns the node's *rendered*
+bounds. A headline whose Figma text box is 1808x180 came back 1196x175, and its metadata
+`x, y` was NOT the placement: the ink starts 6-7 px right and down of the box origin (side
+bearing plus the gap above the cap line). Placing the PNG at the metadata coordinate put it
+6 px off, which is exactly the kind of error that ruins a "1:1 with the design" claim while
+looking almost right.
+
+Recover the placement by measurement, not by metadata: template-match the export against a
+full-frame render of the same frame, scoring only the export's opaque pixels. On the case
+above the metadata position scored a mean error of 143/255 and the matched position 5/255 -
+a 28x separation, so the match is unambiguous.
+
+Two useful facts from the same tool:
+- A node export IS clipped to the frame when the node is a background that overflows it:
+  a 9146x9358 gradient came back as 1920x1080. That is what makes it possible to pull a
+  slide's background out as its own layer.
+- The renderer will not upscale: asking `maxDimension` 3840 for a 1920-wide frame returns
+  1920. Fine when the comp is 1920 too, but there is no free 2x master.
+
+## 77. The ASCII-only JSX rule also covers the asset PATH
+
+Quirk #58 is about content. The same writer breaks on a path: this project lives under
+`C:\Users\Глеб\...`, so every `new File(...)` line in the emitted script carried Cyrillic
+and the ASCII write failed tens of thousands of characters in.
+
+Escaping to `\uXXXX` makes the *source* ASCII, but ExtendScript's `File()` on Windows is
+not reliable with non-ASCII paths, so the fix is to mirror the assets to an ASCII root
+(`C:/dev/...`) and reference that. Cheap, and it removes a whole class of flakiness.
+
+## 78. Setting `app.project.workingSpace` opens a modal — and it silently shifts every import
+
+Two things, one line of code.
+
+The project was on a **Rec.709 Gamma 2.4** working space, so every imported sRGB PNG was
+colour-converted on the way in. Held frames still matched the Figma reference to 0.000 % of
+pixels past a threshold of 16, but the mean difference ran 0.1-9.8/255, largest on the
+bright gradients — a small hue shift that no per-pixel pass/fail would have caught. If a
+build must match a design byte for byte, read `workingSpace` before trusting any diff.
+
+Assigning it is the trap: `app.project.workingSpace = "None"` raises a confirmation dialog,
+which blocks the CEP bridge and produces a CDP timeout (quirk #25). Colour management is a
+project-wide setting and changing it repaints everything already in the project, so it is
+the user's call, not a build step.
+
+## 79. Cutting a design into rectangles from its own render is 1:1 by construction
+
+The general technique behind the deck, worth keeping. The brief was "layout must be exactly
+as in Figma" and the type is set in a font AE does not have, so native text was out.
+
+Instead: render each frame once from Figma as ground truth, then cut the *animation units*
+out of that render as plain rectangles and place each at the coordinate it was cut from.
+Every pixel is Figma's, so the held frame is the design — no font, no kerning, no line
+breaking to re-derive. On a flat background an opaque cut can also be translated freely,
+because the background it carries is identical to the background beneath it.
+
+What it costs: a cut carries its own background, so translating one over *artwork* smears;
+those slides get the artwork as its own exported layer and reveal by opacity only. And a
+cut cannot be split into parts that were composited together in Figma - to stagger a card's
+title after its panel you need the panel exported separately.
+
+The check that makes it a claim rather than a hope: stack every cut at its stored
+coordinates and diff against the ground-truth render. 17 of 18 slides came back at exactly
+0 differing pixels, which also catches the opposite error - a unit rectangle that missed
+visible content reports it as uncovered.
+
+## 80. `app.fonts.allFonts[i].postScriptName` is undefined — and `textDocument.font` echoes anything
+
+Two font-API traps that together made an installed font look absent.
+
+`app.fonts.allFonts` (AE 24+) returned 148 entries, and every `.postScriptName` and
+`.familyName` on them read `undefined` — so a filter on those properties matched nothing and
+"SB Sans Display" was declared missing while it sat in the Character panel. The names ARE
+there, one level down: the objects are families whose string dump lists the styles
+(`SBSansDisplay-Thin SBSansDisplay-Light SBSansDisplay-Regular …`). Scan every property of
+each entry with `for (k in obj)` rather than the two you expect.
+
+Then the assignment side: `doc.font = "anything"; st.setValue(doc); st.value.font` echoes
+the string back verbatim — for a real PostScript name, for the family alone, and for
+`"NoSuchFont-Xyz"`. The echo proves nothing. Measure: `sourceRectAtTime().width` of a fixed
+word at a fixed size is the fingerprint. `SBSansDisplay-Semibold` set "Главный" at 90 px to
+344.99 px; `SBSansDisplay` (no style) and the garbage name both gave 314.97 — identical, i.e.
+the same silent fallback. Only the full PostScript name with the style resolves. And 344.99
+vs 345 px measured off Figma's render is the number that licenses native text at all.
+
+## 81. Place type by its measured ink, not by baseline arithmetic
+
+To land native text exactly on a Figma design, do not derive a baseline from ascender,
+leading and box top — the two apps disagree on all three. Create the layer, read its own
+ink box with `sourceRectAtTime(0,false)` (left/top are relative to the anchor), and set
+`position = target - [r.left, r.top]` where `target` is the element's ink box measured off
+the design's render. Two measurements, one subtraction, and every element on the pilot came
+out at dx = dy = 0 against Figma.
+
+Three ways this went wrong before it went right:
+- Measure BEFORE adding a Text Animator. Its offset is in the rect.
+- Read the rest position ONCE, into a variable, before any keyframe exists. `pos.value`
+  after a key is set returns the value at the comp's current time — the first key — so
+  reusing it for the exit put a slow 14 px drift into every hold.
+- The measurement rectangle must contain exactly one element. A rect that started 4 px too
+  high caught the descenders of the line above and put the second headline line 6 px high.
+  On artwork, key the mask on the element's fill colour; differencing against a "clean"
+  background failed because exported line art does not reproduce antialiasing bit for bit,
+  and a residual on one ray pulled a target 146 px sideways. Every one of these showed up
+  as a per-element bbox delta and none of them by eye.
+
+## 82. Tracking is per element, not per deck
+
+Figma reports `letter-spacing` in px; AE tracking is 1/1000 em, so AE = px / size × 1000.
+This deck's kicker (−0.64 @ 32), headline (−1.8 @ 90) and statement (−2.76 @ 138) all
+come to exactly −20, which invites a global constant — but the card titles, bodies and the
+footnote have no tracking class at all, i.e. 0. The global −20 doubled every card title
+horizontally in the diff. Carry tracking on the element.
+
+## 83. Exit stagger must fit inside the exit lead
+
+`exit_i = end − LEAD + STAG × (n−1−i)` looks right and silently fails: with 15 layers,
+50 ms × 14 = 700 ms > a 620 ms lead, so the first elements' exits started after the comp
+ended and never played. Derive the stagger from the count: `min(STAG, (LEAD − DUR)/(n−1))`.
+Same family as #66 — a sum the library does not check for you.
+
+## 84. Range Selector "Ease High / Ease Low" — which one shapes the landing depends on sweep direction
+
+A word cascade built as Ramp Up + Percent Offset swept from −RAMP to 100 was reviewed as
+"robotic", and the centroid track showed why: the word crawled while still invisible and
+then covered its last 24 px in TWO frames. Setting `Ease High = 100 / Ease Low = 25` — the
+intuitive "ease into the top" — was the cause.
+
+As the ramp sweeps right, each character crosses it from the HIGH end (selected → offset
+applied → hidden) to the LOW end (rest). So the curve that shapes the arrival is **Ease
+Low**, and Ease High only shapes the departure from the hidden state. For an ease-out
+landing: `ADBE Text Levels Min Ease` (Ease Low) = 100, `ADBE Text Levels Max Ease` (Ease
+High) ≈ 20. Widening the ramp (`Percent End` 45 → 60) gives each word more frames in
+transition. Result on the same track: 11.5 → 6.3 → 3.6 → 1.8 → 0.6 px/frame, a x3.6
+deceleration, and a 0.6 s landing instead of a snap.
+
+Matchnames, read off a live selector: `ADBE Text Range Advanced` holds `Range Units`,
+`Range Type2` (Based On: 1 chars, 3 words, 4 lines), `Selector Mode`, `Selector Max Amount`,
+`Range Shape` (1 square, 2 ramp up, 3 ramp down, 4 triangle, 5 round, 6 smooth),
+`Selector Smoothness`, `Levels Max Ease`, `Levels Min Ease`, `Randomize Order`, `Random Seed`.
+
+**General shape:** measure the thing the review complained about. "Robotic" was a shape
+on a graph — one number (px/frame per frame) found the cause where three viewings of the
+contact sheet had not.
+
+## 85. A property holds its FIRST keyframe before it in time — a stale `rest` variable moves a layer for its whole life
+
+Badges and pills vanished from every rest frame while their labels stayed. The generator
+emitted the shape's exit as `tw(pos(S), ex, ex+360, [rest[0], rest[1]], …)` after the
+label had been created — and `var rest = pos(L).value` had been re-declared for the
+label. The exit keys therefore held the LABEL's position, and since AE holds the first
+key's value at all earlier times, the shape sat at the label's coordinates from frame 0.
+Rule: capture each layer's rest in its own variable (`var restU = rest;`) before any
+other layer's `rest` is read, and never emit keys for layer A after layer B's rest.
+
+## 86. `sourceRectAtTime(0)` includes the Text Animator's offset — read the rect BEFORE adding the cascade
+
+Rows that persist across a cut were placed 7 px right / 11 px high on the next slide. Their
+travel targets were computed from `L.sourceRectAtTime(0, false)` taken after `cascade()`
+had been added: at t = 0 the selector offset is −RAMP, so every word is displaced by the
+animator's Position (rise) and the reported box moves with it. Measure the layer once,
+right after `align()`, and keep that rect for every later position.
+
+## 87. Figma's design-context box width does not reproduce its line breaks — fit breaks from the render
+
+`w-[735px]` on a paragraph does not mean the text wraps at 735: boxes are wider than the
+text they hold, some breaks are manual, and Figma's break of "Платить за готовую мощность
+| или инвестировать …" cannot be produced by ANY greedy wrap width. AE box text with the
+same width therefore wrapped differently on 14 of 31 paragraphs. What works: measure each
+line's ink width in the reference (bands of inked rows, keep bands at least an x-height
+tall so breves/descenders/dots drop out), then choose the break positions whose lines,
+set with PIL metrics of the same OTF, match those widths best, and emit explicit `\r`
+lines as point text. PIL `getbbox` widths of SB Sans Display run ~1.2 % wider than Figma's
+ink (a constant factor — fine for deciding breaks, wrong for verifying placement).
+
+## 88. Line pitch measured from band TOPS is not the leading — measure baselines
+
+Band-top spacing of consecutive lines came out 40 / 48 / 66 for texts whose leading was
+32 / 40 / 52: the top of a band is the tallest glyph on that line (cap, ascender, or a
+breve above the cap), so it shifts by up to 14 px with the glyph inventory. The body rows
+(≥ 25–30 % of the peak row count) end at the baseline; baseline-to-baseline is the leading
+exactly. All the "leading-[1.25]" guesses made from band tops were wrong; the design's
+32-px bodies are leading 32.
+
+## 89. Figma strokes sit INSIDE the rect (path inset 0.5) — AE rect shapes centre the stroke on the path
+
+`M40 0.5H…` in every Figma SVG: a 1-px stroke occupying exactly the outer pixel row. An AE
+Rect shape of the same size strokes on the path itself, so the stroke straddles the edge —
+two half-covered rows, a dim 2-px halo, and the ink box grows by one px on every side (also
+breaks a `>60` verification where a #4C4C4C box at 50 % falls below the threshold). Emit
+the rect as `[w − sw, h − sw]` at the same centre with roundness `r − sw/2`.
+
+## 90. Figma's 2× PNG icon exports are the vector's bounds, not the node box — fit them by measurement
+
+Exports of 50×50 icon nodes came back 108×108, 82×92, 86×88; placed at the node origin at
+50 % they landed within 1 px but their luminance boxes were off by 4–7 px because the soft
+edge of a downscaled PNG shifts a thresholded box, and one export (s12) was simply a
+different size from its instance. Downscale the PNG in Python the way AE will, threshold it
+the way the verifier thresholds the frame, and solve position (and scale when the size is
+off by more than 1 px) so the boxes coincide. Deterministic, no eyeballing.
+
+## 91. Same text on the next slide with a different alignment: a hold key on Source Text at the cut
+
+Text layers persisting across a cut (`travel()` between two measured rest positions) can
+change justification mid-travel: `st.setValueAtTime(0, st.value)` then a second key at the
+cut with `d.justification` changed. Source Text keys are hold keys, so the switch is one
+frame, invisible inside an 800 ms move. Read the new rect with `sourceRectAtTime(cut +
+0.02)` to compute the second position — the anchor-relative box changes with the alignment.
+
+## 92. A frame that continues into the next slide can grow: keyframe the Rect path's Size / Position / Roundness
+
+`groupNamed(S, "frame").property("ADBE Vectors Group").property("ADBE Vector Shape - Rect")`
+then keys on `ADBE Vector Rect Size`, `… Position`, `… Roundness` between the two slides'
+boxes (with the #89 inset applied to both). Trim Paths from the draw-on stays at 100 and
+does not interfere. Pass both boxes explicitly — after the first keys, `.value` returns the
+first key, not the current state (#85 family).
+
+## 93. Colour management sanity check: `saveFrameToPng` returned #7459F9 as exactly (116, 89, 249)
+
+Project working space Rec.709 Gamma 2.4, PNG footage and shape fills: the captured frames
+match Figma's render to the unit on a flat stroke, white text and the gradient panels
+(mean |diff| 0.4–0.7 / 255 against the SVG-defined radial gradient rendered in numpy).
+Whatever the final export does, the frame captures used for verification carry no
+colour shift, so a bbox/colour verification against the Figma PNG is valid.
+
+## 94. Consecutive slides that share elements are one comp — detect persistence by signature
+
+A deck review asked why the same headline "exits and re-enters" between slides. Matching
+(text, font, size, colour, leading, tracking) across consecutive slides finds every
+element that continues; those slides become one comp (segment) where the layer is built
+once, travels to each later slide's measured rest position (#86, #91), and the absorbed
+elements are simply not built. Frames match by name (#92), hairlines by name and length.
+Verification still runs per state — the persisting layer gets a check point in every
+slide it appears in.
+
+## 95. ExtendScript parses a nested ternary LEFT-associatively — `a ? X : b ? Y : Z` picks the wrong branch
+
+`live.justification = (j === "center") ? CENTER : (j === "right") ? RIGHT : LEFT;` set every
+centred paragraph to RIGHT. ExtendScript evaluates it as `((a ? X : b) ? Y : Z)`: for
+"center" the inner result CENTER is truthy, so the outer picks RIGHT; for "right" the inner
+gives `true`, so RIGHT again (correct by accident); only "left" falls through to LEFT.
+Probe: three 2-line layers built with the same function came back 7414 / 7415 / 7414.
+Use `if / else` (or parenthesise every nested ternary) in anything sent to AE.
+
+**Verification lesson:** an ink-box comparison cannot see justification — the block's bbox
+is identical for left / centre / right. Multi-line text needs a per-line x-extent check
+(tools/verify_deck.py `line_ranges`), which is what finally exposed this.
+
+## 96. Figma MCP responses over ~19.5 KB fail to parse ("EOF while parsing a string at column 19xxx")
+
+`get_metadata` on three of eighteen frames and one combined `use_figma` dump died with the same
+SSE-parse error at column 19 664–21 364 — the transport truncates long replies. Not the file,
+not the node: the SIZE. Split the request (one `use_figma` per frame, return compact objects,
+no `relativeTransform`/children dumps) and every one of them comes back.
+
+## 97. The slide crop is not the artwork — read the node, not the frame
+
+Six "different" backgrounds turned out to be one 4001×4096 bitmap and one vector flower placed
+at 2–3× and rotated; the frame exports (and `get_screenshot` of a child) are always clipped to
+the parent frame, so they can't show that. `download_assets` on the node returns the raw fill
+bitmap (`rawImages`, identical md5 across all four uses) and the unclipped SVG. Geometry comes
+from the plugin API: `x,y` (un-rotated origin), `width,height`, `rotation`, `fills[].imageTransform`
+(CROP: `[[sx,0,u0],[0,sy,v0]]` in normalized image space). Figma's rotation matrix in screen
+space is `[[c, s], [−s, c]]` and AE's rotation is its negative — verified by rendering the node
+in Python and diffing against Figma's own render (0.42/255).
+
+## 98. Expressions with zero phase at the verified time keep "life" and 1:1 layout compatible
+
+Breathing/wander on a gradient field: `1 + 0.03·sin((time − T0)·…)` and
+`value + [16·sin((time−T0)·0.75), …]` with `T0` = the slide's rest time. The layer moves the whole
+time, and the verification frame is still exactly the Figma pose, because every term vanishes at
+T0. Same idea for the planet's rotation: `rot + ω·(t − vt)` through the pose at `vt`.
+
+## 99. saveFrameToPng writes lag the script by minutes — and slow layers slow the queue
+
+A 2913-frame capture in five scripts returned `ok` within seconds each while the PNGs trickled
+out at 1–4 fps for ~12 minutes (a 4001-px bitmap at 2.3× + blur renders at ~1 fps). Anything
+that reads the frames must poll for the LAST index, not trust the script result; a strip built
+too early shows black tiles for the missing frames and looks like a broken build.

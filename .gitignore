@@ -9,3 +9,6 @@ out/
 # page cannot render without them - so they are tracked explicitly.
 !_build/mark_ya.png
 !html/templates/cn-assets/*.png
+
+# Cloud.ru art kit: the raw planet bitmap is an INPUT (reference/art-kit.md)
+!assets/cloudru-art/planet.png
