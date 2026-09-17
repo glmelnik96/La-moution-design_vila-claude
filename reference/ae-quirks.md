@@ -1948,3 +1948,16 @@ Figma wraps "друга —  они" (two spaces) rendering neither space; repla
 `\r` leaves the second one at the start of the next line, shifting that line by a space width
 (35 px at 136 px). Swallow the whole run around an inserted break and shift later character
 indices accordingly (a deletion list next to the hyphen-insert list), then apply #114.
+
+## 119. A text's measurement box is its content estimate, not its Figma box
+
+Figma text boxes lie in both directions: a 51 px box holds five lines of 18 px, a 925 px box holds
+four lines of 120 px and reaches the planet gradient below (whose violet passes the violet key and
+becomes a fifth "line", so the fitter breaks the statement into five lines), a divider's box is the
+whole slide with the word centred in it. Rules that survived films 1-5: estimate the line count
+with a greedy PIL wrap at the box width (manual breaks added), set the box to (n + 1.2) line
+boxes (n + 0.6 for a single line); a box much taller than that keeps the window of that height
+holding the most ink of the text's own colours (a centred divider slides onto its word); a box
+shorter than that grows down to the nearest VISIBLE node below — texts, bitmaps, logo vectors,
+plates — not only texts, or a hero grows into the screenshot card under it and measures the card.
+Never cap growth by font size alone: a five-line 120 px statement is as real as a five-line body.

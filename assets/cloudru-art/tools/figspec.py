@@ -175,6 +175,23 @@ FONT_FILES = {SEMI: "C:/Windows/Fonts/SBSansDisplay-SemiBold.otf", MED: "C:/Wind
 _fonts = {}
 
 
+def est_lines(raw, face, size, track_, width):
+    """Lines a text needs at `width`: manual breaks plus a greedy word wrap in the real font metrics."""
+    n = 0
+    for para in raw.replace("\n", "\r").split("\r"):
+        words = para.split(" ")
+        cur, k = "", 1
+        for wd in words:
+            cand = wd if not cur else cur + " " + wd
+            if cur and est_width(cand, face, size, track_) > width * 1.02:
+                k += 1
+                cur = wd
+            else:
+                cur = cand
+        n += k
+    return max(1, n)
+
+
 def est_width(text, face, size, track_):
     """Expected ink width of one line (PIL metrics, same bias as deck.py's fitter)."""
     from PIL import ImageFont
@@ -485,9 +502,20 @@ def build_slide(sid, nodes, geo):
         return any(b[0] < gx + gw and b[0] + b[2] > gx and b[1] < gy + gh and b[1] + b[3] > gy for gx, gy, gw, gh in glow_rects)
 
     def clip_below(b):
-        """Top of the nearest text node below b that shares its columns (a growth limit)."""
-        tops = [t["b"][1] for t in nodes if t["t"] == "TEXT" and t["b"] is not b and t["b"][1] > b[1] + b[3] * 0.5
-                and t["b"][0] < b[0] + b[2] and t["b"][0] + t["b"][2] > b[0]]
+        """Top of the nearest visible node below b that shares its columns (a growth limit): texts, but also
+        bitmaps, logos and plates - a hero's box grown into the screenshot card below it measures the card."""
+        tops = []
+        for t in nodes:
+            tb = t["b"]
+            if tb is b or t.get("off") or t["t"] in ("GROU", "SECT") or tb[1] <= b[1] + b[3] * 0.5:
+                continue
+            if not (tb[0] < b[0] + b[2] and tb[0] + tb[2] > b[0]) or tb[2] < 20 or tb[3] < 20:
+                continue
+            if t["n"].startswith("image 22") or (t["t"] == "VECT" and tb[2] > 4000) or inside(b, tb):
+                continue                                   # the art and containers around the text are not limits
+            if t["t"] != "TEXT" and not (t.get("fl") or t.get("sk") or t["n"].startswith("Logo")):
+                continue
+            tops.append(tb[1])
         return min(tops) if tops else 1080
 
     # --- background art (planet / rays) into the art kit
@@ -815,13 +843,29 @@ def text_elements(sid, n, title_slide, divider, overlaps_glow, nm, art, clip_bel
     segs = segments_of(n, raw)
     x, y, w, h = n["b"]
     line_box = max(s[3] for s in segs) * 1.15
-    if "\r" not in raw and "\n" not in raw:              # one line of text: its box may still hold empty line slots
-        h = min(h, 1.6 * line_box)
-    # Figma boxes are often smaller than their content (a 51 px box holding two 44 px lines): look down,
-    # stopping above the next text node, and let the ink decide
+    big = max(segs, key=lambda sg: sg[3])
+    n_est = est_lines(raw, STYLE.get(big[4], REG), big[3], track(big[6]) if len(big) > 6 else 0, w)
+    # Figma boxes are often smaller than their content (a 51 px box holding two 44 px lines) or much taller
+    # (a 925 px box over four lines, reaching the planet): size the box from the estimated content, grow it
+    # down to the nearest visible node when small, and let the ink decide
     if h < line_box:
         y, h = y - (line_box - h) / 2, line_box
-    h = max(h, min(8 * line_box, clip_below(n["b"]) - 6 - y))
+    content_max = (n_est + (0.6 if n_est == 1 else 1.2)) * line_box   # the text plus slack for a misjudged wrap
+    if h > content_max * 1.15:
+        # a box far taller than its text (a centred divider statement; a 925 px box over four lines that reaches
+        # the planet): keep the window of content height holding the most ink of the text's own colours
+        key0 = [list(c) for c in {tuple(s[2] or n.get("c") or WHITE) for s in segs}]
+        m, mx, my = mask(sid, (x, y, w, h), key0, 100, 40)
+        win = int(round(content_max))
+        rows = m.sum(axis=1).astype(float)
+        if len(rows) > win:
+            cs = np.concatenate([[0.0], np.cumsum(rows)])
+            r0 = int(np.argmax(cs[win:] - cs[:-win]))
+            y, h = my + r0, win
+        else:
+            h = content_max
+    elif h < content_max:
+        h = min(content_max, max(h, clip_below(n["b"]) - 6 - y))   # a box shorter than its text: grow to the next node
     box = (x - 4, y - 6, w + 12, h + 12)
     styles = {(s[3], s[4]) for s in segs}
     paras = raw.split("\n")
