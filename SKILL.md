@@ -143,6 +143,15 @@ rules still apply (all the motion ones; none of the visual stop-list).
    twins yet (pointer, typing, checklist, card3d, whip, device); build them from
    `reference/extendscript-patterns.md`, or deliver the HTML render.
 
+## 5c. A Figma deck as a 1:1 film — the deck pipeline
+
+When the input is a whole presentation and the bar is layout fidelity (native SB Sans text,
+every element within 2 px of the Figma render, the art-kit background), do not free-mode it:
+follow `reference/deck-pipeline.md` — plugin-API dumps → `figspec.py` → `deck.py` →
+`build_film.py` (one AE call at a time, verify + background diff + QA sheets) →
+`capture_film.py` → preview. Read every QA sheet before sending. Background art:
+`reference/art-kit.md`; the lessons: quirks #100–#119.
+
 ## 6. Generation workflow
 
 1. Discover params (`GET /nodes*` via `gen.js`), match aspect/resolution to the comp.
