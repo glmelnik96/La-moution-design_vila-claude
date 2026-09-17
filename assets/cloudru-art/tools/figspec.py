@@ -29,6 +29,8 @@ import json
 import re
 from pathlib import Path
 
+import shutil
+
 import numpy as np
 from PIL import Image
 
@@ -38,9 +40,17 @@ ROOT = Path(__file__).resolve().parents[1]
 FIG = ROOT / "_build" / "fig"
 ASSETS = ROOT / "assets"
 
-FILMS = {"2": ["p01", "p02", "p03", "p04", "p05", "p06", "p07"],
+FILMS = {"2": ["p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08", "p09"],
          "3": ["h01", "h02", "h03", "h04", "h05", "h06"],
-         "4": ["b01", "b02", "b03", "b04", "b05"]}
+         "4": ["b01", "b02", "b03", "b04", "b05"],
+         "5": ["e01", "e02", "e03", "e04", "e05", "e06", "e07", "e08", "e09"]}
+# slides dumped from the "final" section (node 4206:321) with the segment-level inspector
+FIG2 = {"Slide 91": "p08", "Slide 92": "p09", "Slide 107": "e01", "Slide 104": "e02", "Slide 105": "e03", "Slide 106": "e04",
+        "Slide 111": "e05", "Slide 112": "e06", "Slide 108": "e07", "Slide 109": "e08", "Slide 110": "e09"}
+TITLE_SLIDES = ("p01", "h01", "b01", "e01")
+DIVIDERS = ("p06", "h04", "b04", "e07", "e08", "e09")
+AUTO_LH = 1.28            # SB Sans Display "auto" line height, measured on e03 (41 px pitch at 32 px)
+CHIP_STROKE = (89, 89, 89)
 SEMI, MED, REG = "SBSansDisplay-Semibold", "SBSansDisplay-Medium", "SBSansDisplay-Regular"
 STYLE = {"Semibold": SEMI, "Medium": MED, "Regular": REG}
 WHITE = (255, 255, 255)
@@ -52,7 +62,8 @@ LIST_NODES = {"4188:200": {1, 2, 3}, "4188:203": {1, 2, 3}, "4188:218": {1, 2, 3
 BULLET = "\u2022"
 # content timing for these films: card texts fan left-to-right inside a row
 INTRA_FILMS = {"cardTitle": (300, 700, 120), "cardBody": (440, 560, 120), "text": (300, 700, 120),
-               "icon": (400, 500, 120), "pill": (150, 500, 120), "line": (60, 600, 60), "arrow": (420, 520, 0)}
+               "icon": (400, 500, 120), "pill": (150, 500, 120), "line": (60, 600, 60), "arrow": (420, 520, 0),
+               "qr": (80, 900, 0), "chip": (300, 600, 110)}
 
 
 # ---------------------------------------------------------------- node dumps
@@ -85,7 +96,40 @@ def load_nodes():
             d = details["texts"].get(n["i"])
             if d:
                 n["s"] = d["s"]; n["segd"] = d["seg"]; n["ps"] = d.get("ps", n.get("ps", 0))
-    return out, details["geo"]
+    geo = dict(details["geo"])
+    # the "final" section dumps: {nodeId: {name, nodes}}; segments carry [start, end, rgb, size, style, lh, ls, list, indent]
+    for fn in sorted((ROOT / "_build" / "fig2").glob("film*.json")):
+        for nid, d in json.loads(open(fn, encoding="utf-8").read(), strict=False).items():
+            sid = FIG2.get(d["name"])
+            if not sid:
+                continue
+            nodes = []
+            for n in d["nodes"]:
+                n = dict(n)
+                if n["t"] == "TEXT" and n.get("seg"):
+                    segs = n["seg"]
+                    n["segd"] = [sg[:7] for sg in segs]
+                    n["f"] = [segs[0][3], segs[0][4]]
+                    n["c"] = segs[0][2]
+                    n["lh"], n["ls"] = segs[0][5], segs[0][6]
+                    lists = set()
+                    for sg in segs:
+                        if sg[7] == "UN":
+                            for k in range(n["s"].count("\n", 0, sg[0]), n["s"].count("\n", 0, max(sg[0], sg[1] - 1)) + 1):
+                                lists.add(k)
+                    if lists:
+                        LIST_NODES[n["i"]] = lists
+                if n.get("geo"):
+                    g = dict(n["geo"])
+                    fl = (n.get("fl") or [{}])[0]
+                    if fl.get("t") == "I":
+                        g["fill"] = {"sm": fl.get("sm"), "tr": fl.get("tr")}
+                    if n.get("sk"):
+                        g["sw"] = n["sk"].get("w", 1)
+                    geo[n["i"]] = g
+                nodes.append(n)
+            out[sid] = nodes
+    return out, geo
 
 
 def clean(s):
@@ -102,7 +146,9 @@ def clean(s):
 def pct(v, size):
     if isinstance(v, str) and v.endswith("%"):
         return size * float(v[:-1]) / 100
-    if v in (None, "auto", "mix"):
+    if v == "auto":
+        return size * AUTO_LH
+    if v in (None, "mix"):
         return size
     return float(v)
 
@@ -117,6 +163,21 @@ def c3(rgb):
     return [round(v / 255, 4) for v in rgb]
 
 
+FONT_FILES = {SEMI: "C:/Windows/Fonts/SBSansDisplay-SemiBold.otf", MED: "C:/Windows/Fonts/SBSansDisplay-Medium.otf",
+              REG: "C:/Windows/Fonts/SBSansDisplay-Regular.otf"}
+_fonts = {}
+
+
+def est_width(text, face, size, track_):
+    """Expected ink width of one line (PIL metrics, same bias as deck.py's fitter)."""
+    from PIL import ImageFont
+    k = (face, int(round(size)))
+    if k not in _fonts:
+        _fonts[k] = ImageFont.truetype(FONT_FILES[face], int(round(size)))
+    l, t, r, b = _fonts[k].getbbox(text)
+    return ((r - l) + track_ / 1000 * size * max(0, len(text) - 1)) * 0.988
+
+
 # ---------------------------------------------------------------- render helpers
 _cache = {}
 
@@ -128,6 +189,7 @@ def render(sid):
 
 
 EXCL = {}          # sid -> rects (white plates, pills, bitmaps) that never count as text ink
+TAKEN = {}         # sid -> frame-size mask of glyph pixels already claimed by measured texts
 PLATES = {}        # sid -> white plate rects (dark texts are measured inside the plate that holds them)
 
 
@@ -160,6 +222,8 @@ def mask(sid, rect, key=None, thr=100, tol=40):
     else:
         m = sub.max(axis=2) > thr
     cx, cy = x + w / 2, y + h / 2
+    if sid in TAKEN:
+        m &= ~TAKEN[sid][y:y + m.shape[0], x:x + m.shape[1]]
     for ex, ey, ew, eh in EXCL.get(sid, ()):
         ex, ey, ew, eh = int(ex), int(ey), int(round(ew)), int(round(eh))
         if ex <= cx <= ex + ew and ey <= cy <= ey + eh:
@@ -395,8 +459,8 @@ def build(film):
 
 def build_slide(sid, nodes, geo):
     import artkit
-    title_slide = sid in ("p01", "h01", "b01")
-    divider = sid in ("p06", "h04", "b04")
+    title_slide = sid in TITLE_SLIDES
+    divider = sid in DIVIDERS
     raw_dims = {f.name: Image.open(f).size for f in sorted(ASSETS.glob(f"f/{sid}_raw*.png"))}
     glow_rects = [tuple(n["b"]) for n in nodes if is_glow(n)]
     counters = {}
@@ -431,10 +495,14 @@ def build_slide(sid, nodes, geo):
     if art:
         artkit.ART[sid] = art
 
+    chip_frames = [n for n in nodes if n["t"] == "FRAM" and n.get("sk") and tuple(n["sk"].get("c") or ()) == CHIP_STROKE
+                   and n["b"][2] < 200 and n.get("cr", 0) >= 20]
     white_plates = [n for n in nodes if n["t"] in ("FRAM", "RECT") and solid(n) == WHITE and n.get("cr", 0) >= 24]
     pills = [n for n in white_plates if n["b"][3] <= 60 and n["b"][2] < 600]
     PLATES[sid] = [tuple(n["b"]) for n in white_plates]
-    EXCL[sid] = [tuple(n["b"]) for n in white_plates] + \
+    TAKEN[sid] = np.zeros((1080, 1920), bool)
+    light_plates = [n for n in nodes if n["t"] in ("FRAM", "RECT") and solid(n) and min(solid(n)) > 200 and n["b"][2] > 100]
+    EXCL[sid] = [tuple(n["b"]) for n in white_plates + light_plates] + \
                 [tuple(n["b"]) for n in nodes if n["b"][2] < 1000 and ((n.get("fl") and n["fl"][0].get("t") == "I") or (n["t"] == "VECT" and n["n"].startswith("Logo")))]
     used = set()
     content = []           # (y, x, element)
@@ -442,6 +510,22 @@ def build_slide(sid, nodes, geo):
     def add(el):
         content.append((el["rect"][1], el["rect"][0], el))
 
+    for ch in chip_frames:
+        x, y, w, h = ch["b"]
+        used.add(ch["i"])
+        for t in nodes:
+            if t is not ch and inside(t["b"], ch["b"]):
+                used.add(t["i"])
+        sw = ch["sk"].get("w", 1)
+        add(FR(nm("chipf"), x, y, w, h, min(ch.get("cr", 0), h / 2), CHIP_STROKE, sw=sw, align=ch["sk"].get("al", "C")))
+        ins = int(sw) + 2
+        cx, cy, cw, chh = int(x) + ins, int(y) + ins, int(w) - 2 * ins, int(h) - 2 * ins
+        fn = nm("chip") + ".png"
+        Image.open(ASSETS / f"{sid}_full.png").convert("RGB").crop((cx, cy, cx + cw, cy + chh)).save(ASSETS / "gen" / fn)
+        shutil.copy2(ASSETS / "gen" / fn, Path("C:/dev/gct-pres/gen") / fn)
+        el = IMG(fn[:-4], "gen/" + fn, cx, cy, cw, chh, 100, fit=False)
+        el["kind"] = "chip"
+        add(el)
     for pn in pills:
         label = next((t for t in nodes if t["t"] == "TEXT" and inside(t["b"], pn["b"]) and t.get("c") == list(INK)), None)
         x, y, w, h = pn["b"]
@@ -452,7 +536,8 @@ def build_slide(sid, nodes, geo):
         else:
             add(FR(nm("bar"), x, y, w, h, min(pn.get("cr", 0), h / 2), WHITE, sw=0, fill=WHITE))
 
-    for n in nodes:
+    # shapes first, then texts smallest-first so a label never leaks into a bigger text's measurement
+    for n in sorted(nodes, key=lambda q: (q["t"] == "TEXT", q["b"][2] * q["b"][3] if q["t"] == "TEXT" else 0)):
         if n.get("off") or n["t"] == "GROU" or n["i"] in used:
             continue
         b = n["b"]; x, y, w, h = b
@@ -513,6 +598,12 @@ def build_slide(sid, nodes, geo):
             add(FR(nm("plate"), x, y, w, h, min(n.get("cr", 0), h / 2), solid(n), sw=0, fill=solid(n)))
             continue
 
+    # a QR bitmap and the white plate under it form one unit: the plate carries the flag, the bitmap its own kind
+    for _, _, el in content:
+        if el["kind"] == "icon" and el.get("fit", True) is False and el["scale"] < 60:
+            for _, _, pl in content:
+                if pl["kind"] == "frame" and pl.get("fill") and pl["x"] <= el["x"] and pl["y"] <= el["y"] and pl["x"] + pl["w"] >= el["x"] + 10:
+                    el["kind"] = "qr"; pl["qr"] = True
     # role names only when unique on the slide (three stacked glowW panels on b03 stay separate)
     for role in ("glowW", "glowR"):
         same = [e for _, _, e in content if e["name"] == role]
@@ -646,13 +737,29 @@ def one_text(sid, n, text, seg, segs, offset, rect, title_slide, divider, overla
     plate = on_plate(sid, n["b"]) if color == INK else None      # by the node box: the grown rect may leave the plate
     if plate:
         rect = clip_rect(rect, plate)
+    if "\r" not in text and "\n" not in text and text.strip():   # one line: measure only where its glyphs can be
+        ew = est_width(text, STYLE.get(style, REG), size, track(ls)) * 1.15 + 12
+        bx, bw = rect[0], rect[2]                          # relative to the rect in hand (a split tail, a paragraph)
+        if ew < bw:
+            if just == "right":
+                rect = clip_rect(rect, (bx + bw - ew, -10, ew + 12, 1100))
+            elif just == "center":
+                rect = clip_rect(rect, (bx + bw / 2 - ew / 2, -10, ew, 1100))
+            else:
+                rect = clip_rect(rect, (bx - 12, -10, ew + 12, 1100))
     rect, core = tight(sid, rect, size, key=key, tol=40, min_h=3 if text == BULLET else None)   # a bullet is one short band
     if plate and core is not None:
         rect = clip_rect(rect, plate)
+    n_lines = len(bands(sid, rect, key, 100, max(3, int(0.35 * size)))) if core is not None else 0   # before the claim
+    is_kpi = bool(re.match(r"^(\d+)(\s*\u2192\s*)(\d+)$", text)) and size >= 100
+    if core is not None and not is_kpi:                      # claim this text's glyph pixels (KPIs: after the split)
+        m, mx, my = mask(sid, rect, key, 100, 40)
+        own = inkmeasure.own_mask(m, (core[0] - mx, core[1] - my, core[0] + core[2] - mx, core[1] + core[3] - my), size)
+        TAKEN[sid][my:my + own.shape[0], mx:mx + own.shape[1]] |= own
     if core is None:
         raise SystemExit("%s: no ink for %r in %s" % (sid, text[:30], rect))
     kind = text_kind(size, style, n["b"][1], title_slide, divider, overlaps_glow(core))
-    boxw = n["b"][2] if core[3] > lh * 1.4 else 0
+    boxw = n["b"][2] if n_lines >= 2 else 0
     vt = [i for i, ch in enumerate(text) if ch == "\x0b"]        # a vertical tab renders as nothing in Figma
     if vt:
         text = text.replace("\x0b", "")

@@ -1851,3 +1851,37 @@ holding two lines — the render simply overflows. Grow the measurement box down
 line boxes, stopping above the next text node that shares its columns) and let the ink decide the
 line count. Dark text on a white pill/bar (#0a0600) needs the rect clipped to the plate, because
 the black ground around the plate is within the colour tolerance of the ink.
+
+## 109. The Figma MCP response cap is 20 KB — and node NAMES carry U+2028 too
+
+Two more faces of #100. (a) `use_figma` returns at most ~20 KB; a bigger result is cut mid-string
+and the client reports the same "EOF while parsing a string at column 19xxx". Batch dumps to two
+or three frames per call (~80 nodes) and keep the schema compact. (b) Figma names text nodes after
+their content, so a name can hold U+2028 as well — sanitise every string you return (names
+included), not only `characters`. A shallow 5-node dump of a title slide failed for exactly that.
+
+## 110. `getStyledTextSegments` gives everything per run in one call
+
+Per-run fontSize, fontName, fills, lineHeight, letterSpacing, listOptions and indentation in a
+single call per text node — no second "details" query, and it exposes list paragraphs (#103)
+without a separate `getRangeListOptions` sweep. Store `[start, end, rgb, size, style, lh, ls,
+listType, indent]` and derive paragraph indices from the "\n" count before `start`.
+
+## 111. Measuring a text in Figma's render: who else is in the box
+
+Text boxes overlap freely in these decks (a right-aligned NDA label sits inside the hero's box,
+a hero runs under a light card). Three rules keep a measurement to its own glyphs: (1) measure
+texts smallest-first and subtract every measured text's glyph pixels from the later ones;
+(2) clamp a single-line text's box to its expected ink width on the aligned side (PIL metrics
+×1.15 + 12 px) — a label can only be where its glyphs fit; (3) exclude light plates (any solid
+fill with all channels > 200), not only pure white, from white-text masks. And decide wrapping
+by the number of line bands, never by the core's height — an "auto" line height (1.28×) makes a
+two-line body shorter than 1.4 leadings.
+
+## 112. Logo lockups inside stroked pills: cut them from the render
+
+Small logo chips (a GigaChat/Qwen/GLM pill: stroke #595959 centred, r 40, two stacked image
+fills, a 24 px version number) are not worth rebuilding layer by layer — the stacked identical
+bitmaps hint at blend tricks the API does not expose. Draw the stroke natively (so it can draw on)
+and cut the interior from the 1:1 render as one PNG; skip every node inside the pill.
+Same idea as film 1's s17 chips.
