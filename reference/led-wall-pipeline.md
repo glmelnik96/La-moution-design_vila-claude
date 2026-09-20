@@ -165,3 +165,29 @@ What "параллакс" means for a still on a 4608×768 wall:
   copy underneath stops being scenery and becomes the cross-dissolve bed.
 - Interleave with the generated walk-throughs rather than stacking: shop clip, then stills, then the
   portal. Each chapter becomes "we entered a shop, remembered, walked out".
+
+## 11. The corridor, not the slideshow — and how an endless walk is actually built
+
+Two rejected passes on the same intro taught the structural lesson. The brief's through-line was a
+**walk**: a performer on a treadmill in front of the wall, the image moving behind them, the shop
+shown in strict central perspective ("как будто человек стоит на входе в цех, не сверху, не боком").
+Archive photographs were named an **overlay** in the same paragraph, not the picture. Reading them
+as the hero produced first an album, then a brutal 6:1 crop, then a mirrored fill — three rounds
+spent because the *structure* was wrong, not the treatment. "Parallax" in such a brief means layers
+moving at different rates inside a space, not a Ken Burns push on a flat scan.
+
+The build that fits:
+- **Base = generated walk-throughs**, one per shop/era, in two canvases: 21:9 masked exactly to the
+  backdrop, and 1:1 on the wings and (band-masked) the diagonals, mirrored on the right half so the
+  wall reads as one room. The generated camera supplies the real multi-plane parallax for free.
+- **Endless motion from a 5 s clip without generating a loop pass**: two copies of the same clip,
+  time-remapped `((t - inPoint) + phase) % d` with `phase = 0` and `d/2`, each with a triangular
+  opacity `100 * clamp((0.5 - |p - 0.5|) / 0.18)` on its own phase. One copy is always mid-clip; the
+  wrap is hidden inside a dissolve, and the forward travel never stops. Transitions (a propeller
+  becoming a turbine, an old hall becoming a modern one) play `once`, time-remapped to the window.
+- **Archive as overlays**: one fragment at a time, 52–74 % opacity, feather ≈ 16 % of the width, three
+  size/blur classes so some read as underlay and some as accent, placed off-centre and high — the
+  lower centre belongs to the performer. They drift faster than the corridor: that difference is the
+  parallax the brief asked for.
+- Ask before inventing pixels on historical material: extending archive photographs by outpainting
+  is a client decision, not a production shortcut.
