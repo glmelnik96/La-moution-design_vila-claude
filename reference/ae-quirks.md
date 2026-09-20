@@ -2096,3 +2096,12 @@ on `FileNotFoundError` for files the capture "returned", and a file that does ex
 half-written. Wait on size-stable files first (`review_sheet.py` polls; or
 `until [ -f f ] && [ "$(stat -c%s f)" -gt N ]; do sleep 4; done` plus a few seconds of slack), then
 crop. Cost of ignoring it: a whole build round looks failed when only the cropper was early.
+
+## 133. `timeRemapEnabled = true` resets the layer's outPoint to the source duration
+
+Setting `layer.outPoint` before enabling time remapping is silently undone: switching the flag on
+re-derives in/out from the footage length, so a 49-second corridor segment built from a 5.17 s clip
+ends after 5.17 s and the rest of the window plays black. Always order it
+`startTime → inPoint → timeRemapEnabled = true → remap expression → outPoint`. The failure is
+invisible in the build result (no error, the layer exists, the expression is right) and only shows
+up as missing footage in a capture several seconds past the clip length.
