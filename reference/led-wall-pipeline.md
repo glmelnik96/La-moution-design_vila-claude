@@ -61,3 +61,24 @@ polls file sizes), assemble a wall strip + main-screen crops + the OUT comps, an
 came only from looking: the flattened emblem alpha, text landing right-aligned, the air layer
 invisible at 38 % soft-light, seven drawings in Add turning the preshow into blue mush, chapter
 words typed over the portal's white tail, duotone book scans staying pink under a mild desaturate.
+
+## 6. "Flat is generic" — the material pass (2026-09-20, evening)
+
+The first wall build (grey gradients, thin outline rings, a white hub light) was called generic by
+the user; a second pass with flat two-tone shape blades was "the right direction, but the
+execution must be better"; the third was still "flat graphics, not fashionable". What finally
+read as material: the blades built as one extruded, bevelled shape layer under the **Cinema 4D
+renderer** (`comp.renderer = "ADBE Calder"` — the only renderer where extrusion is
+script-writable, quirk #129), lit by three point lights + ambient, a camera with DOF drifting,
+a dark iris in front of the roots and a white core + bloom behind/over them, a second fan far
+back for depth, seven albedo facets per blade, the emblem on a real shadow. Render cost stayed
+in seconds per wall frame. Advanced 3D looked flat (no extrusion from script, env light source
+not settable) and the fake-thickness copy read as paper. Lesson: when a client brief says
+«градиент, тень, подсветка, трёхмерность», go to real 3D geometry and lights first — every 2D
+shading trick (stepped fills, matted ramps, polar-brushed textures) costs a review round and
+still reads as vector.
+
+Timing came from the real tracks (`src/music/`): the intro WAV's speech-band envelope
+(`ffmpeg` → numpy, 100 ms frames, 300–3400 Hz) gives narration pauses and the music-only gap;
+chapter portals were re-timed to those landmarks (40 / 82 / 140 / 184 s; propeller→turbine in
+the 1:59–2:20 gap) before a single word was placed by ear.
