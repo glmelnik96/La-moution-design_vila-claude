@@ -82,3 +82,17 @@ Timing came from the real tracks (`src/music/`): the intro WAV's speech-band env
 (`ffmpeg` → numpy, 100 ms frames, 300–3400 Hz) gives narration pauses and the music-only gap;
 chapter portals were re-timed to those landmarks (40 / 82 / 140 / 184 s; propeller→turbine in
 the 1:59–2:20 gap) before a single word was placed by ear.
+
+## 7. After the material pass: ripples, dark clips, stale crops (2026-09-20, night)
+
+- Thin strokes over lit 3D blades read as wires / a mesh on the wall (13 crest rings at 1.4–2.8 px
+  did). A ripple is a *band*, not a line: 10–26 px stroke, Gaussian blur 26 on the light crest and
+  44 on a dark trough offset 10 px below it, opacity 5–36 % falling with radius, glow radius 140
+  at 0.7. Judge such systems on a full-resolution centre crop, never on the 1/3-scale sheet.
+- Generated clips arrive at whatever exposure the model chose (the G1 "turbine eye" came at a mean
+  of 37/255). Grade at the layer (Levels: Input White 0.62, Gamma 1.4 — quirk #130) instead of
+  re-generating; a dark passage right after the push into the dark core is coherent as drama.
+- Review tooling must follow the wall geometry: `review_sheet.py --main` still cropped 2048×1024
+  from the first 1024-high wall and squeezed it to 512, so every circle became an ellipse and a
+  black band appeared under the main screen. Two rounds went into doubting the render before the
+  crop was checked. When the wall changes size, grep every tool for the old numbers first.

@@ -2063,3 +2063,13 @@ sets under Calder. Advanced-3D-only effects for volume (CC Light Rays / CC Parti
 in any renderer — they are 2D effects; CC Particle World with default Particle Type draws line
 sparks, not dust. Ray-traced captures of a 4800 px extruded fan take minutes per frame: run
 captures in the background and poll.
+
+## 130. Levels (`ADBE Easy Levels2`) property map — LIVE-VERIFIED (AE 26.3)
+
+`-0001` Channel, `-0002` Histogram, `-0003` Input Black, `-0004` Input White, `-0005` Gamma,
+`-0006` Output Black, `-0007` Output White, `-0008`/`-0009` Clip To Output Black/White. All
+levels are 0..1 (not 0..255); gamma is a plain multiplier (1 = none). Probe recipe for any
+effect: add it to a throw-away solid, walk `numProperties` and print `matchName + " = " + name`,
+remove the solid — ten seconds, and it ends the guessing that produced quirk #126. Used to lift a
+generated clip that arrived at mean 37/255 (Input White 0.62, Gamma 1.4 on the layer — grade at
+the layer, do not re-generate for exposure).
