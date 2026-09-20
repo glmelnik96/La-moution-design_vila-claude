@@ -2105,3 +2105,14 @@ ends after 5.17 s and the rest of the window plays black. Always order it
 `startTime → inPoint → timeRemapEnabled = true → remap expression → outPoint`. The failure is
 invisible in the build result (no error, the layer exists, the expression is right) and only shows
 up as missing footage in a capture several seconds past the clip length.
+
+## 134. Prefix matching picks the wrong clip when ids share a stem
+
+`odk_N3a_quality_…mp4` and `odk_N3a_sq_quality_…mp4` both satisfy `name.indexOf("odk_N3a_") === 0`,
+and a "take the last by name" tiebreak hands you the square version for the wide slot — silently, in
+a build that reports success. Any id scheme with a suffixed variant (`sq`, `loop`, `alt`) needs an
+anchored match, not a prefix: build it from the id and the known tier names,
+`new RegExp("^odk_" + id + "(loop)?_(quality|balanced|draft)")`. ExtendScript constructs RegExp from
+a string fine. Cheap rule: whenever generated assets are looked up by name, the lookup must be able
+to say no to a longer id, and the build log should print which file each slot resolved to so the
+mismatch is visible without opening the comp.
