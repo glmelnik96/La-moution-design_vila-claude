@@ -1961,3 +1961,61 @@ holding the most ink of the text's own colours (a centred divider slides onto it
 shorter than that grows down to the nearest VISIBLE node below — texts, bitmaps, logo vectors,
 plates — not only texts, or a hero grows into the screenshot card under it and measures the card.
 Never cap growth by font size alone: a five-line 120 px statement is as real as a five-line body.
+
+## 120. Fractal Noise (and friends): the "Transform" / "Evolution Options" groups are headers, not groups
+
+`effect.property("Transform")` on ADBE Fractal Noise returns a flat PROPERTY (type 6212), not a
+PropertyGroup — calling `.property(...)` on it throws `Function ... is undefined`. All the controls
+are direct children of the effect: `ADBE Fractal Noise-0009` Uniform Scaling, `-0011` Scale Width,
+`-0012` Scale Height, `-0023` Evolution, `-0025` Cycle Evolution, `-0026` Cycle (in Revolutions),
+`-0027` Random Seed (the group rows are `-0007`, `-0024`). Address them by matchName on the effect
+itself. Dump `numProperties` + matchNames once per unfamiliar effect instead of guessing the tree.
+
+## 121. Imported footage keeps its extension in `item.name`
+
+`importFile` names the FootageItem `page122_image-000.png` / `odk_A1_dark_bed_loop.mp4`, not the
+stem. A lookup by name without the extension finds nothing and the build "succeeds" with missing
+layers (the preshow came back with seven "missing" drawings). Either rename on import or search
+with the extension. Also: a directory import must filter by prefix — `M:/Minimax h3/out/*.mp4`
+pulled 63 unrelated clips into the project before the `odk_` filter existed.
+
+## 122. Centre text by its measured box, not by justification
+
+Point text with CENTER_JUSTIFY set through `TextDocument.justification` did not centre on the
+anchor in AE 26.3 — the string ended at the anchor (rendered as right-aligned). Box text centres
+inside its box whose origin is the layer's top-left, so `x` means the box's left edge. The robust
+move for both: create the layer, then `sr = L.sourceRectAtTime(L.inPoint, false)` and set position
+to `[x - (sr.left + sr.width/2), y - (sr.top + sr.height/2)]` before any entrance tween reads the
+rest position. Works for every font/box combination and survives re-layout.
+
+## 123. An "upscaled" PNG may have lost its alpha
+
+The 2× upscale of the emblem (Lanczos through the generation pipeline) came back flattened on
+white; only the original export kept transparency. When a logo shows a plate behind it, check
+`Image.open(f).mode` / alpha extrema of the SOURCE file before blaming blend modes — and keep the
+original next to the upscale.
+
+## 124. Building a multi-screen LED wall in one comp
+
+Design in physical space at one pixel pitch (256 px/m here): SIDE 768×768 | DIAG 512×768 |
+MAIN 2048×1024 | DIAG | SIDE = 4608×1024, regions drawn as guide layers. Delivery comps take a
+SLOT comp (the whole wall) with anchor at the wall centre and position = comp centre − region
+centre; the main backdrop that the TZ calls 2048×512 at 8×4 m is the same region with scale
+[100, 50] (non-square pixels are the TZ's problem, not the design's). One number = one wall comp;
+every reusable look (splash background, waves, portal) is a SYS precomp used as a layer, so
+awards ×8, splash and the intro finale share one background build. Loops: rotation rates chosen so
+one loop = one blade pitch (15° for 24 blades over 40 s), Fractal Noise with Cycle Evolution = N
+revolutions and `evolution = time·360·N/T`, drifts as `sin(2π·time/T)`.
+
+## 125. Timing-aware generation briefs: chain frames, not prompts
+
+Five-second clips only serve a four-minute number when the brief carries the number's timeline:
+per segment tc_in/tc_out, which clip (loop bed vs event), and the exact start/end frames at the
+pipeline canvas (1536×672 for 21:9, 1024×1024 for 1:1). Events longer than 5 s are chains — clip
+k+1 starts with `--first <last frame of k>` (exact), and chains that must land on a designed
+picture (a loop's anchor, an AE handoff) end with `--last <anchor>` plus a 6–10 frame crossfade in
+the edit. Anchors that come from existing takes are extracted with ffmpeg at the pipeline
+resolution; anchors that come from the archive are graded per era first (sepia / cold BW /
+vintage / clean), because a start frame sets the look of the whole clip. Write the pack as data
+(`shots3.py` in the generator's own list format + `timeline.csv`) so the other agent queues it
+without re-reading prose.

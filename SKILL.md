@@ -152,6 +152,12 @@ follow `reference/deck-pipeline.md` — plugin-API dumps → `figspec.py` → `d
 `capture_film.py` → preview. Read every QA sheet before sending. Background art:
 `reference/art-kit.md`; the lessons: quirks #100–#119.
 
+## 5d. Multi-screen LED wall for an event (backdrop + wings), with generated beds
+
+One wall comp in physical pixels, per-screen delivery comps, SYS precomps for every reusable look,
+numbers laid out from a single timeline module that also writes the timing-aware generation brief:
+`reference/led-wall-pipeline.md`; lessons in quirks #120-#125.
+
 ## 6. Generation workflow
 
 1. Discover params (`GET /nodes*` via `gen.js`), match aspect/resolution to the comp.
