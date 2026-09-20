@@ -2087,3 +2087,12 @@ start. To tell a repeat from new material, correlate per-band log-energy feature
 windows: same section ≈ 0.15–0.28, unrelated ≈ 0.03. Tool: `tools/vocal_map.py` in the ODK project.
 Verified on a 4:04 anthem: intro 14.7 s, 2 verse blocks and 2 chorus blocks of 34 s each at 109 bpm
 (bar 2.20 s), every stanza landing on the measured boundaries.
+
+## 132. `M.capture` returns before the PNGs exist — never chain a cropper onto it
+
+`saveFrameToPng` queues the write; the call that follows it in the same shell line runs while AE is
+still flushing. A crop/compose step chained after a capture (`node ae.js … && python crop.py`) dies
+on `FileNotFoundError` for files the capture "returned", and a file that does exist may still be
+half-written. Wait on size-stable files first (`review_sheet.py` polls; or
+`until [ -f f ] && [ "$(stat -c%s f)" -gt N ]; do sleep 4; done` plus a few seconds of slack), then
+crop. Cost of ignoring it: a whole build round looks failed when only the cropper was early.
