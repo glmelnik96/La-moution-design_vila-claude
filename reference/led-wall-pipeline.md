@@ -96,3 +96,18 @@ the 1:59–2:20 gap) before a single word was placed by ear.
   from the first 1024-high wall and squeezed it to 512, so every circle became an ellipse and a
   black band appeared under the main screen. Two rounds went into doubting the render before the
   crop was checked. When the wall changes size, grep every tool for the old numbers first.
+
+## 8. The ceiling of procedural material (2026-09-20, ~23:00)
+
+Four passes on the same splash — gradients, two-tone shapes, faceted-and-brushed shapes, real
+extrusion with lights under Cinema 4D — and the verdict stayed «дженерик»; the user's own words:
+the question is not flat vs 3D. The director's references for the scene were photographs (macro
+brushed titanium, anisotropic highlights, warm/cool reflections, shallow focus, off-centre framing);
+a procedural fan, however shaded, is a *diagram* of that and reads as stock. Rule: read the scene's
+references before building its bed. Photographic references → brief a generated loop (or a real
+PBR render) for the bed first, and let AE own only what must be exact — type, emblem, cross-screen
+geometry, timing, award mechanics. Brief from the references' qualities, never their pixels (stock,
+© marks). Wall mapping for generated beds: 21:9 canvas 1536×672 → the middle 384 px band → ×1.333
+= MAIN 2048×512, key content and the white core inside that band; 1:1 canvas → wings 768 and the
+512×768 diagonals by centre crop; loops as first = last stills, AE cross-fade as the seam fallback.
+The procedural system stays as the placeholder and is presented as such.
