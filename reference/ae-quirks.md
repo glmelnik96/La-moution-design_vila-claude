@@ -2027,3 +2027,22 @@ without re-reading prose.
 `-0004` to −72 rotates the hue by 72° instead of desaturating: duotone book scans came out green and
 magenta and the mistake is invisible on neutral photos. Dump the effect once (name | matchName) before
 setting anything by number; the review captures caught it, the numeric result did not.
+
+## 127. `"text" + err` inside a catch throws its own error in ES3
+
+Concatenating an Error object to a string (`out.notes.push("skipped: " + e1)`) raises
+`Object of type Error found where a Number, Array, or Property is needed` — from INSIDE the catch,
+so the real cause is lost and the outer M.run reports the catch line. Always `String(e1)` (the
+cousin of quirk #1 for Arrays). Seen while probing an unknown effect (Polar Coordinates).
+
+## 128. Polar Coordinates: Interpolation is 0..1, Type of Conversion 1/2
+
+`ADBE Polar Coordinates-0001` (Interpolation, shown as %) takes 0..1 — `setValue(100)` throws
+"Value 100 out of range 0 to 1"; `-0002` Type of Conversion = 2 for Rect to Polar. Recipe for a
+brushed radial metal texture: Fractal Noise (Turbulent Smooth, scale width 14 / height 3000 →
+vertical streaks) → Polar Coordinates (1, 2) → the streaks become radial; track-matte by the blade
+alpha, Overlay ~25 %, rotate with the fan. Combined with per-blade stepped fills (7 strips across
+each blade, brightness peaking in the leading third, times an angular light factor), a hub shadow
+and a tip shade as matted Multiply solids, and a rim stroke offset 3 px in Screen, shape-layer
+blades read as machined metal — no gradient fills needed (shape gradient colours are not
+scriptable).
