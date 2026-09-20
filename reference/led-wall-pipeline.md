@@ -111,3 +111,26 @@ geometry, timing, award mechanics. Brief from the references' qualities, never t
 = MAIN 2048×512, key content and the white core inside that band; 1:1 canvas → wings 768 and the
 512×768 diagonals by centre crop; loops as first = last stills, AE cross-fade as the seam fallback.
 The procedural system stays as the placeholder and is presented as such.
+
+## 9. The swap point, and what a generated bed still needs from AE
+
+Build one precomp — `SYS splash bed` — that every scene using that background references (splash, the
+eight awards, the intro finale). Inside it: the procedural system at the bottom as the fallback, and
+above it the generated clips, picked up by prefix (`odk_S1loop_` → `odk_S1_`) with `importNewClips()`
+scanning the generation folder on every build. Nothing else changes when the clips land: one build
+and the whole show is on photography, and a missing clip degrades to the placeholder instead of a
+hole. Loop clips time-remap `time % d`; a non-loop take ping-pongs `u = time % 2d; u < d ? u : 2d - u`.
+
+What photography then needs from AE, none of which the generation can supply:
+- **A light pool under every type block.** Black type on a photographed fan is unreadable wherever
+  the frame is dark. A white solid with a wide elliptical mask (feather ≈ the radius) at ~78 % under
+  the main lockup and ~88 % on the wings restores the brief's "white centre, graphite edges" and
+  keeps the metal visible through it.
+- **Vignette calibrated to the wall, not the frame.** A radial multiply of radius 2150 on a 4608-wide
+  wall reaches the wings and kills them; 3400 with a 0.26 floor darkens only the outer edges.
+- **The narrow diagonals** fall into a dark band between the bright main screen and the wings —
+  give them their own low light fields (~46 %) or the wall reads as a hole.
+- **Mirror repeated square clips** on the wings/diagonals (`scale.x = -75`) so the same photograph
+  does not sit twice side by side.
+- **Vector overlays die on photography.** A 5 px red circle over a photographed core reads as a
+  sticker; the same accent as a 16 px stroke blurred 34 px at ~34 % reads as light on metal.
