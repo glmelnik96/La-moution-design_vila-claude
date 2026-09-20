@@ -2046,3 +2046,20 @@ each blade, brightness peaking in the leading third, times an angular light fact
 and a tip shade as matted Multiply solids, and a rim stroke offset 3 px in Screen, shape-layer
 blades read as machined metal — no gradient fills needed (shape gradient colours are not
 scriptable).
+
+## 129. Extrusion is script-writable only under the Cinema 4D renderer
+
+AE 26.3: with `comp.renderer = "ADBE Advanced 3d"` a 3D shape/text layer shows `Geometry Options`
+(`ADBE Extrsn Options Group`: Bevel Styles / Bevel Direction / Bevel Depth / Hole Bevel Depth /
+Extrusion Depth) and the values read fine, but every `setValue` throws "property or a parent
+property is hidden" — with or without the comp open in a viewer. Under `"ADBE Calder"` (the
+Cinema 4D renderer) Extrusion Depth and Bevel Styles/Depth set normally; Bevel Depth is hidden
+while Bevel Style = None (1), so set the style first (2 = Angular). Material Options: Ambient,
+Diffuse, Specular, Shininess, Metal, Casts Shadows are writable in both renderers; Reflection
+Intensity/Sharpness/Rolloff stayed hidden in both from script. `layer.environmentLayer = true`
+sets under Calder; `LightType.ENVIRONMENT` (4416) exists and a light accepts it under either
+renderer (whether Calder honours it is unverified). `collapseTransformation` on a nested 3D comp
+sets under Calder. Advanced-3D-only effects for volume (CC Light Rays / CC Particle World) render
+in any renderer — they are 2D effects; CC Particle World with default Particle Type draws line
+sparks, not dust. Ray-traced captures of a 4800 px extruded fan take minutes per frame: run
+captures in the background and poll.
