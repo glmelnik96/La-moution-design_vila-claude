@@ -134,3 +134,27 @@ What photography then needs from AE, none of which the generation can supply:
   does not sit twice side by side.
 - **Vector overlays die on photography.** A 5 px red circle over a photographed core reads as a
   sticker; the same accent as a 16 px stroke blurred 34 px at ~34 % reads as light on metal.
+
+## 10. Archive stills on a wall: one frame at a time, two speeds, no frames
+
+The brief said "анимируем архивные фотографии в формате параллакса… эффект бесконечного движения"
+and, explicitly, "не эффект фотоальбома". The first build read both words as decoration and produced
+the album: dozens of rectangles with drop shadows, several on screen at once, cropped by the wall's
+edges, with type sitting on the fragments. The client's note was immediate.
+
+What "параллакс" means for a still on a 4608×768 wall:
+- **One photograph at a time**, butted end to end with a 1.3–1.6 s cross-dissolve, 4–6 s of dwell
+  each. Fewer photographs, each actually seen, beats a flicker of everything the client sent —
+  compute how many fit at the target dwell and sample the era's list evenly for that many.
+- **Two layers of the same file at different speeds.** A blurred copy scaled to cover the whole wall
+  drifts slowly (no visible edge anywhere), and a sharp copy scaled to cover the main screen edge to
+  edge drifts three to four times faster, feathered ~7 % of its width so it melts into its own blur.
+  That reads as depth without a depth map and without distortion ("без сильных искажений").
+- **No borders, no drop shadows, no scattered placement.** The shadow is what makes a photograph
+  read as a print on a table rather than a memory.
+- Vertical crop: covering a 4:1 screen with a 4:3 original keeps a quarter of the frame, so offset
+  the hero up by ~35 % of the overflow (capped) — heads sit above centre in archive photographs.
+- Give each scene its own motion: a push-in with lateral drift for one number, a pure lateral travel
+  for the next, or the two numbers read as the same footage ("но другие, не такие же").
+- Interleave with the generated walk-throughs rather than stacking: shop clip, then stills, then the
+  portal. Each chapter becomes "we entered a shop, remembered, walked out".
