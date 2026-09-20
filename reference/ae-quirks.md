@@ -2019,3 +2019,11 @@ resolution; anchors that come from the archive are graded per era first (sepia /
 vintage / clean), because a start frame sets the look of the whole clip. Write the pack as data
 (`shots3.py` in the generator's own list format + `timeline.csv`) so the other agent queues it
 without re-reading prose.
+
+## 126. Hue/Saturation matchNames are off by one from the panel order
+
+`ADBE HUE SATURATION-0004` is **Master Hue**, `-0005` Master Saturation, `-0006` Master Lightness,
+`-0007` Colorize (`-0002` Channel Control, `-0003` Channel Range — there is no `-0001`). Setting
+`-0004` to −72 rotates the hue by 72° instead of desaturating: duotone book scans came out green and
+magenta and the mistake is invisible on neutral photos. Dump the effect once (name | matchName) before
+setting anything by number; the review captures caught it, the numeric result did not.
