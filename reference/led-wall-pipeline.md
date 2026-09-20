@@ -156,5 +156,12 @@ What "параллакс" means for a still on a 4608×768 wall:
   the hero up by ~35 % of the overflow (capped) — heads sit above centre in archive photographs.
 - Give each scene its own motion: a push-in with lateral drift for one number, a pure lateral travel
   for the next, or the two numbers read as the same footage ("но другие, не такие же").
+- **"Full frame" on a multi-screen wall means every screen, not the main one.** The first correction
+  was "sequential, not an album"; the second, immediately after, was "во весь кадр, включая боковые
+  экраны" — a sharp centre with a blurred bleed on the wings still reads as a fragment. Cover the
+  whole wall (`scale = max(W/w, H/h)`) and accept the crop: a 6:1 wall keeps about a fifth of a 4:3
+  original, so offset the frame up by ~18 % of the vertical overflow and say plainly which
+  photographs lose too much, offering a detail crop on the wings as the alternative. The blurred
+  copy underneath stops being scenery and becomes the cross-dissolve bed.
 - Interleave with the generated walk-throughs rather than stacking: shop clip, then stills, then the
   portal. Each chapter becomes "we entered a shop, remembered, walked out".
