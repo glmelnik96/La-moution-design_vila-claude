@@ -2073,3 +2073,17 @@ effect: add it to a throw-away solid, walk `numProperties` and print `matchName 
 remove the solid — ten seconds, and it ends the guessing that produced quirk #126. Used to lift a
 generated clip that arrived at mean 37/255 (Input White 0.62, Gamma 1.4 on the layer — grade at
 the layer, do not re-generate for exposure).
+
+## 131. Reading a song's structure without listening: centre extraction + bar grid
+
+To place lyrics/section text on a track you cannot hear, do not threshold the waveform — music is
+loud everywhere. Estimate the vocal instead: per FFT bin, `C = max(0, |mid| - |side|)` where
+`mid = (L+R)/2`, `side = (L-R)/2` (lead vocals are centre-panned, instruments are spread), sum `C`
+over 300–3400 Hz on 50 ms frames. Sung phrases then separate cleanly from instrumental bars, and a
+gap sweep gives first the sections (gap ≈ 2 s) and then the individual lines (gap ≈ 0.6 s). Take the
+beat period from the autocorrelation of the spectral flux over lags 0.3–1.2 s; lines of a verse
+almost always sit on a 2-bar grid, so `line = 2 * 4 * beat` places every line from one section
+start. To tell a repeat from new material, correlate per-band log-energy feature vectors of two
+windows: same section ≈ 0.15–0.28, unrelated ≈ 0.03. Tool: `tools/vocal_map.py` in the ODK project.
+Verified on a 4:04 anthem: intro 14.7 s, 2 verse blocks and 2 chorus blocks of 34 s each at 109 bpm
+(bar 2.20 s), every stanza landing on the measured boundaries.
