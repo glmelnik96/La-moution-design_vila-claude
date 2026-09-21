@@ -191,3 +191,20 @@ The build that fits:
   parallax the brief asked for.
 - Ask before inventing pixels on historical material: extending archive photographs by outpainting
   is a client decision, not a production shortcut.
+
+
+## 12. One image across the wall beats five sharp panels
+
+Two separate corrections landed on the same point and it is worth stating plainly: on a segmented
+LED wall the audience reads **one picture**, not five screens. Both of the arrangements that seemed
+reasonable were rejected on sight — a sharp centre with blurred spill on the wings ("кусками и с
+блюром — ужасно"), and five sharp panels each carrying a different take of the same room. What was
+accepted: the clip scaled to cover the entire canvas (`scale = max(W/w, H/h)`), no mask, no spill,
+no per-screen composition, with the overlays full height and sharp on top of it.
+
+The cost is an upscale: a 1536-wide generation on a 4608-wide wall is 3×, against 1.33× when the
+backdrop is masked to its own screen. That trade is usually right — LED pitch and viewing distance
+swallow the upscale, while a visible seam or a blurred wing is noticed from anywhere in the hall.
+Say the number out loud when proposing it, and generate at the widest canvas the pipeline offers so
+the factor stays as low as possible. Corollary: square "wing" takes are only worth generating if the
+design really is per-screen; check that before spending hours of GPU on them.
