@@ -2128,3 +2128,15 @@ Catch it by asserting on the written text (`assert "\x08" not in src`) and by re
 through `cat -A` rather than a normal view. Prefer character classes with no short escapes
 (`[0-9]` over `\d`) in generated regexes, and keep any regex that must survive two levels in a
 separate constant rather than inline in the patch string.
+
+## 136. Timing a narrated film: transcribe it, do not listen for pauses
+
+An envelope/pause analysis finds where speech stops; it cannot tell you *what* stops, so a chapter
+boundary and a breath look identical. `faster-whisper` runs locally (large-v3, int8 on CPU, ~80 s for
+a 4.5-minute track, models already cached under `~/.cache/huggingface/hub`) and returns word-level
+timestamps, which give the boundary as the first word of the next chapter — exact and re-checkable.
+Two traps: whisper merges a long musical gap into the preceding segment, so read the *word* times,
+not the segment start (a segment beginning at 119.35 s had its second word at 143.54 s — the 24 s
+gap was the film's key transition); and VAD occasionally emits a stray one-word fragment at the gap
+start. Tool: `tools/transcribe.py`. Use it to compare two versions of a track as well — align the
+per-second RMS envelopes first to find *where* they differ, then read the transcripts only there.
