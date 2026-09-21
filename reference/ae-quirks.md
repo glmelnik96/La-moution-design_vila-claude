@@ -2116,3 +2116,15 @@ anchored match, not a prefix: build it from the id and the known tier names,
 a string fine. Cheap rule: whenever generated assets are looked up by name, the lookup must be able
 to say no to a longer id, and the build log should print which file each slot resolved to so the
 mismatch is visible without opening the comp.
+
+## 135. A `\b` written through a code-generating patch becomes a real backspace byte
+
+Patch scripts that rewrite emitters are the usual way to evolve a build, and they are one escaping
+level deeper than the code they write. A regex `\b` that loses one backslash on the way through a
+non-raw string is not a syntax error: Python writes byte 0x08 into the file, the emitter still runs,
+the regex silently matches nothing, and the only symptom is a slot that never fills. Two other
+escapes on the same line (`\s`, `\d`) survived, so the file "looked" right in an editor.
+Catch it by asserting on the written text (`assert "\x08" not in src`) and by reading the result
+through `cat -A` rather than a normal view. Prefer character classes with no short escapes
+(`[0-9]` over `\d`) in generated regexes, and keep any regex that must survive two levels in a
+separate constant rather than inline in the patch string.
