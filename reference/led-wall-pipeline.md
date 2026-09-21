@@ -226,3 +226,10 @@ quality decision.
 
 Both checks are three lines of Pillow over the file list and belong in the emitter, next to the
 layout, rather than in a reviewer's eye.
+
+A fixed bias still fails the common documentary frame where faces sit at a fifth of the height and
+the rest is bodies: any single band is wrong. Animate the band instead — start it at ~0.30 of the
+height and crane down to ~0.52 across the shot's dwell, smoothstepped. The audience sees faces
+first and the room after, the whole photograph gets used, and the move reads as an intended camera
+rather than as a crop. It also gives a still the "picture itself is moving" quality a wall needs,
+without any zoom.
