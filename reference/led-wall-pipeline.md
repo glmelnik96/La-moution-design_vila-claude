@@ -208,3 +208,21 @@ swallow the upscale, while a visible seam or a blurred wing is noticed from anyw
 Say the number out loud when proposing it, and generate at the widest canvas the pipeline offers so
 the factor stays as low as possible. Corollary: square "wing" takes are only worth generating if the
 design really is per-screen; check that before spending hours of GPU on them.
+
+## 13. Two numbers to check before a source goes full-wall
+
+Filling a 4608×768 wall with one image turns every source's own resolution and aspect into a visible
+quality decision.
+
+- **Upscale factor.** `4608 / source_width` must stay under about 3.2. Generated clips at 1536 give
+  3.0 and hold; an archive scan at 1960 gives 2.35 and holds; a 510-px scan gives 9 and is mush on a
+  wall. Measure the whole set before building, not after: in one number four files out of
+  thirty-nine were below the line, and swapping them for equally suitable wide frames from the
+  unused pool cost minutes, while noticing it from a capture cost a review round.
+- **Crop bias by aspect.** A 6:1 window keeps roughly a fifth of a 4:3 frame and a seventh of a
+  portrait, so a fixed "shift up 18 %" decapitates tall scans. Bias the crop centre by aspect
+  instead: ~0.46 of the height for landscape, ~0.42 for near-square, ~0.34 for portrait. Heads,
+  machine tops and building rooflines all sit above centre in archive photography.
+
+Both checks are three lines of Pillow over the file list and belong in the emitter, next to the
+layout, rather than in a reviewer's eye.
