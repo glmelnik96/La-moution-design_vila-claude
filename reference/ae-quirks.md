@@ -2152,3 +2152,15 @@ Rules: never `setValue` a property you may have keyframed — branch earlier and
 element at all; and when a build loops over sibling comps, check the layer list of the LAST comp in
 the loop, not the first, before trusting a capture. `M.summary` or a layer-name probe catches it in
 seconds. Related to quirk #1 (`setValue` after keyframes) but the damage here is the aborted loop.
+
+## 138. Two emitters that both own a comp: the later build silently empties it
+
+`numbers_jsx.py` laid out every number from the timeline, and the hymn was in its list; `n4_jsx.py`
+built the hymn in full (39 photographs, lyrics, scrims). Each starts its comp with `M.use(c);
+M.clean();`. Whichever ran last won, so a day of edits ended with the hymn comp holding two layers
+and no error anywhere — the numbers pass had "successfully" laid out a segment that says only
+"AE builds this". Ownership of a comp must be exactly one emitter; a shared list (here `LAYOUT`) is
+where that gets violated by accident. The cheap detector is a health probe after a build session:
+list every delivery comp with size, duration and layer count, and look for the outlier — one comp
+with two layers among comps with twenty stands out instantly, where a capture of a single frame
+would have looked merely dark.
