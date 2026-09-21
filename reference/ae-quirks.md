@@ -2164,3 +2164,88 @@ where that gets violated by accident. The cheap detector is a health probe after
 list every delivery comp with size, duration and layer count, and look for the outlier — one comp
 with two layers among comps with twenty stands out instantly, where a capture of a single frame
 would have looked merely dark.
+
+## 139. A 3D layer under a camera needs its POSITION compensated for depth, not just its scale
+
+LIVE-VERIFIED 2026-09-22 (ODK-Saturn pre-show). With the camera at `-CAMZ` looking at the `z = 0`
+plane and zoom `CAMZ`, a layer at depth `z` is magnified by `CAMZ / (CAMZ + z)` — and so is its
+offset from the centre of the comp. Compensating only the scale leaves the composition wrong:
+a fragment authored at `x = 4060` on a 4608-wide wall at `z = -580` projects to 4622 and is gone.
+
+WRONG
+```js
+var k = 100 * (targetH / cropH) * (CAMZ + z) / CAMZ;   // size is right
+M.pos(L).setValue([x, y, z]);                          // position is not
+```
+RIGHT
+```js
+var dp = (CAMZ + z) / CAMZ;
+M.scale(L).setValue([100 * (targetH / cropH) * dp, ...]);
+M.pos(L).setValue([CX + (x - CX) * dp, CY + (y - CY) * dp, z]);   // lands where it was composed
+```
+Drift amplitudes written into the position expression need the same `* dp`, or near layers crawl
+and far ones barely move. Scatter particles the same way: generate SCREEN x/y, convert on the way
+in, and leave the scale alone so far motes stay small and near ones blur out in the DOF.
+
+## 140. A mask feather wider than the gap to the layer edge is cut off there — a hard seam
+
+LIVE-VERIFIED 2026-09-22. A 700x1400 solid with a full-bleed rectangular mask and feather 340
+does not fade out: the feather is clipped at the layer boundary and the result is a hard diagonal
+edge across the wall, which reads as a render bug. The layer has to be bigger than its mask.
+
+WRONG `M.solid(n, c, 700, 1400)` + mask `[[0,0],[700,0],[700,1400],[0,1400]]`, feather 340
+RIGHT `M.solid(n, c, 1500, 2000)` + mask `[[420,320],[1080,320],[1080,1680],[420,1680]]`, feather 300
+
+## 141. A mask lives in LAYER space: on a scaled layer, comp coordinates put it somewhere else
+
+LIVE-VERIFIED 2026-09-22 (ODK-Saturn splash). The active band of the wall is x 768..3840, so the
+mask on the texture layer was given those vertices — but that layer is a clip scaled ~300% and
+shifted, and the mask scales with it. The right edge landed at 4248 and painted the side screen
+that was supposed to be off. It is invisible in a thumbnail: brighten the band 6x to see it.
+
+```js
+function bandMask(L, cx0, cx1) {                 // comp x -> layer x
+  var px = M.pos(L).value, sc = M.scale(L).value[0] / 100, an = M.anchor(L).value;
+  var lx0 = an[0] + (cx0 - px[0]) / sc, lx1 = an[0] + (cx1 - px[0]) / sc;
+  ...
+}
+```
+Check it by measuring, not by eye: `Image.crop(band).getextrema()[1]` per captured frame. A value
+that is identical on every frame is a static leak; one that changes is something drifting in.
+
+## 142. CC Light Sweep is the metallic glint, and it must leave the layer between passes
+
+LIVE-VERIFIED 2026-09-22. Params are ordinary match names: `CC Light Sweep-0001` Center,
+`-0002` Direction, `-0003` Shape (2 = smooth), `-0004` Width, `-0005` Sweep Intensity,
+`-0006` Edge Intensity, `-0007` Edge Thickness, `-0008` Light Color, `-0009` Light Reception
+(2 = composite). Center is in LAYER space, so drive it from `L.source.width/height`.
+
+A cyclic scene must not pulse, so run the band across in the first quarter of the cycle and let
+it sit off the layer for the rest — off the layer means nothing on screen at all, no fade needed:
+```js
+e.property("CC Light Sweep-0001").expression =
+  "var T = 8, ph = 0; var u = ((((time - ph) % T) + T) % T) / T;" +
+  " var s = Math.max(0, Math.min(1, u / 0.26)); var k = s * s * (3 - 2 * s);" +
+  " [" + (-0.45 * sw) + " + k * " + (1.9 * sw) + ", " + (sh / 2) + "]";
+```
+Width above ~10% of the logo reads as a wash over dark type, not as metal. Narrow it and pay for
+the read with Edge Intensity instead.
+
+## 143. A 120 s CDP timeout is not a modal: check the CPU before you stop
+
+LIVE-VERIFIED 2026-09-22. `ae.js` defaults to a 120 s CDP timeout and a 171 KB build (40 extruded
+blades plus eight award comps) takes about four minutes, so it reports the modal-dialog error
+while AE is working perfectly. The script keeps running inside AE after the client gives up.
+
+Tell the two apart before applying quirk #25: `Get-Process AfterFX` and compare
+`TotalProcessorTime` across a 12 s window. A full core busy plus `Responding = True` means it is
+computing; a title bar that loses its `*` means `app.project.save()` at the end of the run landed.
+The fix is `node scripts/ae.js --lib --timeout 540000 "@file.jsx"`, not a retry.
+
+## 144. On an LED wall, small dark dots read as dead pixels
+
+LIVE-VERIFIED 2026-09-22. A dust pass built as MULTIPLY dots of 2-6 px at 12-26% over a white
+field is invisible in the render and reads as broken hardware on the wall. Bright motes on ADD
+are self-masking instead: over a white field ADD changes nothing, so they only appear where the
+picture is dark, and no mask is needed. Clamp their drift to the active band all the same —
+an ADD dot that wanders onto a screen which is meant to be off is a lit pixel on black.

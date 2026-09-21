@@ -233,3 +233,27 @@ height and crane down to ~0.52 across the shot's dwell, smoothstepped. The audie
 first and the room after, the whole photograph gets used, and the move reads as an intended camera
 rather than as a crop. It also gives a still the "picture itself is moving" quality a wall needs,
 without any zoom.
+
+## 14. A scene that uses only part of the wall
+
+A segmented wall gives you the option of leaving panels dark, and a layout borrowed from print
+often wants exactly that: on the ODK-Saturn splash only the two diagonals and the backdrop carry
+the image, and the two side panels stay off. Three things follow.
+
+**Cut on the seam, not near it.** The boundary of the active band should be the physical join
+between panels — there it is invisible, and no feather is needed. A soft edge of even 26 px
+straddles the seam and puts a grey sliver on a panel that is supposed to be black. Measure the
+dark bands per captured frame rather than trusting the thumbnail: `crop(band).getextrema()[1]`
+over a handful of frames. A value that is the same on every frame is a static leak; one that
+moves is an element drifting in. Zero on one side and 104 on the other is a bug, not a look.
+
+**Anything that drifts needs a hard boundary.** Particles, sweeps and light fields authored in
+comp coordinates will wander off the band. Clamp the coordinate inside the expression
+(`Math.max(800, Math.min(3820, px))`) rather than relying on a generous starting position.
+
+**Dark speckle is not dust, it is broken hardware.** Small dark dots on a light field read as
+dead pixels at wall scale. Build atmosphere out of bright motes on ADD instead: over a white
+field ADD changes nothing, so they appear only where the picture is dark and need no mask at all.
+For real depth, give the motes a comp camera — 3D layers plus depth of field produce genuine
+parallax and bokeh, which no 2D overlay imitates; without a camera, breathe their scale with
+their opacity and the eye reads it as depth anyway.
