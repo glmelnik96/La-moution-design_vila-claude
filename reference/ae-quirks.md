@@ -2140,3 +2140,15 @@ not the segment start (a segment beginning at 119.35 s had its second word at 14
 gap was the film's key transition); and VAD occasionally emits a stray one-word fragment at the gap
 start. Tool: `tools/transcribe.py`. Use it to compare two versions of a track as well — align the
 per-second RMS envelopes first to find *where* they differ, then read the transcripts only there.
+
+## 137. `setValue` on a keyframed property aborts the whole build, silently mid-loop
+
+Hiding an element by `M.opacity(L).setValue(0)` after something already animated it (here
+`M.premiumIn` had written opacity keys) throws inside the loop that was building eight award comps.
+The run still reported `ok: true` from an outer handler, the first comp kept the layers made before
+the throw, and comps 3–8 silently kept the *previous* build's layers because their `M.clean()` never
+ran — so the review sheet showed a mix of new and stale frames and looked like a lookup bug.
+Rules: never `setValue` a property you may have keyframed — branch earlier and don't create the
+element at all; and when a build loops over sibling comps, check the layer list of the LAST comp in
+the loop, not the first, before trusting a capture. `M.summary` or a layer-name probe catches it in
+seconds. Related to quirk #1 (`setValue` after keyframes) but the damage here is the aborted loop.
