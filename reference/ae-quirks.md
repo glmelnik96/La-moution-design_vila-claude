@@ -2249,3 +2249,58 @@ field is invisible in the render and reads as broken hardware on the wall. Brigh
 are self-masking instead: over a white field ADD changes nothing, so they only appear where the
 picture is dark, and no mask is needed. Clamp their drift to the active band all the same —
 an ADD dot that wanders onto a screen which is meant to be off is a lit pixel on black.
+
+## 145. Box text wraps before you can measure it, so a type fit overshoots
+
+LIVE-VERIFIED 2026-09-22 (ODK-Saturn award plates). Fitting a long line into a panel by measuring
+`sourceRectAtTime` and scaling down does not converge: a box-text layer wraps inside its own box,
+so the measurement returns the WRAPPED block (width capped at the box, height doubled) rather than
+the real line width. An iterative shrink then chases the height guard and lands far too small — a
+60 px line came back at 45 px on one pass and stayed at 60 as two lines on another, depending only
+on how wide the box happened to be.
+
+Widen the box beyond any possible line, measure, then divide once:
+```js
+var doc = td.value; doc.text = txt; doc.fontSize = base;
+if (doc.boxText) doc.boxTextSize = [4000, boxH];       // no wrapping at any plausible size
+td.setValue(doc);
+var sr = L.sourceRectAtTime(L.inPoint, false);          // the REAL single-line width
+if (sr.width > maxW) size = Math.floor(base * maxW / sr.width);
+// apply size, nudge down 1 px while still too wide, then pin the box just outside the line
+```
+Checking width alone never detects wrapping — a wrapped block is narrower than the box. Check the
+height against the base size, or keep the box wide while measuring.
+
+## 146. `M.exprErrors()` reads M.comp: it throws in a payload that never called M.use
+
+LIVE-VERIFIED 2026-09-22. A surgical payload that edits existing layers and builds nothing has no
+reason to call `M.use`, and the habitual `out.errs = M.exprErrors();` at the end then fails with
+`TypeError: null is not an object` from inside the library — the reported line number is in the
+prepended lib, not in your code, which is what makes it confusing. Either drop the call or set a
+comp first.
+
+## 147. When the client finishes a comp by hand, the emitter has to be switched off
+
+LIVE-VERIFIED 2026-09-22. The award plates were built by an emitter step that does `ensure()` then
+`M.clean()` per comp. The client then finished plate 1 by hand — screen-frame guides, a different
+set of emblems, their own logo row, the corner emblem and the issuer placeholder deleted — and
+deleted plates 2-8. Re-running the emitter would have rebuilt the OLD layout and wiped all of it.
+
+Two moves, both required:
+- Guard the step off (`var BUILD_AWARDS = false;` plus a note in the output) so no later rebuild of
+  the same file can touch those comps.
+- Generate the siblings from the hand-finished comp instead: `ref.duplicate()`, rename, and change
+  only the wording. Read each text layer's settled centre BEFORE editing and restore it after, so
+  the layout stays exactly as the client left it.
+
+Before writing to a comp you did not build in this session, list its layers. Names like
+`emblem wing L 2` (an AE duplicate suffix) or a guide layer that your emitter never creates are the
+signal that a person has been in there.
+
+## 148. Quirk 135 again: a backslash escape does not survive the shell into a generated file
+
+LIVE-VERIFIED 2026-09-22. Writing `"\r"` inside a heredoc-fed Python patch produced a REAL 0x0D
+byte in the emitted source, breaking the string literal it landed in — the same failure as quirk
+135 with `\b`. Do not pass backslash escapes through a shell into code you are generating. Put a
+plain sentinel in the data and expand it in code: `c.replace("|", chr(13))`, and compare with
+`String.fromCharCode(13)` on the ExtendScript side. Assert the raw byte is absent before writing.
