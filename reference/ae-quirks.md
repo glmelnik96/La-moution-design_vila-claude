@@ -2304,3 +2304,57 @@ byte in the emitted source, breaking the string literal it landed in — the sam
 135 with `\b`. Do not pass backslash escapes through a shell into code you are generating. Put a
 plain sentinel in the data and expand it in code: `c.replace("|", chr(13))`, and compare with
 `String.fromCharCode(13)` on the ExtendScript side. Assert the raw byte is absent before writing.
+
+## 149. The closed link: how to make a long bed out of a short clip without a loop
+
+LIVE-VERIFIED 2026-09-22 (ODK-Saturn). A 5 s generated clip looped over a 160 s window repeats
+thirty-two times, and cross-dissolving the seams only turns the repeat into mush. The fix is not a
+better dissolve, it is a different structure — generate 15 s links whose ENDPOINTS are pinned to
+the local clip's endpoints:
+
+```
+link.firstFrame = local.lastFrame        (First Video Frame = <base>_last.png)
+link.lastFrame  = local.firstFrame       (Last  Video Frame = <base>_first.png)
+```
+
+Then `[local][link]` joins seamlessly on BOTH sides and needs no dissolve at all, and every extra
+link is a different road between the same two points. Five links turn a 5 s repeat into a 20 s
+cycle whose 15 s middle is new every time.
+
+Verify the pinning by measurement before you build on it: extract the link's first and last frame
+and compare the mean absolute difference against both anchors. Correct pinning showed 8 and 9
+levels against the right anchors versus 73 against the swapped ones. Under ~10 a four-frame fade
+hides the residue; a hard cut would show a small jump because the platform re-renders the endpoint.
+
+Links cannot be chained to each other: link N ends on `first` and link N+1 starts on `last`, which
+are different frames. The local take must sit between them, so the cycle is fixed at
+local + link.
+
+## 150. Place a sequence of shots, not a loop: slots, natural speed, four-frame joins
+
+LIVE-VERIFIED 2026-09-22. Replacing eleven looped 5 s corridor clips with twenty-two 15 s takes
+removed every loop from a 253 s film. The placer that worked:
+
+- a block of the timeline gets an ordered LIST of shots; slot = block length / count;
+- if slot <= clip duration, play at natural speed and let the clip stop early (trim);
+- if slot > clip duration, stretch, but never speed up — a hurried dolly reads as nervous.
+  Choose the shot count so the stretch stays above ~0.9;
+- the join is a four-frame fade on the INCOMING layer over the outgoing one (`outPoint = a1 + 0.08`,
+  opacity `100 * Math.min(1, u / 0.08)`). It reads as a cut and kills a luminance flash;
+- assert in the emitter that no shot id appears twice in the table. That single assertion is what
+  guarantees "no repeats" instead of hoping.
+
+A full-wall white flash on a transition must be short: 0.18 s in, 0.32 s out, peak ~88 rather than
+100. Held at full white for 0.7 s it reads as the blink the client complained about.
+
+## 151. A shot's description is not evidence: look at the frames before you cut it in
+
+LIVE-VERIFIED 2026-09-22. Two clips whose prompt carried the client's explicit "completely
+unmarked aircraft" sentence came back with red stars on the fuselage and with a national flag plus
+a registration number on the tail. The generation platform silently ignores part of a prompt, and
+the index file only records the id, the size and the duration.
+
+Before placing any generated shot that shows hardware, extract three frames — start, middle, end —
+with `ffmpeg -vf "select='eq(n\,30)+eq(n\,200)+eq(n\,370)',tile=1x3"` and look at them. Two of the
+five aircraft takes in this batch were unusable, and the description of one of them ("цех, две
+фигуры у станков") turned out to be a modern blue-lit hall that would have sat in a 1916 chapter.
