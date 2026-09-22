@@ -2358,3 +2358,27 @@ Before placing any generated shot that shows hardware, extract three frames — 
 with `ffmpeg -vf "select='eq(n\,30)+eq(n\,200)+eq(n\,370)',tile=1x3"` and look at them. Two of the
 five aircraft takes in this batch were unusable, and the description of one of them ("цех, две
 фигуры у станков") turned out to be a modern blue-lit hall that would have sat in a 1916 chapter.
+
+## 152. Archive stills as a memory: a feathered oval, a ceiling on the whites, and headroom
+
+LIVE-VERIFIED 2026-09-22 (ODK-Saturn intro and hymn). The client asked for the photographs to lie
+on the wing screens "like the drawings, as a memory, a bit abstract, and the frame edges must not
+read". Three things made it work, and two of them were mistakes first.
+
+**An oval, not a rectangle.** A rect mask with a big feather still reads as a frame, because the
+corners give the eye a shape to latch onto. An ellipse with a feather of ~26 % of the short side
+dissolves the photograph into the dark on every side. Keep the oval AND its feather inside the
+layer bounds — `rx = w/2 - feather*0.62` — or the feather is clipped at the edge and hands back
+the hard line you were removing (quirk 140).
+
+**No bloom.** `ADBE Glo2` over that oval looked right on a dark photograph and blew a bright one
+into a white patch, which also destroyed the legibility of the lyric text sitting on the wing. A
+ceiling on the whites does the job instead: `ADBE Easy Levels2` output white 0.82, gamma 1.08. The
+wing then physically cannot out-shine the centre.
+
+**Headroom when a full-wall image becomes a band.** The same still that used to cover 4608 px at
+2.25x covers a 3072 px band at 1.5x, and the vertical overflow that used to hide the scan's own
+dark border is gone — the border appears inside the frame as a rectangle. Do not answer that with
+a soft edge: at a panel seam a soft edge spills onto a screen that now shows something else.
+Answer it with scale: `cov = max(band / w, (H + 220) / h)`, so the scan's edge is always outside
+the visible band and the crane still has room to travel.
