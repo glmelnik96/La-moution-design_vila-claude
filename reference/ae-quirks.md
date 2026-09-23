@@ -2893,3 +2893,7 @@ screens re-centred at y 64..832).
   the emblem's edge at x 243 when its dark edge was at 194, and the enter animation carries it further left
   than the hold. Scale the text column as a group on a pivot null (per-screen fit to the edge margin) so
   the title keeps its weight next to the bigger picture.
+- A taller window also uncovers CUTS that used to sit on the old screen edge: the client's white glow was
+  a 2048x512 solid whose mask feather (187 px) ran past its top edge — hidden while that edge was the top of
+  the 512 strip, a hard line (-36 levels) inside the 896 MAIN. Pad such solids (+300 px each side, anchor
+  and mask vertices shifted by the same amount, `replaceSource`) so every feather ends inside its layer.
