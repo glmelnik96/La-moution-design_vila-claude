@@ -2933,3 +2933,44 @@ LIVE-VERIFIED 2026-09-24 (ODK-Saturn pre-show: 60 -> 180 s loop plus a slogan "�
   Everything before it had been applied. The error line counts from the start of the COMBINED script:
   es-json + tokens + cloudru-motion = 1131 lines in front of the payload, so line 910 = lib line 716
   (`M.comp.numLayers`). Subtract the prelude lengths before hunting in the payload.
+
+## 181. A number re-cut from chained generations: joins, reversals, a hero at the frame edge, five AE traps
+
+LIVE-VERIFIED 2026-09-24 (ODK-Saturn «Мы — дети галактики», 227 s: dark space -> clock -> galaxy -> Da Vinci
+in a golden ring -> the ring turns into a turbine; the client's Seedance clips plus AE-built transitions).
+
+- **Measure the joins before planning.** Clips generated from first/last-frame anchors chain frame to frame.
+  Diff the first and last frames of every pair (small, grey): the same frame measured 0.5-3.8 levels, a
+  foreign one ~40.
+  - Cut on those joins; no dissolves are needed.
+  - A clip whose first frame equals its last loops with `time % d`.
+  - A clip that ends elsewhere (8 levels here) plays forward and then back, which returns it to its anchor.
+- **A generated transition played backwards is a new transition.** "Da Vinci -> galaxy" reversed became
+  "galaxy -> the ring forms". Its hero changes size inside the source (ring radius ~905 px at 4 s, 527 at
+  1.9 s, 413 at 0), so a portal mask on a fixed curve cut the ring off. Key the mask to the hero's measured
+  size at each source second, a little wider than hero plus glow.
+  - Hold the reversed clip at the backdrop's cover scale until the move starts, so the cut in is seamless
+    and the frame edges never show.
+  - Do the whole fly-in inside one bar, landing on the downbeat.
+- **A hero tight against the source frame edge.** Here the ring top sits 16 px under the frame top and its
+  glow is cut there. No mask hides that without dimming the ring. Scale the layer so the source's cut edge
+  lands exactly on the screen's physical edge: 448 - 429 * s = 0, so s = 104.43 %.
+- **No Twirl on an adjustment layer over a 5:1 wall.** It pulls the empty space above and below the comp into
+  the picture as black crescents. For a rush between scenes use:
+  - over-scaled layers (135 % over cover), turned no more than 10° so they still cover;
+  - a ZOOM-type Radial Blur, which samples toward the centre. Spin samples along arcs that leave the frame.
+- **Traps:**
+  1. Removing EVERY Time Remapping key switches remapping off. The next `setValueAtTime` throws "the property
+     or a parent property is hidden". Add your keys first, then delete the default ones.
+  2. Levels (`ADBE Easy Levels2`) parameters take neither keys ("canVaryOverTime is false") nor expressions
+     in AE 26; static values still work. Animate brightness with Brightness & Contrast 2 (`property(1)`).
+  3. Shift Channels "alpha from luminance" rewrites alpha AFTER the masks. The masked-out black, inverted,
+     turned white and filled the frame. For ink over a picture, push the paper to white with Levels and
+     use Multiply.
+  4. Removing mask 1 of [Add circle, Intersect rect] leaves the Intersect first. A new Add mask then unions
+     with the rect, which is the whole frame. Clear all masks before re-masking.
+  5. In a loop that removes items by name, `break` after `remove()`. The next name check throws "Object is
+     invalid".
+- **The agent's Write tool decodes `\uXXXX` in file contents into real characters.** Inside a string that
+  only warns; in a regex literal the lint rejects it ("non-ASCII in code"). Match Cyrillic names with
+  strings and `indexOf`, or emit the JSX from Python with `ensure_ascii`.
