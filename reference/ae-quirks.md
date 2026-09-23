@@ -2533,3 +2533,109 @@ an effect on a text layer that carries the same animator:
   `first` = words on the previous lines. Percent units cannot do this: the ramp is capped at 100 %,
   so a three-word title staggers 0.33 s and a nine-word one 0.12 s.
 
+## 162. A door transition: fly back out of one room into the next
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn "5 интро", 39 transitions). The outgoing shot stays inside an
+arch and the arch recedes into the incoming shot, so the camera seems to fly backwards out of one
+room into another. All archive generations were pull-backs, so the move always reads as one motion.
+
+- A null at the vanishing point; the outgoing layer is parented to it and track-matted
+  (ALPHA) by an arch-shaped shape layer that is also parented to the null.
+- Scale the null in LOG space: `k = exp(log(s1) * ease(u))`. A linear scale from 1 to 0.1 spends
+  90 % of the time on the first half of the move and looks like a snap at the end.
+- The arch frame is an OPEN path (a door has no line on the floor; a closed arch read as a window).
+  Keep its stroke constant on screen: `width / (parent.transform.scale[0] / 100)`.
+- Depth: a blurred open-path shadow around the opening (32 % max; 58 % read as dirt) and an Add
+  radial light spilling out of the doorway; the incoming room arrives 1.22x and slightly dark
+  (Brightness & Contrast keys -34 -> 0) and pulls back to 1.0 with ease-out.
+- Chapter changes get a wide gate instead of a door; the propeller-to-turbine moment gets a circle.
+
+## 163. Things that failed in AE 26 and what worked instead
+
+LIVE-VERIFIED 2026-09-23.
+
+- `ADBE Easy Levels2` parameters refuse expressions: "Can not set expression or expressionEnabled
+  on this property." Key them, or use `ADBE Brightness & Contrast 2` / keys.
+- A luma matte built from a duplicate of the layer with `ADBE Threshold2` on it rendered solid black
+  (solo render: rgb mean 0), so the "develop" reveal showed the whole photo at once. What works:
+  `ADBE Gradient Wipe` on the layer itself, Gradient Layer = its own index, Invert Gradient on,
+  Completion from max to 0 — the darkest tones appear first, like a print in the developer.
+  Its Softness is 0..1, not percent (28 -> "out of range 0 to 1"); read Completion's range from
+  `hasMax / maxValue` instead of assuming 100.
+- `layer.duplicate()` copies the parent AND the track matte. Make every copy of a shot BEFORE you
+  hang it on a door null and matte it, or the copies silently inherit both.
+- A shot split into two layers (one part under a circle matte, one part carrying the exit door)
+  must keep one clock: write the time remap against a constant start, `time - 139.18`, never
+  `time - inPoint`, because the second part's in-point differs.
+- ES5 `.indexOf` on strings works in AE 26 despite the linter warning; arrays still need a loop.
+
+## 164. Lettering that draws itself without installing the font
+
+LIVE-VERIFIED 2026-09-23 (508 letters, Tektur OFL). Convert glyphs to AE shape paths in Python
+with fontTools and never touch the system font folder or restart AE:
+
+- `instancer.instantiateVariableFont(font, {"wdth": 75, "wght": 620})`, then draw each glyph with a
+  BasePen; quadratic TrueType segments become cubic exactly: `c1 = p0 + 2/3 (q - p0)`,
+  `c2 = p + 2/3 (q - p)`. AE tangents are relative to their vertex; flip y (`base - y * k`).
+- A drafting slant is a shear: `x + tan(15 deg) * y` in font units, before scaling.
+- Kerning lives in GPOS PairPos (format 1 pair sets, format 2 class pairs), often wrapped in
+  Extension lookups (type 9 -> `ExtSubTable`). Without it "ТЬ" and "АТ" gape.
+- Per letter: a "pen" group (Trim Paths end 0 -> 100 over 0.24 s, stroke 2.2 px, then fades) and an
+  "ink" group (fill, group opacity 0 -> 100 from +0.12 s). Guide lines ruled 0.5 s before the first
+  letter make it read as drafting. Time each word to the transcript word, letters staggered 35-90 ms.
+
+## 165. Generated "archive" clips: they inherit the photo and invent the rest
+
+LIVE-VERIFIED 2026-09-23. The client's folder of animated archive photos (Kling/Seedance
+image-to-video) is only as safe as its source photos plus whatever the model adds:
+
+- an animated Victory-train photo carried the original's portrait of Stalin on the locomotive;
+- an animated engine-installation photo gained dark chevrons on the wing that read as markings;
+- a clean frontal Li-2 had a background plane with a tail emblem entering after 5 s — solved by
+  capping the source time (`maxsrc`) instead of dropping the shot.
+
+Check three frames of EVERY clip you place (start, middle, the last frame you will actually reach),
+and check the band crop, not the full frame. And check a real scan before using it full-bleed: a
+2048x1041 archive scan at 1.5x on the main screen fell apart into black blotches; a cleaner
+2048x1228 scan of the same era held up.
+
+## 166. A door that never shows the clip's edges: sweep in, hold, fly back, with parallax
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn "5 интро", replaces the door of quirk 162). The first door
+parented the outgoing shot to the door and matted it with the arch: a tall arch over a 2.35:1 clip
+left the clip's top and bottom edges visible inside the arch — "a crooked crop". The client's fix,
+which works: the door appears first and covers the edges, then flies back.
+
+- The door is a doorway in the NEW room: an arch-shaped matte on the outgoing shot plus an opaque
+  casing (graphite stroke along the arch, width in door-local units so it scales with the door).
+  At scale 1 the opening contains the whole band (check the band corners against the arch circle,
+  not just the jambs: a semicircle of radius 1600 cut the top corners of a 3072x768 band; 1760 did not).
+- Door scale in log space as a sum of three smooth terms — sweep in (ease-out to ~0.42), a slow
+  drift through the hold (x0.92), fly back (ease in-out to ~0.06). A sum of smooth ramps has no
+  velocity jumps, unlike piecewise segments with a flat hold.
+- The outgoing room sits DEEPER than the doorway: parent it to its own null whose scale follows the
+  door by perspective, `sR = K / (K + (1/sD - 1))`, K = 8. The room shrinks slower than the door,
+  so the opening keeps showing the middle of the room and its edges stay hidden. Add a floor:
+  `sR = max(sR, need)` where `need` is the visible part of the opening (clamped to the band) over
+  the room's half extents (minus / plus its vertical framing shift), with 3 % margin.
+- Parenting compensation uses the comp's current time: set `comp.time = 0` (where every null is at
+  scale 1) before `layer.parent = null`, then set the child's position explicitly.
+- Stack per transition: casing, inner shade (on the old room), old room (matted), light spill and
+  outer shade (on the new room), new room.
+
+## 167. Effects on shape layers do not scale with the parent
+
+LIVE-VERIFIED 2026-09-23. Shape layers are continuously rasterised: their effects run after the
+layer transform, in comp pixels. A Gaussian Blur on a shape layer parented to a shrinking door keeps
+its screen radius — a 150 px shadow blur on a door shrunk to 190 px swamps it. Drive the radius by
+the parent's scale: `base * thisLayer.parent.transform.scale[0] / 100`. Solids and footage (not
+continuously rasterised) apply effects in layer space and scale on their own.
+
+## 168. A soft glow without edges: radial ramp to black on an oversize layer in Screen
+
+LIVE-VERIFIED 2026-09-23. A halo made as a feathered ellipse mask on a small solid showed straight
+horizontal edges on the wall (the feather reached the layer bounds, quirk 140). Robust recipe: a black
+solid larger than the frame, `ADBE Ramp` radial from white at the centre to black at the radius you
+want, blend Screen, and squash it with a non-uniform scale for an ellipse. Black does nothing in
+Screen, so the layer's own edges can never show.
+
