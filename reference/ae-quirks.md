@@ -2438,3 +2438,48 @@ LIVE-VERIFIED 2026-09-23.
   15.09 and 14.21 on either side — the seam is a normal frame step.
 - Carry overlays across the loop by shifting the duplicate's `startTime` by `-comp.duration`: its
   fade-in keys fall into negative time and the layer holds its end state on 0..T/2.
+
+## 156. Blend modes over an empty comp background render as Normal: lay an opaque floor
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn "08 гимн"). The comp background colour is not a layer. Where
+nothing lies under a Multiply / Soft Light / Screen layer, it has nothing to blend with and is
+composited as Normal: a cool near-white Multiply tint over the black opening of a slideshow lit up
+as a pale slab (measured 99/255 against 0 without the glass layers; the Multiply tint alone
+accounted for 38 of it). In a comp whose footage always covers the frame this never shows; in a
+comp that opens from black, or has gaps, put an opaque black solid at the very bottom.
+
+## 157. Faces without a download: the Windows face detector from PowerShell, and framing by score
+
+LIVE-VERIFIED 2026-09-23. `Windows.Media.FaceAnalysis.FaceDetector` ships with Windows and is
+reachable from Windows PowerShell 5.1 through WinRT (`[Type, Namespace, ContentType=WindowsRuntime]`
+plus an `AsTask` helper to await `IAsyncOperation`). Gotchas, in the order they bite:
+
+- `BitmapDecoder.GetSoftwareBitmapAsync(Gray8, ...)` fails on PNG ("pixel format is unsupported").
+  Decode `Bgra8` + `Premultiplied`, then `SoftwareBitmap::Convert($bmp, Gray8)`.
+- On a whole 3136 px group photo it finds 0-3 faces: faces of 30-60 px are below what it detects.
+  Decode at 2x through `BitmapTransform` (`ScaledWidth/Height` + `Bounds` = one tile), 1600 px tiles
+  with 360 px overlap, detect per tile, map back by `/2`, merge duplicates by centre distance.
+  35 photos went from 1-8 found faces each to all visible faces.
+- It still reads a stage light or a portrait on a banner as a face: keep a per-image ignore band.
+
+Framing a 4:1 band out of a 21:9 photo (58 % of the height): head = face box from -0.35h to +1.12h
+(a -0.6h/+1.25h head made large foreground faces "not fit" and forced needless pans). Score every
+band position: a face fully inside counts +height, a face cut by the band edge -1.5 x height. Hold
+still at the best position that contains every "main" face (>= 35 % of the biggest); if none, retry
+without the push-in; only then pan, each end chosen by the same score so the edge passes between
+faces, and end on the biggest face. Run the pan from the cut to the START of the next pass: over
+the whole layer life the end framing arrived only under the next glass.
+
+## 158. Slideshow with glass passes: per-slide mattes, no holds; bloom that stays tasteful
+
+LIVE-VERIFIED 2026-09-23. With stills, the glass wipe of quirk 153 needs no frozen duplicates:
+every slide lives from the start of its incoming pass to the end of the outgoing one, and each
+slide has its OWN edge matte (ALPHA_INVERTED) that parks off-left before its pass and off-right
+after it. A shared matte cannot work here: parking it for the next pass would hide the slide on
+screen.
+
+On bright daylight photos `ADBE Glo2` at threshold 82 %, radius 90, intensity 0.28 already reads
+as haze, and a "hit" pulse to intensity 0.9 / radius 160 on a chorus cut washed the frame to white.
+Threshold 88, radius 60, intensity 0.18, pulse +0.22 / +30 px is visible and clean. A light sweep
+reads as gloss only with a crisp core: a soft band at 35 % mask opacity plus an 18 px core with an
+8 px feather, Add 30 %; the soft band alone read as fog.
