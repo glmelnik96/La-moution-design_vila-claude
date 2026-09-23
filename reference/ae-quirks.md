@@ -2754,3 +2754,57 @@ LIVE-VERIFIED 2026-09-23 (ODK-Saturn: 104 comps and 26 folders renamed to the cl
 - Tooling trap: `\uXXXX` typed into a bash heredoc that writes a Python patch arrived as real
   Cyrillic in the emitter. Put non-ASCII values through `json.dumps` placeholders in the emitter
   (as it already did for its other names) and write patch scripts with a file tool, not a heredoc.
+
+## 174. A generated "loop" that starts and stops: retime it to constant speed from its own motion profile
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn diagonal turbines, `S1sq_loop`, 24 fps, 124 frames, first ~ last).
+A generated clip whose first and last frames match is not a usable loop by that fact alone: this
+fan turned exactly one blade pitch with an ease-in and an ease-out — frame-to-frame difference
+0.3 at the start, ~10 in the middle, 0.25 at the end — so a plain cycle stops every 5 s (the
+client: "it must move constantly, without stopping"). There is no internal loop point either (the
+best inner seam was 10.5 against a normal step of 2-8).
+
+- Profile the motion: mean abs difference of consecutive frames inside a disc around the rotor
+  (the static nacelle adds only noise), minus a noise floor (~0.8 x the 3rd percentile).
+- Cumulative sum, normalised to 0..1 = a lookup table "share of the turn -> source frame".
+- Time remap by expression: `u = (time % PER) / PER`, binary-search the table, interpolate the
+  fractional frame, `f / fps`. `layer.frameBlendingType = FrameBlendingType.FRAME_MIX` and the
+  comp's frameBlending on, so the slowed middle frames blend instead of stepping.
+- PER = cycle / N with N whole turns (96.48 / 19): the show loop wraps without a jump too.
+- Result, measured on 50 rendered frames across the joint: steps 1.7-2.9 (one 3.8 at the joint)
+  instead of 0.25-10.6.
+
+## 175. Emitters inside a converted comp: default positions, prefixes, string reads, scripted save
+
+LIVE-VERIFIED 2026-09-23 (the award emitter rebuilding 15 screens in 4608x768 comps).
+
+- `comp.layers.add(item)` places the layer at the CURRENT comp's centre. In the old 2048x512 comp
+  that was the right spot by accident; in the 4608x768 one the award titles landed at (2304, 384)
+  and, hung on the MAIN-offset null, went onto the right diagonal under the turbine. Set every
+  emitted layer's position explicitly.
+- Select comps by the exact name, not a prefix: `06_Награждение_14_` matched the title precomp
+  `06_Награждение_14_титр` before the screen itself.
+- Concatenating an effect colour value into a string (`"x = " + prop.value`, Leave Color's
+  Color To Leave) threw "invalid numeric result (divide by zero?)" and aborted the build after the
+  effect was set; `JSON.stringify(prop.value)` of the same property works.
+- `app.project.save()` from a script blocked for 2 min behind a modal (the file was written when
+  the user closed it). `app.project.dirty` exists in AE 26: check it, copy the saved file as the
+  backup, and let the user press Ctrl+S when a save is due.
+
+## 176. Collapse Transformations on a 3D precomp of 2D layers renders it FLAT; a photo-wall camera without moving the camera
+
+LIVE-VERIFIED 2026-09-23 (AE 26, Classic 3D; the ODK-Saturn hymn faces mosaic — 126 photo tiles).
+
+- A precomp whose layers are all 2D, placed as a 3D layer with Collapse Transformations on, renders
+  as a flat 2D layer: z position and X rotation are ignored, magnification stays 1 — although
+  `toComp()` on that layer reports the full 3D projection (300 wall px -> 1030 screen px) and the
+  camera's focus expression reads the right distance. Collapse OFF renders the 3D correctly, but the
+  precomp is rasterised at its own size first (a 600 px tile magnified 3.4x goes soft).
+  RIGHT: make the layers INSIDE the precomp 3D (`threeDLayer = true` on every tile and the background)
+  and keep Collapse ON — the parent camera then renders each tile from its own 2400 px source.
+- Moving a camera over a flat wall is easier inverted: keep the camera still at [cx, cy, -Z] (zoom Z)
+  and drive the wall: anchor point = the wall point you want in the centre of the frame, position =
+  [cx, cy, Z/m - Z] for magnification m, rotations for tilt. The anchor makes the target land in the
+  centre whatever the tilt; interpolate m in log space so zooms read evenly; focus distance =
+  `Z + wall.position[2]` keeps the centre tile sharp and lets depth of field blur the rest.
+- Check a render, not the numbers: every property read-back here was correct while the frame was wrong.
