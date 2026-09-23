@@ -2382,3 +2382,59 @@ dark border is gone — the border appears inside the frame as a rectangle. Do n
 a soft edge: at a panel seam a soft edge spills onto a screen that now shows something else.
 Answer it with scale: `cov = max(band / w, (H + 220) / h)`, so the scan's edge is always outside
 the visible band and the crane still has room to travel.
+
+## 153. A glass wipe that hides sloppy joints: fluted displacement, frozen holds, one shared matte
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn, "2 заставка общая", AE 26.3). Generated clips placed
+end-to-end never match at the cut (a title that is 2 % bigger, a different grade, a jump from the
+title to a white sky). A pane of fluted glass sliding across the frame hides every one of them,
+provided the old/new boundary rides UNDER the glass instead of the cut happening all at once.
+
+- **Fluted glass** = Displacement Map (Use For Horizontal: Luminance = 5, Vertical: Off = 11,
+  Behavior: Stretch Map to Fit = 2, Expand Output 0) on a moving adjustment layer, the map being a
+  precomp of 45 px solids with a black-to-white Gradient Ramp each (a sawtooth). Each rib then
+  shows a squeezed slice of the picture, and any edge under it is broken into strips.
+- **Both clips on screen at once** without handles: duplicate the outgoing layer, time-remap it to
+  a constant = its last visible source frame (`(idx + 0.5) / srcFps`), and duplicate the incoming
+  layer frozen on its first frame. Duplicates keep parenting and transforms, so a user's
+  hand-aligned framing survives untouched.
+- **One matte for all of them**: `layer.setTrackMatte(matte, TrackMatteType.ALPHA)` for the old
+  side and `ALPHA_INVERTED` for the new side (AE 23+). The matte is a wide solid whose feathered left
+  edge follows the pane centre; `matte.enabled = false` and it still works as a matte.
+- Overlays that END on the cut (logos, a white plate) get the same treatment: a duplicate on the
+  old side, so the curtain carries them off instead of letting them pop.
+- Put the glass set ABOVE everything, logos included — a pane that passes under a logo reads as a
+  HUD, and a logo that must leave with the old frame cannot leave under glass it sits above.
+
+## 154. Glass on white: Soft Light and Add do nothing there; a fast periodic pattern strobes
+
+LIVE-VERIFIED 2026-09-23. Two failures that only showed on real frames.
+
+- On a white sky the pane read as a **white bar**: a Levels lift, a Soft Light tint, a bloom and a
+  sheen each brighten, and on 255 they all clip. Soft Light with any blend value leaves pure white
+  unchanged, Add and Screen cannot go above it. Glass that must read on white needs DENSITY:
+  Levels output black 0.02 / output white 0.965, a Multiply tint of a cool near-white
+  `[0.95, 0.968, 0.99]`, and a thin Multiply line at every rib trough (the ribs precomp through
+  Levels input white 0.08). Highlights (Add) are for the dark parts only.
+- A periodic pattern that moves with a fast pane **strobes like a wagon wheel**: with strong easing
+  the pane peaks at 80-100 px per frame and 45 px ribs travel more than a period per frame. Keep
+  the per-frame shift of a periodic texture under half its period: the ribs drift at 15 % of the
+  pane speed (a null inside the map precomp, expression `((-(P - xa) * 0.85) % rib + rib) % rib`)
+  while the soft refraction envelope moves at full speed.
+
+## 155. Easing by Graph Editor influence, and a transition across a loop point
+
+LIVE-VERIFIED 2026-09-23.
+
+- A designer's "make the speed more nonlinear" maps to keyframe influence. Cubic-bezier
+  `(a, 0, 1-a, 1)`: a = 0.33 is Easy Ease, a -> 0 is linear. Peak speed over average: a = 0.6 ->
+  2.5x, 0.7 -> 3.3x, 0.75 -> 4x, 0.8 -> 5x; smoothstep is 1.5x. Solve x(t) = u by Newton
+  (12 iterations, clamp t to 0..1), then y = t*t*(3 - 2t). Expose `a` as a slider in percent.
+- A **loop** transition is one more joint cut in half by the comp boundary. Put virtual joints at
+  0 and at `comp.duration` into the same motion expression: with a symmetric ease, u = 0.5 falls
+  exactly on the boundary and ease(0.5) = 0.5, so the pane stands in the centre on the last frame
+  and on frame 0. Holds: the first clip frozen on its first frame at the end, the last clip frozen
+  on its last frame at the start. Measured frame-to-frame change across the loop 14.87 against
+  15.09 and 14.21 on either side — the seam is a normal frame step.
+- Carry overlays across the loop by shifting the duplicate's `startTime` by `-comp.duration`: its
+  fade-in keys fall into negative time and the layer holds its end state on 0..T/2.
