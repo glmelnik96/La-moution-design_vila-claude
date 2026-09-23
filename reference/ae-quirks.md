@@ -2196,6 +2196,12 @@ edge across the wall, which reads as a render bug. The layer has to be bigger th
 WRONG `M.solid(n, c, 700, 1400)` + mask `[[0,0],[700,0],[700,1400],[0,1400]]`, feather 340
 RIGHT `M.solid(n, c, 1500, 2000)` + mask `[[420,320],[1080,320],[1080,1680],[420,1680]]`, feather 300
 
+It also appears when a script MOVES somebody else's masked layer (2026-09-23, ODK-Saturn awards): the
+client's white glow was a 2048 px solid filling MAIN, with the mask's feather running out exactly at the
+comp edge. The emitter shifted the layer 166 px left with the logo row, so the solid's edge landed
+inside the frame and cut the feather into a vertical line (-13 levels) the client spotted. To move
+what a masked layer shows, move its MASK vertices (all keys) and leave the layer where it is.
+
 ## 141. A mask lives in LAYER space: on a scaled layer, comp coordinates put it somewhere else
 
 LIVE-VERIFIED 2026-09-22 (ODK-Saturn splash). The active band of the wall is x 768..3840, so the
@@ -2828,3 +2834,54 @@ LIVE-VERIFIED 2026-09-23 (ODK-Saturn hymn: MAIN 2048x512 -> MAIN + both diagonal
 - Then check the widest shot: at magnification 0.27 the 3072 px band sees 11378 wall px, more than
   the 8760 px wall. Add columns outside the old grid (3 each side) and fill only them, so MAIN's
   neighbours stay where they were.
+
+## 178. A clean "ink drawing" from a photo; light lines over a photo from inside a precomp; smooth multi-phase scale
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn intro v3, AE 26).
+
+- Find Edges on an archive-style photo traces every brick and every grain and, on a moving clip,
+  the lines crawl: the client called it "dirty". Cartoon (`ADBE Cartoonify`) with Render = Edges
+  smooths the picture first and keeps only the structure: `-0001` = 2 (edges), `-0002` detail
+  radius 10, `-0003` detail threshold 30, `-0009` edge threshold 2.0, `-0010` width 1.1,
+  `-0011` softness 55, then Invert and Tint for light lines. A median before Find Edges also cleans
+  up but leaves the lines broken. Freeze the frame for the drawing phase (a constant time-remap
+  expression equal to the frame the photo develops from): a drawing does not move.
+- Line drawings inside a precomp that sits over a photo: Screen inside the precomp has nothing under
+  it and composites as Normal (quirk #156), so the black paper of an inverted scan darkens the whole
+  photo. Key the paper out instead: Shift Channels, Take Alpha From = Luminance (`property(1)` = 5),
+  then Tint to the ink colour. The lines stay, the paper is transparent, and the layer stays Normal.
+- Effect property INDEX is not the matchName number. `ADBE Unsharp Mask2` `property(1)` is Color
+  Mode (0..1, `-0004`); Amount is `-0001` (index 2). Set effect values by matchName. (Levels:
+  `-0005` gamma, `-0006` Output Black, `-0007` Output White — see the Levels map above; writing
+  "darker" into `-0006` lifts the blacks instead.)
+- A portal that sweeps in, holds and flies back: the old arch summed three eased phases and then ran
+  a separate tail — the speed jumped where the tail began, which the client saw as jitter. One curve
+  over the whole life (sweep in -> hold -> fly back -> fade) in log scale, through 4 keys with
+  Fritsch-Carlson (PCHIP) tangents, evaluated as a cubic Hermite in the expression: continuous speed,
+  monotone (no overshoot). Check it numerically: sample `valueAtTime` every 0.02 s and look at the
+  first and second differences of log(scale).
+- Grading black-and-white footage: its colour IS the tint. Lowering the tint amount to "let colour
+  through" lowered the saturation (chroma 15 -> 9.7). Measure colourfulness as mean(max - min) of
+  RGB, not HSV saturation (HSV S is large on dark grey pixels).
+
+## 179. Growing a live wall to a taller screen (4608x768 -> 4608x896): what moves, what doesn't, what shows up
+
+LIVE-VERIFIED 2026-09-23 evening (ODK-Saturn, 26 masters, 96 screen comps; MAIN 2048x512 -> 2048x896, the other
+screens re-centred at y 64..832).
+
+- 2D numbers: a null with anchor = the OLD wall centre, position = the NEW centre, scale = new/old height,
+  and every top-level video layer `setParentWithJump(null)` — the layers keep their values, so they stay
+  editable exactly as before. Skip sound layers, cameras and (in a camera comp) the 3D layers.
+- A camera comp needs no translation: a two-node camera projects its point of interest to the CURRENT comp
+  centre, so making the comp taller re-centres the 3D scene by itself. Scale it with the zoom (x new/old);
+  a 2D parent null would scale the camera's x/y position and bend the perspective instead.
+- A y-scaled adjustment layer does NOT resample what lies under it: 1-px lines under a Levels adjustment
+  at scale [100, 175] kept std 124.0 vs 124.1 outside. Stretching glass panes, grades and vignettes
+  (scale y only; their masks follow) to the taller screen is safe; so is a Displacement Map on it.
+- A shared solid (the black frame of every converted comp) cannot be resized in place — replace it with a
+  new solid of the new size and give it its mask in comp px (tools that read the hole from the mask
+  vertices read layer px).
+- The taller window shows MORE OF EVERY CLIP: the client's generated splash poster had its own logo row
+  and a baked-in "С ДНЁМ ПРЕДПРИЯТИЯ!" title above and below the 512-px strip — both appeared, the title
+  cut by the new bottom edge, and on the award screens the title does not belong at all. Before growing a
+  screen, look at the full frame of every clip that is cropped by it.
