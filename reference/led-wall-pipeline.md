@@ -257,3 +257,12 @@ field ADD changes nothing, so they appear only where the picture is dark and nee
 For real depth, give the motes a comp camera — 3D layers plus depth of field produce genuine
 parallax and bokeh, which no 2D overlay imitates; without a camera, breathe their scale with
 their opacity and the eye reads it as depth anyway.
+
+## 15. Growing a number onto more screens
+
+When a number built for the backdrop has to spread onto the neighbouring panels, the answer depends
+on what the picture is made of. Flat sources (photos, plates, footage) have a fixed width: covering
+more panels means scaling them up, and the backdrop then shows a tighter crop — re-frame faces per
+panel. A 3D scene (a camera over a photo wall, a set) just gets a bigger frame: the camera stays, the
+backdrop keeps its picture, the new panels see more of the world — but check the widest shot for the
+end of the world. Details in quirk #177.

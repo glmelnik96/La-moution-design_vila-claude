@@ -2808,3 +2808,23 @@ LIVE-VERIFIED 2026-09-23 (AE 26, Classic 3D; the ODK-Saturn hymn faces mosaic �
   centre whatever the tilt; interpolate m in log space so zooms read evenly; focus distance =
   `Z + wall.position[2]` keeps the centre tile sharp and lets depth of field blur the rest.
 - Check a render, not the numbers: every property read-back here was correct while the frame was wrong.
+
+## 177. Spreading a one-screen picture onto the neighbouring screens: 2D plates scale, a 3D camera widens
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn hymn: MAIN 2048x512 -> MAIN + both diagonals, a 3072x768 band).
+
+- A 2D source cannot keep its scale: the outpainted 21:9 plates (3136 px) exactly filled MAIN; to fill
+  the band at the same scale they would need 4704 px. Without generating more width, scale the whole
+  local scene (one null: position [768, 0], scale 150 %). The cost is on MAIN: it now sees the middle
+  2/3 of the band, 523/k plate px of height instead of 784/k. Re-frame per screen — a face on MAIN has
+  to fit MAIN's height, a face on a diagonal the whole band — and keep the band on the plate (MAIN then
+  never reaches the plate's top or bottom 130 px). A face taller than MAIN (a selfie) or at the plate's
+  edge: pan to it, framed as close to its eyes as the plate allows; a bare "centre of the image"
+  fallback put both faces of a portrait above MAIN.
+- A 3D camera scene widens instead: keep the camera (zoom, distance, aperture) and enlarge the comp
+  (2048x512 -> 3072x768), place it at 66.667 % under the 150 % null. MAIN keeps its exact old picture;
+  the diagonals see more of the scene. The first try scaled everything 1.5x (zoom 3600, 3600 px hero
+  textures) — MAIN became a 1.5x tighter crop that cut the faces the old frame held.
+- Then check the widest shot: at magnification 0.27 the 3072 px band sees 11378 wall px, more than
+  the 8760 px wall. Add columns outside the old grid (3 each side) and fill only them, so MAIN's
+  neighbours stay where they were.
