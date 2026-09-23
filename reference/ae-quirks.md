@@ -2483,3 +2483,53 @@ as haze, and a "hit" pulse to intensity 0.9 / radius 160 on a chorus cut washed 
 Threshold 88, radius 60, intensity 0.18, pulse +0.22 / +30 px is visible and clean. A light sweep
 reads as gloss only with a crisp core: a soft band at 35 % mask opacity plus an 18 px core with an
 8 px feather, Add 30 %; the soft band alone read as fog.
+
+## 159. Setting `inPoint` moves `outPoint`: always assign startTime -> inPoint -> outPoint
+
+LIVE-VERIFIED 2026-09-23 (AE 26.x, ODK-Saturn award screens). Trimming a layer "out first, then in"
+silently shifts the out point. Measured on a 200 s solid: `outPoint = 32.16` gives (0, 32.16), then
+`inPoint = 3.1` gives **(3.1, 35.26)** — the layer slid instead of trimming. On a precomp layer after
+`startTime = 32.16; outPoint = 64.3`, assigning the SAME in point (`inPoint = 32.16`) restored the out
+point to the source end (68.66). A fresh, untrimmed layer does trim (`inPoint = 3.1` -> (3.1, 36.5)).
+The build reported ok; the damage showed only as overlays living 3 s into the next cycle and keep
+copies stretching to the next joint.
+
+WRONG `L.outPoint = t1; L.inPoint = t0;`
+RIGHT `L.startTime = s; L.inPoint = t0; L.outPoint = t1;` — and for a duplicate that must start where
+its source ends (a glass "keep" copy), in first (it may slide), then out, which pins it. After any
+batch of trims, dump `[name, inPoint, outPoint, startTime]` of the new layers before capturing.
+
+## 160. Effect point parameters on a TEXT layer are comp coordinates, not `sourceRectAtTime` space
+
+LIVE-VERIFIED 2026-09-23. A Gradient Ramp on a point-text layer given its points from
+`sourceRectAtTime` (top -69 .. 0, layer space around the anchor) painted the whole glyph in the END
+colour: the ramp was above the letters. The same points shifted by the layer position
+(`[x, pos.y + rect.top]` .. `[x, pos.y + rect.top + rect.height]`) gave a clean red-to-blue ramp,
+for two layers at different positions — the effect sees the text layer as comp-sized with its origin
+at the comp's top-left. Holds for an untransformed text layer (no parent, scale 100, rotation 0);
+anything else, compute through `toComp` in an expression. Symptom in a dimensional-type build: the
+face came out uniformly dark and the silver rim uniformly grey — every pixel got the end colour.
+
+## 161. Dimensional metal type that keeps a per-word text animator
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn award titles, Manrope ExtraBold 48 px on a light field, matching
+the chrome «110» emblem). Construction that survives a word cascade with blur, because every part is
+an effect on a text layer that carries the same animator:
+
+- One **face** + one **side** text layer PER LINE (a lacquer gradient is per line; one multi-line
+  layer gets one ramp top-to-bottom). Side = duplicate of the face, below it, fill + stroke 3 px
+  silver, `strokeOverFill = false` -> a 1.5 px rim shows around the face.
+- Face: `ADBE Ramp` over the cap height (points per quirk 160) `[0.90,0.24,0.27] -> [0.58,0.04,0.09]`,
+  then `ADBE Bevel Alpha` thickness 1.2, angle -40, intensity 0.6. Thickness 1.8 / intensity 0.75 at
+  48 px shades half of an 8 px stroke and the face goes maroon.
+- Side: silver ramp, then SIX `ADBE Drop Shadow` of 1 px each, opacity 255, softness 0, direction 205,
+  colours stepping from `[0.78,0.79,0.82]` (near) to `[0.46,0.47,0.51]` (far): each shadow is cast by
+  the result of the previous one, so they stack into an extrusion that follows the words as they
+  rise and blur. Then one soft cast shadow (opacity 70/255, distance 8, softness 16).
+- Glint: CC Light Sweep on an adjustment layer at the top of the title precomp (quirk 142 timing).
+- Word cascade across line layers with ONE global stagger: Range Units = Index (2), Based On = Words
+  (3), Ramp Up, Ease High 20 / Ease Low 100, `ADBE Text Index Start` 0, `End` R = WORD_DUR / STAG,
+  `ADBE Text Index Offset` linear from -R at `T0 + first*STAG` to n at `+ (n + R)*STAG`, where
+  `first` = words on the previous lines. Percent units cannot do this: the ramp is capped at 100 %,
+  so a three-word title staggers 0.33 s and a nine-word one 0.12 s.
+
