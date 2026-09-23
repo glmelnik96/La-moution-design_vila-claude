@@ -2885,3 +2885,11 @@ screens re-centred at y 64..832).
   and a baked-in "С ДНЁМ ПРЕДПРИЯТИЯ!" title above and below the 512-px strip — both appeared, the title
   cut by the new bottom edge, and on the award screens the title does not belong at all. Before growing a
   screen, look at the full frame of every clip that is cropped by it.
+  Fix used ("то, что было обрезано, не должно попадать в кадр, можно крупнее"): measure the clean band
+  between the baked elements in the SOURCE frame (here rows 296..874 of a 1228-px poster), scale the clip
+  until that band fills the new height (101 % -> 155 %), and scale only the clip's root layers (the client
+  had parented the enter clips to the hold clip; its stop-frame copies hung on the null and needed the
+  same transform). Then check the hero's margin on renders across the whole loop: a colour threshold put
+  the emblem's edge at x 243 when its dark edge was at 194, and the enter animation carries it further left
+  than the hold. Scale the text column as a group on a pivot null (per-screen fit to the edge margin) so
+  the title keeps its weight next to the bigger picture.
