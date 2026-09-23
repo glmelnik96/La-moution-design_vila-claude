@@ -284,3 +284,13 @@ every previz holds exactly those comps at their rects, the guides overlay, sound
 content (sample every master at half resolution, 8 frames: which screens carry picture, and whether any screen
 with picture has black bands at its edges). The ODK tools are `audit_wall_jsx.py` + `audit_wall_check.py`.
 
+**A narrated film gets a third pass: words, voice and picture.** Transcribe the delivered track (word
+timestamps; check it is byte-identical to the file in the comp), then (1) put every on-screen word next to
+the moment it is spoken — anything more than ~0.4 s early reads as a spoiler, and a wording that shifts the
+meaning ("опыт поколений" for "опыт одного поколения") or contradicts it (a "1960" label over "в конце 50-х")
+is a bug even when the timing is right; (2) grab one clean mid-frame per shot and lay it out with the words
+spoken in that shot's window and the titles on screen. On ODK-Saturn that sheet caught what no metric would:
+an English "FACTORY" poster in a Soviet wartime shop, a facade signed with a 2001 company name under the years
+1945-1955, a black-and-white shot inside the colour chapter, and a "modern facade" clip that was in fact
+sepia-toned — so moving it to the colour chapter would have broken the turn into colour.
+
