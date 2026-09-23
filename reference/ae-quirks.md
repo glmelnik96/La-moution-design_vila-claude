@@ -2639,3 +2639,118 @@ solid larger than the frame, `ADBE Ramp` radial from white at the centre to blac
 want, blend Screen, and squash it with a non-uniform scale for an ellipse. Black does nothing in
 Screen, so the layer's own edges can never show.
 
+## 169. Tidying a live project: what `usedIn` misses, and proof that no comp changed
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn `ODK110.aep`: 1058 -> 513 items, 552 unused removed, 55 moved,
+9 folders made, 2 emptied folders dropped — all in about 1 s, one undo group).
+
+- `FootageItem.usedIn` lists comps that hold a LAYER with that source. An expression that pulls
+  footage by name (`footage("data.json")`) is not a use, and removing that item breaks the
+  expression. Before a purge, walk every property of every layer and collect expressions that
+  contain `footage(` (1795 layers / 1253 expressions scanned in ~4 s here; none named footage).
+- Removing an item that IS used deletes every layer that uses it, silently. Re-check
+  `usedIn.length === 0` at execution time; never trust a list made in an earlier call.
+- Address items by `id` through a map built once at the start: ids survive moves, renames and
+  saves; indexes shift after every `remove()`.
+- Prove it in the same call: before and after, one string per comp,
+  `id|name|parentFolder.id|numLayers|layer source ids`; equal strings = nothing in any comp moved.
+  Compare a fresh full inventory afterwards too (names, folders, layer counts, sizes, durations,
+  the set of used footage ids, missing footage).
+- Media Encoder: "Add to Media Encoder Queue" saves a reduced copy of the project to
+  `<project>.aep_AME/tmpAEtoAMEProject-<comp>.aep` (4 MB copies next to a 42 MB project), and the
+  queue renders those. Reorganising the main project does not touch queued renders; still keep comp
+  names and folders when the user says the comps go out through the encoder.
+- Emitters that find a folder by name (`folderMake("I2 archive clips")`) recreate it at the root on
+  their next run: when a tidy renames or nests a folder, patch the name in the live emitters.
+- "Collect Files" leaves `(Footage)/<panel folder path>/...` on disk plus `<project>Report.txt`;
+  after that, panel folders and disk paths are independent — reorganising the panel needs no relink.
+- Back up first: save in place, copy the `.aep` elsewhere, `cmp` the two. `app.project.save(file)`
+  is Save As and would repoint the open project.
+
+## 170. `ae.js --timeout` is in milliseconds; "CDP timeout (0s)" means units, not a modal
+
+LIVE-VERIFIED 2026-09-23. `--timeout 300` failed at once with "CDP timeout (0s) — a modal dialog is
+probably blocking AE", but there was no modal: the payload kept running in AE and finished (the file
+it writes appeared). WRONG `--timeout 300`; RIGHT `--timeout 300000`. When the message says (0s) or
+(1s), check the file/state the payload produces before calling AE again — a second call queues
+behind the one still running. Separately: `lint-jsx.js` warns "last statement does not call
+JSON.stringify" for every multi-line `JSON.stringify(M.run(...))` payload, because it only scans
+the last three lines; the payload returns normally.
+
+## 171. Moving a finished comp onto a bigger canvas without losing editability
+
+LIVE-VERIFIED 2026-09-23 (AE 26, ODK-Saturn: ten 2048x512 comps moved into the MAIN area of a
+4608x768 LED wall, 31-78 top-level layers each, glass wipes with ~70 position expressions).
+
+- `comp.width/height` grow the canvas from the top-left; nothing moves. Add a null with anchor
+  [0,0] at the region's corner ([1280,128]) and hang every top-level video layer on it with
+  `layer.setParentWithJump(null)` (exists in AE 26): unlike `layer.parent = x` it keeps the child's
+  values, keys and expressions, so the content moves by exactly the null's offset and the null's
+  space IS the old comp. Expressions reading other layers' `transform.position` stay consistent
+  (both sides live in null space); only `thisComp.width/height`, `toComp/fromComp` and comp-space
+  hard-codes in emitters (`Z.height / 2`) change meaning — grep for them first.
+- Layers larger than the old frame (3136 px slides, 6400 px glass mattes, 2600 px frosted fields)
+  were cropped by the old comp edge and now spill onto the neighbouring screens: put a black solid
+  on top with a SUBTRACT mask of the region.
+- Prove it by pixels, not by layer lists: `saveFrameToPng` the same frames before and after, crop
+  the region out of the new frame, diff. Here 14 of 19 frames matched to 0-1 levels. The rest was
+  real: (a) an adjustment layer that slides in from off-frame (a glass pane) is no longer clipped
+  by the comp edge, so its Displacement Map is laid over the whole pane instead of the visible part —
+  the rib phase differs while the pane enters or leaves (the new behaviour is the steadier one);
+  (b) a dark rim at an inner edge — quirk 172.
+- Per-screen render comps: one layer of the master, anchor = master centre, position =
+  `[W/2 - x0, H/2 - y0]`; copy the master's fps, duration, motion-blur switch and shutter. Checked
+  against a crop of the master frame: max difference 0.
+- Emitters that built the old comp keep laying out in the old space; end them with a helper that
+  hangs new top-level layers on the null (setParentWithJump), puts the black frame back on top and
+  rebuilds the edge mirrors. Their "rebuild" loops must skip the helper layers (a glass emitter
+  duplicated every layer that lasts to the end of the comp into its loop — that would have included
+  the null and the black frame).
+- A previz of the wall: put the per-screen comps back at their rects in a wall-sized comp (it shows
+  exactly what goes out; the wall outside the screens stays black) and lay the guide comp on top.
+  Guide layers of a NESTED comp do not render — duplicate the guide comp, switch `guideLayer` off
+  and extend its duration and layer out points. Keep audio on ONE nested screen layer: five nested
+  copies of the master sum its track five times.
+
+## 172. Adjustment-layer effects read beyond their own bounds: mirror the region at an inner edge
+
+LIVE-VERIFIED 2026-09-23. A frosted-glass field (adjustment layer 2600x900, Box Blur 14 x3 with
+Repeat Edge Pixels on, Levels, desaturate) that was clean at the right edge of a 2048 comp showed a
+dark rim (-15..-36 levels, 11 px) at the same edge once the comp was 4608 wide: the blur now pulled
+in what lies beyond the region (a 14 px sliver of clip, then empty) instead of repeating edge
+pixels — Repeat Edge Pixels only acts at the COMP boundary.
+
+- Pinning the adjustment layer's own rect to the edge (anchor following position, the mask moved
+  by a path expression instead) changed nothing: the effect does not read only its layer's rect.
+- A white strip beyond the edge at the bottom of the stack removed the rim (-0.6): the input is
+  the composite outside the layer too.
+- Fix: directly under every run of adjustment layers that can reach past the region, a
+  comp-sized adjustment layer with four `ADBE Mirror` effects on the region's edges — Reflection
+  Angle 0 reflects left onto right, 180 right onto left, 90 top onto bottom, 270 bottom onto top.
+  Effects above it see a continuation of the picture; the black frame on top hides it. Awards went
+  from max 38 to max 3. Inside the region the Mirror copies pixels exactly.
+- Not under an adjustment layer lying exactly on the region (static 2048x512 grade with Glow): it
+  matched the old render without help, and a mirror under it added +4 levels of glow at the edges
+  (the reflected highlights glow; the old comp had nothing beyond the edge).
+
+## 173. Renaming a live project to a naming scheme: what breaks and how to prove nothing did
+
+LIVE-VERIFIED 2026-09-23 (ODK-Saturn: 104 comps and 26 folders renamed to the client's TZ numbering,
+26 comps moved, precomps regrouped by number).
+
+- `item.name = ...` on a comp does NOT rewrite `comp("old name")` in expressions: two glass
+  expressions still carried the old names after the rename and had to be rewritten (split/join on
+  the exact `comp("...")` string). Scan every expression for `comp("` + each old name.
+- `app.project.item(i)` is re-sorted when items are renamed or moved. A loop that moves items while
+  indexing skipped one of two same-named solids. Collect the targets first, then mutate. For the
+  same reason a before/after snapshot string built in item order differs after a rename even when
+  nothing changed — key it by `id` (or sort it); the inventory diff by id showed 0 changes.
+- Numbered folders repeat across bins after such a scheme (`00_PREVIZ/06_…`, `02_NUMBERS/06_…`,
+  `03_PRECOMPS/06_…`): emitters that find a folder by name alone pick the wrong one. Look folders up
+  by FULL path (`folderPathMake("03_PRECOMPS/05_Интро")`), and clean up an emitter's own precomps by
+  an explicit list or a tag — not by a name prefix that the screen comps and previz now share.
+- Comp names become render file names: underscores, a zero-padded number first (`07_Номер_Путь_MAIN`)
+  so the panel and Explorer sort the show in running order.
+- Tooling trap: `\uXXXX` typed into a bash heredoc that writes a Python patch arrived as real
+  Cyrillic in the emitter. Put non-ASCII values through `json.dumps` placeholders in the emitter
+  (as it already did for its other names) and write patch scripts with a file tool, not a heredoc.
