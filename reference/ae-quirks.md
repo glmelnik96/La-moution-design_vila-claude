@@ -2897,3 +2897,39 @@ screens re-centred at y 64..832).
   a 2048x512 solid whose mask feather (187 px) ran past its top edge — hidden while that edge was the top of
   the 512 strip, a hard line (-36 levels) inside the 896 MAIN. Pad such solids (+300 px each side, anchor
   and mask vertices shifted by the same amount, `replaceSource`) so every feather ends inside its layer.
+
+## 180. A thinner cut than the font family has; a loop made longer in place; `M.exprErrors` without `M.use`
+
+LIVE-VERIFIED 2026-09-24 (ODK-Saturn pre-show: 60 -> 180 s loop plus a slogan "тонким шрифтом" in Tektur).
+
+- **Thinner than the lightest weight.** Tektur stops at wght 400 (stem 7 px on a 50 px cap = 0.14, a Regular).
+  WRONG: a negative Offset Paths (`ADBE Vector Filter - Offset`) in every letter group. Letters without counters
+  (С Н Л И М Е) thin nicely, but О А Д Р В З Ь come out SOLID: AE offsets each closed path on its own and the
+  counter stops cutting the fill. The client caught it on the first look ("с багами").
+  RIGHT: thin the outline before it reaches AE. Flatten the glyph contours (~1.2 px steps), find each ring's ink
+  side from its nesting depth and signed area, move every edge by d toward the ink, mitre the joins (bevel past
+  4d), then apply the skew and send straight segments (ODK `tools/tektur_thin.py`). At 80 px with d = 1.8 px:
+  stem 3 px on a 56 px cap (a Light), counters open, chamfers intact. Preview it with a PIL XOR fill (one
+  polygon mask per ring, XOR = even-odd) before spending an AE build.
+- **Thin display type: no glow, Normal blend.** Glow 26 px at 0.45 around 3-px strokes read as "не резко"; Add
+  over a dark bed also softens the edge. Keep the defocus only on the way in and out (blur 12 -> 0, back to 8).
+- **Make a loop longer IN PLACE when the comp carries the client's hand edits.** Here: his own precomp chain
+  looped at 60 s and a disabled layer; the old emitter would have rebuilt the comp from scratch.
+  - Everything periodic must close on the new period T. Camera, focus and particles become sums of harmonics
+    n·2π/T with integer n; use n >= 3 so the path does not come back every minute.
+  - A footage loop of length d gets a whole number of passes: k = round(T/d)·d/T, time remap `(time * k) % d`.
+    Here the speed changed by +0.46 %.
+  - The client's precomp keeps its own period via time remap `time % 60`.
+  - A single 20-s light sweep becomes eight passes with uneven gaps, in both directions.
+  - Reschedule the appearances over the whole T and check them every 0.25 s across the wrap: a minimum count
+    on screen, no two centres closer than 700 px, one sheet never twice at once. Relax the minimum only where
+    a title needs the centre clear.
+  - Seam check: last frame -> frame 0 differed by 0.25 levels, a normal frame step by 0.17.
+- **Screen comps built at the master's duration:** extend them in place (comp duration, work area 0..T, layer
+  in/out 0..T) instead of rerunning the rebuild of all of them. The rebuild deletes the comps, and with them any
+  render-queue items that point at them.
+- **`M.exprErrors()` walks `M.comp`.** In a payload that never called `M.use(comp)` it throws
+  `TypeError: null is not an object` under the step name of the last `M.step`, so that step looks broken.
+  Everything before it had been applied. The error line counts from the start of the COMBINED script:
+  es-json + tokens + cloudru-motion = 1131 lines in front of the payload, so line 910 = lib line 716
+  (`M.comp.numLayers`). Subtract the prelude lengths before hunting in the payload.
