@@ -266,3 +266,21 @@ more panels means scaling them up, and the backdrop then shows a tighter crop �
 panel. A 3D scene (a camera over a photo wall, a set) just gets a bigger frame: the camera stays, the
 backdrop keeps its picture, the new panels see more of the world — but check the widest shot for the
 end of the world. Details in quirk #177.
+
+## 16. Lifting a logo row off a busy picture — and checking every screen before delivery
+
+**Change the picture under the logos, don't box them.** On the ODK-Saturn splash the logo row sat on a
+generated turbine and "disappeared". A crisp white rounded plate with a shadow fixed legibility and was
+rejected at once as generic. What worked: the logos larger (~690–820 px of row on a 2048 px screen) and at
+100 %, over a *frosted-glass pool* — an adjustment layer (box blur ~26, Levels output black ~0.42, saturation
+−35) with a pill mask feathered ~130 px, so the picture itself turns soft and light behind the row and no edge
+is ever visible. It speaks the same material language as the glass transitions. Converting the existing,
+already-timed glow layers into that adjustment layer kept the fade-ins and the transition stop-frames for free.
+
+**Audit before the encoder does.** A wall with many numbers drifts: a screen that gained picture without a
+render comp, a render comp for a dark screen, a crop offset left over from the old geometry. Check it in two
+passes — structure (every listed screen has its comp with the right size, duration, fps, bin and crop offset;
+every previz holds exactly those comps at their rects, the guides overlay, sound on one screen only) and
+content (sample every master at half resolution, 8 frames: which screens carry picture, and whether any screen
+with picture has black bands at its edges). The ODK tools are `audit_wall_jsx.py` + `audit_wall_check.py`.
+
