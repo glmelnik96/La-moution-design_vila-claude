@@ -2945,6 +2945,15 @@ in a golden ring -> the ring turns into a turbine; the client's Seedance clips p
   - Cut on those joins; no dissolves are needed.
   - A clip whose first frame equals its last loops with `time % d`.
   - A clip that ends elsewhere (8 levels here) plays forward and then back, which returns it to its anchor.
+  - Calibrate against motion. Fast shots and fine textures differ 15-24 levels between NEIGHBOURING frames
+    (rails, a head-on train, chainmail). So compare a join with the clip's own frame step on both sides:
+    up to ~1x is a clean join, 1.2x needs a 0.2 s dissolve, 1.5-3x needs 0.25-0.5 s. Chainmail joins made
+    from the same still kept the composition but got new rings, measuring 39 against steps of 7-24. The
+    generation agent's "seamless loop" claims were only true in this relative sense.
+  - Cutting loops to the bars: pick each shot's source phase so a shot shorter than the loop never wraps,
+    and rotate its opening phase so the same shot does not open on the same frame. A longer shot wraps in its
+    middle, never next to a cut: a wrap 0.2 s after a hard cut reads as a stutter. The last shot before a
+    frame-matched exit ends exactly on the clip's last frame.
 - **A generated transition played backwards is a new transition.** "Da Vinci -> galaxy" reversed became
   "galaxy -> the ring forms". Its hero changes size inside the source (ring radius ~905 px at 4 s, 527 at
   1.9 s, 413 at 0), so a portal mask on a fixed curve cut the ring off. Key the mask to the hero's measured
@@ -2974,3 +2983,29 @@ in a golden ring -> the ring turns into a turbine; the client's Seedance clips p
 - **The agent's Write tool decodes `\uXXXX` in file contents into real characters.** Inside a string that
   only warns; in a regex literal the lint rejects it ("non-ASCII in code"). Match Cyrillic names with
   strings and `indexOf`, or emit the JSX from Python with `ensure_ascii`.
+- **Smoothness, the second round.** The client's note was "не хватает изингов и плавности".
+  - WRONG: an `ease()` helper passing `value.length` eases (3 for a 2D layer's Scale, which wants 2) inside a
+    silent `try/catch`. Every scale move of the film stayed linear and nobody saw an error.
+  - RIGHT: set BEZIER interpolation first, try arities [n, 2, 1, 3], and COUNT failures into the result
+    (`easeFail: 0`).
+  - No ping-pong: a clip that does not return to its anchor dissolves into the next one; nothing plays
+    backwards.
+  - Joins: key the time remap at half speed into and out of each seam (`KeyframeEase(speed, 30)`, not 0).
+  - When the next clip moves faster (7x here), hold its anchor frame under a 0.35 s fade and start it from
+    almost still (speed 0.03, influence 75 %).
+  - Measure smoothness: the mean frame-to-frame difference over +/-20 frames. A spike is a jump.
+  - Slow motion from 24 fps generations: Frame Mix at 0.72x pulsed every ~3 frames (std/mean of the steps
+    ~0.35); Pixel Motion gave 0.07 with no warping on particles or thin clock hands.
+  - A turbine that appears spins up rather than starting at speed: time remap
+    `t < R ? t*t/(2R) : t - R/2`.
+- **A seamless loop carrying a long shot** (the finale's birds, 2 x 9.93 s at 0.51x; the loop's last frame
+  measured 0.97 against its first, the frame step ~1.5).
+  - Butt-join the passes with no dissolve and remap each one 0 -> the FULL duration. Stopping at `duration - 0.07`
+    skips the last frame and jumps.
+  - Split one push-in across the passes with LINEAR keys, 100 -> 103 -> 106 %. Eased keys per pass stop the
+    move dead at every wrap, which reads as a hiccup.
+  - Measured: the step across the wrap was 0.55 levels against 0.05-0.26 around it, which is invisible on a
+    sky. The last source frame holds for about 4 comp frames at 50 fps before the wrap.
+- **Rebuild scripts must not delete what the user added.** A "clean everything that is not mine" step is fine
+  on the first run. From then on, remove only the layers found in the v1 backup comp, and report any others as
+  `kept`. Also duplicate the current state into `_OLD` before each client-driven rebuild (`snap`).
