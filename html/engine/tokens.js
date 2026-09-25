@@ -93,7 +93,7 @@
       "ae_postscript": {
         "regular": "SBSansDisplay-Regular",
         "medium": "SBSansDisplay-Medium",
-        "semibold": "SBSansDisplay-SemiBold",
+        "semibold": "SBSansDisplay-Semibold",
         "bold": "SBSansDisplay-Bold"
       },
       "weights": {

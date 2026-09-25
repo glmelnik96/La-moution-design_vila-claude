@@ -90,9 +90,9 @@
     "ae_postscript": {
       "regular": "SBSansDisplay-Regular",
       "medium": "SBSansDisplay-Medium",
-      "semibold": "SBSansDisplay-SemiBold",
+      "semibold": "SBSansDisplay-Semibold",
       "bold": "SBSansDisplay-Bold",
-      "_note": "PostScript names as AE expects them in TextDocument.font. LIVE-VERIFY on the local machine (read back .font after setValue, see quirk #9). Verdana fallback: 'Verdana' / 'Verdana-Bold'."
+      "_note": "PostScript names as AE expects them in TextDocument.font. Semibold has a lower-case b (the file is SBSansDisplay-SemiBold.otf; quirk 187: the other spelling renders in Times with no warning). A read-back of .font proves nothing (quirk 80): check app.fonts.getFontsByPostScriptName(name)[0].location. Verdana fallback: 'Verdana' / 'Verdana-Bold'."
     },
     "weights": {
       "body": 400,
