@@ -30,7 +30,7 @@ look before you leap and confirm intent.
 
 **Brand + tests (always):**
 ```bash
-node --test            # 57 tests: lib against the AE mock, lint, tokens in sync, HTML core, renderer CLI
+node --test            # 57 tests: lib against the AE mock, lint, tokens in sync, HTML core, renderer/bridge/gen CLIs
 ```
 
 **AE channel (when AE work is requested):**
@@ -41,8 +41,8 @@ node scripts/ae.js --lib 'JSON.stringify({v: M.VERSION, green: CR.HEX.GREEN})'
 - `comp: null` → ask the user to select/open a composition.
 - **"AE panel CDP target not found on port 8092"** → ask the user to open **After Effects** and
   **Window → Extensions → LLM Chat**, then re-run.
-- First local session after the cloud work: run `reference/live-verify-checklist.md` and
-  record results in `reference/ae-quirks.md`.
+- When a task touches a `VERIFY`-tagged builder of the lib, run its item in
+  `reference/live-verify-checklist.md` and record the result in `reference/ae-quirks.md`.
 
 **HTML channel (when HTML/video/web output is requested):**
 ```bash
@@ -79,18 +79,23 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 - **Lint is mandatory and automatic.** `ae.js` refuses payloads that would raise a modal in
   AE (ES5+ syntax, reserved-word keys, non-ASCII identifiers). `node scripts/lint-jsx.js
   file.jsx` runs it standalone. Never `--no-lint` a payload you have not linted.
-- **Temp files, not inline jsx**, for anything beyond a one-liner (Windows shell escaping).
-- **Small, verifiable steps.** Read → mutate → read back (`M.summary`, `M.exprErrors`,
-  `M.visibleWindow`, `M.bounds`). Idempotent rebuilds: `M.clean()` removes only the lib's
+- **Temp files, not inline jsx**, for anything beyond a one-liner (Windows shell escaping). Emit
+  non-ASCII text from Python with `ensure_ascii`: tools decode `\uXXXX` typed into them (quirk #181).
+- **Small, verifiable steps.** Read → mutate → read back (`M.summary`, `M.exprErrors` after
+  `M.use(comp)`, `M.visibleWindow`, `M.bounds`) → capture: a read-back can be right while the rendered
+  frame is wrong (quirks #176, #183). Idempotent rebuilds: `M.clean()` removes only the lib's
   tagged layers.
-- **On `CDP timeout`, STOP calling AE** — a modal is blocking the host; ask the user to
-  dismiss it (quirk #25). Never run AE calls concurrently.
+- **On `CDP timeout`, STOP calling AE.** First rule out a long build (AE busy on the CPU,
+  quirk #143) and a `--timeout` given in seconds (it takes ms, quirk #170). Otherwise a modal is
+  blocking the host: ask the user to dismiss it (quirk #25). Never run AE calls concurrently.
 - **Easing is the #1 quality lever**, and it is exact now: `M.tween(prop, ms0, ms1, v0, v1,
   "enter")` = keys + bezier ease + flattened path. Never ship linear physical motion.
 - **Record every discovery — unprompted.** Undocumented AE behaviour, API traps, reusable
   construction patterns → append to `reference/ae-quirks.md` (numbered, LIVE-VERIFIED, WRONG
   vs RIGHT) in the same session, before reporting back. State in one line what you recorded.
-- Render out of process with `aerender` (quirk #33); capture full-res (`M.capture`);
+- Render out of process with `aerender` (quirk #33): it renders the SAVED project; judge the file by
+  ffprobe, not the exit code; purge caches first, at most two instances, run it under a watchdog
+  (`reference/led-wall-pipeline.md` §17, quirks #182, #184). Capture full-res (`M.capture`);
   PNG writes are asynchronous — poll file sizes (quirks #27/#40).
 - Market-practice helpers: `M.premiumIn`, `M.springBake` (same spring math as the HTML
   engine), `M.blurIn`, `M.wordCascade`, `M.cameraPush`, `M.followThrough`, `M.exitOut`.
@@ -150,17 +155,19 @@ every element within 2 px of the Figma render, the art-kit background), do not f
 follow `reference/deck-pipeline.md` — plugin-API dumps → `figspec.py` → `deck.py` →
 `build_film.py` (one AE call at a time, verify + background diff + QA sheets) →
 `capture_film.py` → preview. Read every QA sheet before sending. Background art:
-`reference/art-kit.md`; the lessons: quirks #100–#119.
+`reference/art-kit.md`; the lessons: quirks #75–#119.
 
 ## 5d. Multi-screen LED wall for an event (backdrop + wings), with generated beds
 
 One wall comp in physical pixels, per-screen delivery comps, SYS precomps for every reusable look,
 numbers laid out from a single timeline module that also writes the timing-aware generation brief:
-`reference/led-wall-pipeline.md`; lessons in quirks #120-#125.
+`reference/led-wall-pipeline.md`; lessons in quirks #120-#184. Rendering unattended, cutting per-screen
+files, checking and uploading them: §17 there (aerender traps: quirks #182, #184).
 
 ## 6. Generation workflow
 
-1. Discover params (`GET /nodes*` via `gen.js`), match aspect/resolution to the comp.
+1. Discover params with curl and the sidecar token (`reference/generation-recipes.md`, «Discover exact
+   params»), match aspect/resolution to the comp.
 2. Author the prompt with `reference/generation-recipes.md` skeletons (keyable background, margin).
 3. `node scripts/gen.js cost …` → **show model + settings + credits and get confirmation**.
 4. Draft low → final high. Never spend on final quality first.
@@ -174,11 +181,13 @@ automatically), then re-check `health`.
 
 ## 7. Safety
 
-- Mutate only the active comp; never delete/overwrite user assets unasked; the lib touches
-  only layers it tagged.
+- Touch only the comps the task names (exact names, quirk #175); snapshot to `_OLD` before a
+  client-driven rebuild and remove only your own layers (#181); extend a comp in place rather than
+  rebuilding it (#180); switch an emitter off once the client edits its comp by hand (#147). Never
+  delete/overwrite user assets unasked; the lib touches only layers it tagged.
 - Always show generation cost and get confirmation before spending credits.
 - No git operations unless the user explicitly asks.
-- Prefer read-back verification and tight undo groups so one Ctrl+Z reverts an action.
+- Prefer read-back plus capture verification and tight undo groups so one Ctrl+Z reverts an action.
 
 ## 8. Smoke checklist
 

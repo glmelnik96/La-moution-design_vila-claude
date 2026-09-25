@@ -1,18 +1,17 @@
 # LED-wall event films — one wall comp, generated beds, procedural systems
 
-How the ODK-Saturn 110 anniversary show (2026-09) was built in the live AE from two client briefs:
-a multi-screen wall (backdrop + diagonals + media wings), 4:30 narrated intro, five numbers to
-music, splash / stinger / bumper / awards, with 5-second generated clips (MiniMax H3, `M:/Minimax h3`)
-as beds and AE doing everything that must match the screens' geometry. Project: `C:/dev/saturn110`
-(`tools/`, `ae/ODK110.aep`, `gen_brief/`). Lessons: quirks #120–#125.
+How a corporate anniversary show on an LED wall (2026-09) was built in the live AE from two client
+briefs: a multi-screen wall (backdrop + diagonals + media wings), 4:30 narrated intro, five numbers to
+music, splash / stinger / bumper / awards, with 5-second generated clips (MiniMax H3, run in a separate
+session) as beds and AE doing everything that must match the screens' geometry. The project's own files
+stay with the project; this page keeps the method. Lessons: quirks #120–#184. Delivery: §17.
 
 ## 1. Read the brief into a timeline first
 
-`tools/timeline_data.py` is the single source: numbers (length, known/estimated), segments
+One timeline module (Python) is the single source: numbers (length, known/estimated), segments
 (tc_in, tc_out, what's on screen, source = AE / GEN id / EXISTING id) and the map from shot id to
-generated file. The generation brief (`tools/brief.py` → `gen_brief/ODK110_gen_brief.md`,
-`shots3.py`, `timeline.csv`, `img/`) and the AE layout (`tools/numbers_jsx.py`) are both derived
-from it, so a timing change propagates to both. Song lengths without the audio are estimates and
+generated file. The generation brief (markdown brief, shot list, CSV, reference images) and the
+AE layout emitter are both derived from it, so a timing change propagates to both. Song lengths without the audio are estimates and
 are marked so.
 
 ## 2. Split animation vs generation by what has to be exact
@@ -27,13 +26,13 @@ are marked so.
   look was wrong (cold rails vs the director's "закатное, ретро"), with the anchor frames that
   chain them (quirk #125).
 
-## 3. The wall (quirk #124)
+## 3. The wall (quirks #124, #171, #179 — 4608×896 since #179)
 
-`ae/_build/01_skeleton.jsx`: folders, `WALL guides` (screen rectangles + labels as guide layers),
-`SLOT` (the whole wall), five `OUT …` delivery comps, one comp per number, imports of logo /
+A skeleton payload: folders, `WALL guides` (screen rectangles + labels as guide layers),
+`SLOT` (the whole wall), per-screen `OUT …` delivery comps (§17 cuts the files from the wall render), one comp per number, imports of logo /
 drawings / refs / anchors / archive (upscaled, ASCII names) / generated clips / audio. Assets are
 staged under ASCII paths (`ae_assets/`) because payloads must be ASCII; Cyrillic text reaches AE
-as `\uXXXX` escapes produced by a Python emitter (`tools/*_jsx.py` → `ae/_build/*.jsx`).
+as `\uXXXX` escapes produced by a Python emitter (`*_jsx.py` → `*.jsx`).
 
 ## 4. Systems, then scenes
 
@@ -49,18 +48,22 @@ as `\uXXXX` escapes produced by a Python emitter (`tools/*_jsx.py` → `ae/_buil
   at their time, alternate left/centre/right, feather-masked, graded per era, gone after 14 s;
   drawings as Add half-shadows; chapter words typed on (text animator, Percent Start 0 → 100 with
   Opacity 0 after it) in the mono face; generated-bed placeholders as graded stills with a slow push.
-- Numbers: `numbers_jsx.py` lays every segment out — comp markers with the segment text, existing
+- Numbers: a layout emitter lays every segment out — comp markers with the segment text, existing
   beds time-remapped `(time - inPoint) % d`, wide clips as a sharp main copy + a blurred 305 %
-  "spill" under the whole wall, square clips on both wings, green guide plates where a GEN clip
-  is pending.
+  "spill" under the whole wall (later replaced by one picture across the wall, §12), square clips on
+  both wings, green guide plates where a GEN clip is pending. Loops: read `mainSource.loop` first and
+  hold long windows with one slow pass (quirk #183); loop a whole number of passes (#180); a 24 fps loop
+  in a 25 fps render plays at stretch 96 % with no frame blending (#184).
 
 ## 5. Verify every build with captures
 
-`M.capture([...frames], prefix, dir)` per comp, wait for the asynchronous PNGs (`review_sheet.py`
+`M.capture([...frames], prefix, dir)` per comp, wait for the asynchronous PNGs (a review script
 polls file sizes), assemble a wall strip + main-screen crops + the OUT comps, and look. Fixes that
 came only from looking: the flattened emblem alpha, text landing right-aligned, the air layer
 invisible at 38 % soft-light, seven drawings in Add turning the preshow into blue mush, chapter
-words typed over the portal's white tail, duotone book scans staying pink under a mild desaturate.
+words typed over the portal's white tail, duotone book scans staying pink under a mild desaturate. Captures respect Solo (quirk #182), and a
+stretched clip must be captured past its source end: read-backs can be right while the frame is wrong
+(#176, #183).
 
 ## 6. "Flat is generic" — the material pass (2026-09-20, evening)
 
@@ -78,7 +81,7 @@ not settable) and the fake-thickness copy read as paper. Lesson: when a client b
 shading trick (stepped fills, matted ramps, polar-brushed textures) costs a review round and
 still reads as vector.
 
-Timing came from the real tracks (`src/music/`): the intro WAV's speech-band envelope
+Timing came from the real tracks: the intro WAV's speech-band envelope
 (`ffmpeg` → numpy, 100 ms frames, 300–3400 Hz) gives narration pauses and the music-only gap;
 chapter portals were re-timed to those landmarks (40 / 82 / 140 / 184 s; propeller→turbine in
 the 1:59–2:20 gap) before a single word was placed by ear.
@@ -92,7 +95,7 @@ the 1:59–2:20 gap) before a single word was placed by ear.
 - Generated clips arrive at whatever exposure the model chose (the G1 "turbine eye" came at a mean
   of 37/255). Grade at the layer (Levels: Input White 0.62, Gamma 1.4 — quirk #130) instead of
   re-generating; a dark passage right after the push into the dark core is coherent as drama.
-- Review tooling must follow the wall geometry: `review_sheet.py --main` still cropped 2048×1024
+- Review tooling must follow the wall geometry: the review sheet's MAIN crop still cut 2048×1024
   from the first 1024-high wall and squeezed it to 512, so every circle became an ellipse and a
   black band appeared under the main screen. Two rounds went into doubting the render before the
   crop was checked. When the wall changes size, grep every tool for the old numbers first.
@@ -108,7 +111,8 @@ references before building its bed. Photographic references → brief a generate
 PBR render) for the bed first, and let AE own only what must be exact — type, emblem, cross-screen
 geometry, timing, award mechanics. Brief from the references' qualities, never their pixels (stock,
 © marks). Wall mapping for generated beds: 21:9 canvas 1536×672 → the middle 384 px band → ×1.333
-= MAIN 2048×512, key content and the white core inside that band; 1:1 canvas → wings 768 and the
+= MAIN 2048×512 (on the later 2048×896 MAIN the whole 672 px height maps at ×1.333, no band), key content
+and the white core inside that band; 1:1 canvas → wings 768 and the
 512×768 diagonals by centre crop; loops as first = last stills, AE cross-fade as the seam fallback.
 The procedural system stays as the placeholder and is presented as such.
 
@@ -116,10 +120,12 @@ The procedural system stays as the placeholder and is presented as such.
 
 Build one precomp — `SYS splash bed` — that every scene using that background references (splash, the
 eight awards, the intro finale). Inside it: the procedural system at the bottom as the fallback, and
-above it the generated clips, picked up by prefix (`odk_S1loop_` → `odk_S1_`) with `importNewClips()`
+above it the generated clips, picked up by prefix (`gen_S1loop_` → `gen_S1_`) with `importNewClips()`
 scanning the generation folder on every build. Nothing else changes when the clips land: one build
 and the whole show is on photography, and a missing clip degrades to the placeholder instead of a
-hole. Loop clips time-remap `time % d`; a non-loop take ping-pongs `u = time % 2d; u < d ? u : 2d - u`.
+hole. Loop clips time-remap `time % d` (read `mainSource.loop` first, quirk #183). A non-loop take
+dissolves into the next clip: a ping-pong (`u = time % 2d; …`) plays backwards and was rejected
+(quirk #181).
 
 What photography then needs from AE, none of which the generation can supply:
 - **A light pool under every type block.** Black type on a photographed fan is unreadable wherever
@@ -142,7 +148,8 @@ and, explicitly, "не эффект фотоальбома". The first build rea
 the album: dozens of rectangles with drop shadows, several on screen at once, cropped by the wall's
 edges, with type sitting on the fragments. The client's note was immediate.
 
-What "параллакс" means for a still on a 4608×768 wall:
+What "параллакс" means for a still on a 4608×768 wall (on the later 4608×896 wall a 4:3 photo keeps
+~26 % and a portrait ~15 %; re-check the crop biases below):
 - **One photograph at a time**, butted end to end with a 1.3–1.6 s cross-dissolve, 4–6 s of dwell
   each. Fewer photographs, each actually seen, beats a flicker of everything the client sent —
   compute how many fit at the target dwell and sample the era's list evenly for that many.
@@ -152,7 +159,8 @@ What "параллакс" means for a still on a 4608×768 wall:
   That reads as depth without a depth map and without distortion ("без сильных искажений").
 - **No borders, no drop shadows, no scattered placement.** The shadow is what makes a photograph
   read as a print on a table rather than a memory.
-- Vertical crop: covering a 4:1 screen with a 4:3 original keeps a quarter of the frame, so offset
+- Vertical crop: covering a 4:1 screen with a 4:3 original keeps a quarter of the frame (the later
+  2048×896 MAIN keeps ~58 %), so offset
   the hero up by ~35 % of the overflow (capped) — heads sit above centre in archive photographs.
 - Give each scene its own motion: a push-in with lateral drift for one number, a pure lateral travel
   for the next, or the two numbers read as the same footage ("но другие, не такие же").
@@ -184,7 +192,8 @@ The build that fits:
   time-remapped `((t - inPoint) + phase) % d` with `phase = 0` and `d/2`, each with a triangular
   opacity `100 * clamp((0.5 - |p - 0.5|) / 0.18)` on its own phase. One copy is always mid-clip; the
   wrap is hidden inside a dissolve, and the forward travel never stops. Transitions (a propeller
-  becoming a turbine, an old hall becoming a modern one) play `once`, time-remapped to the window.
+  becoming a turbine, an old hall becoming a modern one) play `once`, time-remapped to the window (enable
+  remapping before setting in/out and key it over the whole window: quirk #183).
 - **Archive as overlays**: one fragment at a time, 52–74 % opacity, feather ≈ 16 % of the width, three
   size/blur classes so some read as underlay and some as accent, placed off-centre and high — the
   lower centre belongs to the performer. They drift faster than the corridor: that difference is the
@@ -212,7 +221,7 @@ design really is per-screen; check that before spending hours of GPU on them.
 ## 13. Two numbers to check before a source goes full-wall
 
 Filling a 4608×768 wall with one image turns every source's own resolution and aspect into a visible
-quality decision.
+quality decision. (The numbers are for that wall; on 4608×896 re-check the crop biases.)
 
 - **Upscale factor.** `4608 / source_width` must stay under about 3.2. Generated clips at 1536 give
   3.0 and hold; an archive scan at 1960 gives 2.35 and holds; a 510-px scan gives 9 and is mush on a
@@ -237,7 +246,7 @@ without any zoom.
 ## 14. A scene that uses only part of the wall
 
 A segmented wall gives you the option of leaving panels dark, and a layout borrowed from print
-often wants exactly that: on the ODK-Saturn splash only the two diagonals and the backdrop carry
+often wants exactly that: on one show's splash only the two diagonals and the backdrop carry
 the image, and the two side panels stay off. Three things follow.
 
 **Cut on the seam, not near it.** The boundary of the active band should be the physical join
@@ -267,9 +276,17 @@ panel. A 3D scene (a camera over a photo wall, a set) just gets a bigger frame: 
 backdrop keeps its picture, the new panels see more of the world — but check the widest shot for the
 end of the world. Details in quirk #177.
 
+Growing TALLER (4608×768 → 4608×896, quirk #179):
+- A null with anchor = the old wall centre and position = the new centre carries every top-level video
+  layer (`setParentWithJump`); camera comps re-centre by themselves.
+- Shared solids are replaced with new ones of the new size, not resized.
+- Look at each cropped clip's full frame: the taller window shows baked-in titles and logo rows that
+  sat outside the old strip.
+- Pad feathered solids so every feather ends inside its layer.
+
 ## 16. Lifting a logo row off a busy picture — and checking every screen before delivery
 
-**Change the picture under the logos, don't box them.** On the ODK-Saturn splash the logo row sat on a
+**Change the picture under the logos, don't box them.** On one show's splash the logo row sat on a
 generated turbine and "disappeared". A crisp white rounded plate with a shadow fixed legibility and was
 rejected at once as generic. What worked: the logos larger (~690–820 px of row on a 2048 px screen) and at
 100 %, over a *frosted-glass pool* — an adjustment layer (box blur ~26, Levels output black ~0.42, saturation
@@ -282,15 +299,134 @@ render comp, a render comp for a dark screen, a crop offset left over from the o
 passes — structure (every listed screen has its comp with the right size, duration, fps, bin and crop offset;
 every previz holds exactly those comps at their rects, the guides overlay, sound on one screen only) and
 content (sample every master at half resolution, 8 frames: which screens carry picture, and whether any screen
-with picture has black bands at its edges). The ODK tools are `audit_wall_jsx.py` + `audit_wall_check.py`.
+with picture has black bands at its edges). Two small scripts do it: an ExtendScript dump of the structure and a Python check of captured frames.
 
 **A narrated film gets a third pass: words, voice and picture.** Transcribe the delivered track (word
 timestamps; check it is byte-identical to the file in the comp), then (1) put every on-screen word next to
 the moment it is spoken — anything more than ~0.4 s early reads as a spoiler, and a wording that shifts the
 meaning ("опыт поколений" for "опыт одного поколения") or contradicts it (a "1960" label over "в конце 50-х")
 is a bug even when the timing is right; (2) grab one clean mid-frame per shot and lay it out with the words
-spoken in that shot's window and the titles on screen. On ODK-Saturn that sheet caught what no metric would:
+spoken in that shot's window and the titles on screen. On one show that sheet caught what no metric would:
 an English "FACTORY" poster in a Soviet wartime shop, a facade signed with a 2001 company name under the years
 1945-1955, a black-and-white shot inside the colour chapter, and a "modern facade" clip that was in fact
 sepia-toned — so moving it to the colour chapter would have broken the turn into colour.
 
+## 17. Delivering the wall: render, cut, check, upload
+
+The last day of a show: every master rendered unattended, cut into per-screen files, checked and uploaded.
+The traps and measurements are in quirks #182 and #184.
+
+**Plan the file list from the project, then challenge it.** One row per master: duration, fps, music or not, and
+the screens that get a file (read from the screen comps). Before dropping a screen as a duplicate, measure it:
+sample 8 frames of each master and compare the screens by mean level, frame-to-frame change, and DIAG_L against a
+horizontally flipped DIAG_R.
+- On one show the award diagonals really were identical, so one pair served 15 awards and the splash.
+- Three other masters, whose screen comps had been deleted as "duplicates", had five different screens each.
+- Their files were cut from the wall render; the comps were not rebuilt.
+
+**Render unattended with aerender.**
+- Before the night: a power plan with no sleep on AC, Windows Update paused, free disk for at least twice
+  the expected output, and the cloud disk's per-file limit and quota checked.
+- Save the project first: aerender renders the saved file. A scripted save runs as a background call
+  with a watch on AE's windows (check `app.project.dirty` first). A save while aerender runs can raise a
+  «Could not rename … Prefs-indep» modal although the file was written (quirks #175, #182, #183).
+- Set `app.project.gpuAccelType` to CUDA before queueing (quirk #184); restore the user's setting after.
+- A master sped up with a Solo pre-render (quirk #182): layers you add come in soloed. Solo everything
+  the edited range needs, and capture that range before queueing it.
+- Drive it through a queue script:
+  - skip outputs that already exist, so the queue can resume;
+  - keep one log per job;
+  - run every job under a watchdog.
+- The watchdog:
+  - a stall is "no NEW frame number for N minutes", not "no new line";
+  - on a stall, close the render's own dialogs (only windows of its process tree), then kill the tree and retry;
+  - after the last frame, accept a file whose duration is complete even if the process hangs (quirk #184);
+  - judge success by ffprobe (duration, streams), never by the exit code.
+- Load: at most two aerender instances next to the GUI AE (94 GB machine), the GUI's image caches purged, and no
+  uploads or encodes on top during the peak. Check the socket count (`Get-NetTCPConnection`) before a long
+  run: a proxy or VPN client can hold hundreds of sockets (quirk #184).
+- To move an item between queues that are already running, create a 0-byte file with its output name. The queue
+  that owns the item then skips it as done. Render it into a staging folder and move it over the placeholder.
+- Short of time: render at 25 fps through a render-settings template (quirk #184). Render only what differs
+  between masters, for example the award's MAIN, and compose the shared screens in ffmpeg.
+- Not Media Encoder for unattended work: its watch folders ignore comps inside folders, its command line works only
+  at launch, and `queueInAME` uses the last preset. aerender plus ffmpeg is the predictable route.
+- Ask early what plays the wall. H.264 wider than 4096 px does not hardware-decode on NVIDIA, and media servers
+  often want HAP, ProRes, HEVC or DXV (ffmpeg has `hap`, `prores_ks`, NVENC h264/hevc).
+
+One job, as the queue runs it:
+
+```bash
+aerender.exe -project "X:\show.aep" -comp "07_Number" -RStemplate "Best Settings" \
+  -OMtemplate "H.264 - Match Render Settings - 15 Mbps" -output "X:\out\07_Number.mp4" -close DO_NOT_SAVE_CHANGES
+```
+
+`-s`/`-e` take comp frames for a fragment. Expect ~25 s to start and ~30 s of finalising after the last
+frame (quirk #182).
+
+**Cut the screens from the wall render.** A screen comp is a crop of the master, so one decode of the wall render
+feeds every screen: `split=N`, then one `crop=w:h:x:y` and one encoder per output. The rectangles on a
+4608×896 wall: SIDE_L 0,64 768×768 · DIAG_L 768,64 512×768 · MAIN 1280,0 2048×896 · DIAG_R 3328,64 512×768 ·
+SIDE_R 3840,64 768×768.
+- Keep one setting per screen type: the same fps and bitrate on every file. 15 Mbps makes a small screen's file
+  large (200-470 MB for 3-4 min); 9-12 Mbps is common for per-screen files.
+- Copy the AAC only where the master has music.
+- Use NVENC for screens up to 4096 wide and libx264 for the 4608-wide wall.
+
+```bash
+ffmpeg -i wall.mp4 -filter_complex "[0:v]split=3[a][b][c];[a]crop=512:768:768:64[l];[b]crop=2048:896:1280:0[m];[c]crop=512:768:3328:64[r]" \
+  -map "[l]" -an -c:v h264_nvenc -b:v 15M -r 25 DIAG_L.mp4 \
+  -map "[m]" -map 0:a? -c:a copy -c:v h264_nvenc -b:v 15M -r 25 MAIN.mp4 \
+  -map "[r]" -an -c:v h264_nvenc -b:v 15M -r 25 DIAG_R.mp4
+```
+
+Composing a wall from a unique MAIN render (`-i main.mp4`) and one shared diagonal (`-i diag.mp4`, mirrored on the
+right; `-filter_complex` graph, encoded with libx264):
+
+```text
+[0:v]crop=2048:896:1280:0,unsharp=7:7:1.0:5:5:0[m];[1:v]split[dl][d0];[d0]hflip[dr];
+color=black:s=4608x896:r=25:d=96.48[bg];[bg][dl]overlay=768:64:shortest=1[t1];
+[t1][m]overlay=1280:0:shortest=1[t2];[t2][dr]overlay=3328:64:shortest=1
+```
+
+**Check every file before it leaves.**
+- ffprobe each file: duration against the comp (±0.06 s), codec, frame size and fps.
+- Where the master has music: the audio stream is present, and `volumedetect` gives a mean above −45 dB.
+- `blackdetect`: no black longer than 1 s away from the fades.
+- Make an 8-frame contact sheet of every file and look at it.
+- Compare a screen file with the same crop of the wall render: a mean difference around 2 levels is the
+  decoder's own noise (quirk #183); more means a wrong crop or a stale file.
+- Keep a status file (JSON) so a second session knows what already passed.
+
+**Upload from the desktop app's browser pane.** An upload that publishes a link needs a yes for each
+destination. The site's upload button opens a native Open dialog (`#32770`)
+owned by the app. UI Automation cannot set its fields; Win32 can:
+1. `GetDlgItem(dlg, 1148)` returns the ComboBoxEx32; take its ComboBox, then that ComboBox's Edit.
+2. `WM_SETTEXT` the folder path, then `BM_CLICK` the button with id 1: the dialog navigates to the folder.
+3. `WM_SETTEXT` a list like `"a.mp4" "b.mp4"`, then `BM_CLICK` again: the files in the current folder are chosen.
+
+Then:
+- A `.ps1` with Cyrillic needs a UTF-8 BOM.
+- Wait on the page text («Все файлы загружены» on Yandex Disk), and answer «Заменить» when re-uploading a file.
+- Keep a journal of which file went into which remote folder, so batches can resume.
+- For the share link, override `navigator.clipboard.writeText` in the page before pressing the share or copy
+  button. The system clipboard never receives the link. Check the link without a login: fetch the public page and
+  look for the file names in it.
+- Call the dialog script with `&` inside PowerShell rather than `powershell -File`, or the inner quotes of the file
+  list get lost. A list of 15 names (443 characters) worked; 6 files of 2.4 GB went up in about a minute.
+
+Fallback without a browser: DropMeFiles has no public API, but its web uploader can be scripted with the
+standard library.
+- The sequence: GET `/` (session cookie and the server id, 4 MB chunk size), then POST `s<ID>/upload/create`
+  (returns the uid), then `…/upload/password`, then the raw chunks in order to
+  `…/uploadrmbl?name&chunk&chunks&updir=<uid>`, then `…/upload/save`. The link is `https://dropmefiles.com/<uid>`.
+- Every chunk needs the headers `Session-ID`, `Content-Disposition: attachment; filename="<uid>_<fileid>"` and
+  `Content-Range: bytes a-b/size`. Without them the server answers 415 and drops TLS mid-body.
+- A partial chunk's reply is text, not JSON. Treat any HTTP 2xx as success.
+- A link is public: ask before uploading client material, and offer a password.
+
+**Ship a README at the root.** It gives:
+- the format, in one line;
+- the folder map, with each screen's rectangle on the wall;
+- which file goes on which screen (shared files named once);
+- what changed in this version.

@@ -142,14 +142,19 @@ M.text = function (name, str, opts) {
   live.applyStroke = false;
   live.tracking = o.tracking;
   try {
-    live.justification = (o.justify === "center") ? ParagraphJustification.CENTER_JUSTIFY :
-                         (o.justify === "right") ? ParagraphJustification.RIGHT_JUSTIFY :
-                         ParagraphJustification.LEFT_JUSTIFY;
+    // if/else, not a nested ternary: ExtendScript parses `a ? X : b ? Y : Z` left-associatively and
+    // turned "center" into RIGHT (quirk 95)
+    var just = ParagraphJustification.LEFT_JUSTIFY;
+    if (o.justify === "center") just = ParagraphJustification.CENTER_JUSTIFY;
+    else if (o.justify === "right") just = ParagraphJustification.RIGHT_JUSTIFY;
+    live.justification = just;
   } catch (e0) { M.warn("justification not settable: " + e0); }
   if (o.leading !== null) {
     try { live.autoLeading = false; live.leading = o.leading; } catch (e1) { M.warn("leading not settable: " + e1); }
   }
   st.setValue(live);
+  // Weak check: a live AE echoes ANY font name back (quirk 80), so this warns only when the host
+  // substitutes the name. To prove a font, measure a fixed word's sourceRectAtTime width.
   var got = st.value.font;
   if (got !== o.font) M.warn("font fallback on '" + name + "': wanted " + o.font + ", got " + got);
   L.__font = got;

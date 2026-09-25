@@ -12,9 +12,13 @@ html/
   engine/brand.css      canvas, tones, type classes, line-mask, dev controls
   engine/tokens.js|css  GENERATED from brand/cloudru-motion-tokens.json (node scripts/build-tokens.js)
   engine/fonts/         SB Sans Display (Regular/Medium/SemiBold/Bold)
+  engine/demo.js        product-demo primitives (Demo.*: wordsAccent, letters, type, cursor, …)
   templates/showreel.html   six brand scenes; ?scene=title|divider|kpi|content|scheme|finale, ?format=story|square|4k
+  templates/demo-shipper.html  pattern page for animating a supplied frame (SKILL.md §5b)
+  templates/cn-packshots.html, templates/ab-test.html   packshot and A/B demo pages
   render/render.js      headless Chrome over CDP → beat stills, beat sheet, video (ffmpeg pipe), PNG frames
   render/serve.js       static server for live preview with controls
+  render/render.test.js renderer CLI tests
   motion.test.js        Node tests for the pure core
 ```
 

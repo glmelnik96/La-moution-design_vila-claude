@@ -16,6 +16,10 @@ from the slide crops. All six artwork slides are the same two objects, placed di
 | **orbit-18** | vector flower of 18 elliptical loops, 1.14 px white @ 47 %, rotated −116.745° | `s01_vec.svg` (4042 px) / `s09_vec.svg` (5784 px, same shape ×1.431) |
 | **orbit-157** | the dense variant, 157 loops, 1.71 px | `s11_vec.svg`, rotation +50.886° |
 
+Paths in this page are relative to the deck project. The skill ships renamed copies in
+`assets/cloudru-art/` (`planet.png`, `orbit18_4042.svg`, `orbit18_5784.svg`, `orbit157.svg`, `artkit.py`);
+the `glow_*.png` fields are not shipped — `artkit.render_fields()` makes them.
+
 Seen from the side the loops are "orbit lines" (s01, s09); seen near their centre they read as
 **rays** (s02, s13 — the same node at (4962, −1137)). The planet is shown through a rectangle
 2–3× its size: rotated −37.8° on s01, unrotated on s09/s11, CROP-transformed on s15.

@@ -240,8 +240,11 @@ Never `renderQueue.render()` over the bridge (quirk #33). Save the project and s
 
 ```
 aerender.exe -project "C:\...\spot.aep" -comp "CR Title" -RStemplate "Best Settings" \
-  -OMtemplate "H.264 - Match Render Settings - 15 Mbps" -output "C:\...\title.mp4"
+  -OMtemplate "H.264 - Match Render Settings - 15 Mbps" -output "C:\...\title.mp4" -close DO_NOT_SAVE_CHANGES
 ```
+
+aerender renders the SAVED project. Judge the result by ffprobe (duration, streams), not by the exit
+code. For long or many renders, run it under a watchdog: `reference/led-wall-pipeline.md` §17.
 
 ## 9. What to do when something is off
 

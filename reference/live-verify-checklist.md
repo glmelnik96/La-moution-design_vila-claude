@@ -15,7 +15,7 @@ node scripts/ae.js --lib 'JSON.stringify({v: M.VERSION, green: CR.HEX.GREEN, fps
 ```
 Expected: `{"v":"1.0.0","green":"#26D07C","fps":25}` (or the comp's fps). If `--lib` throws a
 syntax modal, AE has rejected something in `cloudru-motion.jsx` — note the line (subtract the
-prelude offset: es-json 38 lines + tokens.jsx ~90 lines) and fix.
+prelude offset: a lib line = reported − 194, a payload line = reported − 1131, quirk #180) and fix.
 
 ## 1. Fonts
 
