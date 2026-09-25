@@ -3216,4 +3216,5 @@ night, then a fixed deadline).
     every blade looks like its neighbour, so the vectors can match the wrong one.
   - RIGHT: no retime and no frame blending. For a 24 fps loop in a 25 fps render, set stretch 96 %, frame
     blending off and time remap off, so each output frame is one source frame and the loop plays 4 % fast. The
-    ffmpeg equivalent is `-stream_loop -1 -i loop.mp4 -vf "setpts=N/(25*TB)" -r 25`.
+    footage item itself does the repeating: interpret it with Loop N× (`mainSource.loop`, quirk 183) so the
+    layer covers the whole comp. The ffmpeg equivalent is `-stream_loop -1 -i loop.mp4 -vf "setpts=N/(25*TB)" -r 25`.

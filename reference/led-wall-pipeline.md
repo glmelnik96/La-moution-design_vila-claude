@@ -325,6 +325,8 @@ horizontally flipped DIAG_R.
 - Their files were cut from the wall render; the comps were not rebuilt.
 
 **Render unattended with aerender.**
+- Before the night: a power plan with no sleep on AC, Windows Update paused, free disk for at least twice
+  the expected output, and the cloud disk's per-file limit and quota checked.
 - Save the project first: aerender renders the saved file. A scripted save runs as a background call
   with a watch on AE's windows (check `app.project.dirty` first). A save while aerender runs can raise a
   «Could not rename … Prefs-indep» modal although the file was written (quirks #175, #182, #183).
