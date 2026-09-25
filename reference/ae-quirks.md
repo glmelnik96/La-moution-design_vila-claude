@@ -1,9 +1,10 @@
 # After Effects / ExtendScript quirks
 
-Battle-tested gotchas found while validating tools against a **real** running
-After Effects via CDP (source: `Extensions-LLM-Chat` live-validation, commit
-`60f2b79`). These are not theoretical — each one produced a silent failure or a
-thrown error in a live AE session. Read before writing host code or expressions.
+Battle-tested gotchas found against a **real** running After Effects via CDP. The early sections
+come from the `Extensions-LLM-Chat` live validation (commit `60f2b79`); later ones from production
+jobs (a word cloud, Cloud.ru decks, an LED-wall show: 120–184). Each one produced a silent failure
+or a thrown error in a live AE session. Read before writing host code or expressions. Code and docs
+cite these numbers: never renumber; mark superseded text and point forward instead.
 
 ---
 
@@ -77,12 +78,9 @@ Editor's combined handle drag. Temporal and spatial are separate axes:
 - **Spatial** (the *curvature of the path through space*) → the
   `setSpatialTangentsAtKey` family above.
 
-**CONFIRMED (2026-07-22 smoke run):** `setSpatialTangentsAtKey` behaves as
-documented against the running AE — set an out-tangent `[120,-60,0]` on a Position
-key and `keyOutSpatialTangent` read back `120,-60,0` exactly. The 3-element arity
-(`[x,y,z]`, `z=0` in 2D) is the real trap; the tangent math itself is sound.
-
 ## 6. Operate on the active composition only
+
+**See quirk 73** (`M.use(comp)`) and quirk 175 (select a comp by its exact name).
 
 Tools assume the user's currently-open comp. Do not walk `app.project.items`
 looking for a comp by name.
@@ -102,6 +100,8 @@ reassign afterward.
 (`ADBE Fill`) and drive its color, rather than trying to mutate the solid source.
 
 ## 8. `capture_comp_frame` captures the current playhead only
+
+**Legacy panel tool only.** `M.capture(frames, …)` takes frame times (quirk 27).
 
 The frame-capture host function has **no time parameter**. It captures whatever
 frame the comp playhead is currently sitting on.
@@ -123,8 +123,8 @@ saving once throws
 3. mutate `live.font` / `live.fontSize` on that live doc,
 4. `sourceText.setValue(live)` again.
 
-Also compare requested vs `value.font` after saving to detect silent font
-fallback (a `fontWarning`).
+Do not trust `value.font` after saving to detect a silent font fallback: it echoes any
+name (quirk 80). Measure the width of a fixed word instead.
 
 ## 10. Always wrap mutations in an undo group
 
@@ -143,6 +143,8 @@ try {
 One undo group per logical action → one Cmd+Z fully reverts it.
 
 ## 11. Inline jsx with nested quotes on Windows can wedge the whole host
+
+**See quirk 25:** a mangled inline payload is what raises the blocking dialog.
 
 **LIVE-INCIDENT (2026-07-22):** a `node scripts/ae.js "…"` call with nested quotes /
 a regex inside the inline jsx got mangled by Windows bash escaping and reached AE as a
@@ -200,6 +202,8 @@ After each scene, verify `comp.numLayers` matches expectation and capture a fram
 a *neighbouring* scene's window to confirm nothing bleeds across.
 
 ## 14. `layer.inPoint` SHIFTS source-less layers — set `inPoint` BEFORE `outPoint`
+
+**See quirk 159:** solids and precomp layers slide as well; assign `startTime` → `inPoint` → `outPoint`.
 
 LIVE-VERIFIED. For layers with no footage source (shape, text, null), the
 `inPoint` setter does **not** trim — it *moves* the layer, preserving duration.
@@ -297,8 +301,8 @@ A shape layer's Scale reads back 2 elements; a **text** layer's Scale reads back
 **3**. Hard-coding `(d === 2) ? 2 : 1` produced
 `Unable to call "setTemporalEaseAtKey" because of parameter 2. Value array does
 not have 3 elements.` Derive the count from the property and keep a fallback
-chain — `p.value.length` is right in every case observed so far, but AE
-occasionally disagrees with itself.
+chain — `p.value.length` is not reliable: a 2D layer's Scale reads 3 but takes
+2 eases (quirk 181). Count the failures.
 
 ```js
 function ease(p, k, i, o){
@@ -451,13 +455,15 @@ four stacked dialogs and ~8 minutes of dead time.
 
 **Rule: on `CDP timeout (120s)`, STOP calling AE.** Ask the user to clear the dialogs
 (or reload the panel), and only then send one lightweight ping before resuming. Do not
-probe "just to see" — probing is what multiplies the dialogs.
+probe "just to see" — probing is what multiplies the dialogs. First rule out a long build (AE busy on
+the CPU: quirk 143) and a timeout passed in seconds (quirk 170).
 
 Reading the line number: `es-json.jsx` (38 lines) is prepended and joined with `\n`, so
 **the payload's own line 1 is reported as line ~40.** A reported line just above 39
-means the fault is at the very top of your jsx, not in the prelude.
+means the fault is at the very top of your jsx, not in the prelude. With `--lib`, 1131
+prelude lines come first (quirk 180).
 
-Related: this is a second reason to follow #19 and keep non-trivial jsx in a FILE rather
+Related: this is a second reason to follow #11 (and #19) and keep non-trivial jsx in a FILE rather
 than passing it inline through the shell — inline payloads can be mangled in transit,
 and a mangled payload is exactly what raises the blocking syntax dialog.
 
@@ -511,7 +517,7 @@ plausible timestamp is indistinguishable from a fresh one.
 **It writes at the comp's Resolution, not full size.** A 4096x2160 comp set to Quarter
 saves a 1024x540 PNG. Fine for judging layout, useless for judging type crispness — and
 it silently breaks any crop coordinates you computed in comp space. Check `im.size`
-before cropping, or set `comp.resolutionFactor = [1, 1]` for the capture.
+before cropping, or set `comp.resolutionFactor = [1, 1]` for the capture (quirk 34).
 
 ## 28. Scaling a 1x1 solid gives you a 1-px tick, not a rule
 
@@ -524,6 +530,8 @@ Build rules, bars and underlines at their **final pixel size** and animate `Scal
 linear in pixels so the easing reads the way you designed it.
 
 ## 29. Parenting AFTER positioning rewrites your values — parent FIRST, and neutralise the null
+
+**See quirk 171:** `setParentWithJump` parents without rewriting the child's values.
 
 Assigning `L.parent = nul` preserves the layer's *world* transform, so AE silently
 rewrites Position (and every Position keyframe) into parent space. Set one value before
@@ -591,7 +599,7 @@ Turning on comp motion blur after building a reflow looks like a free upgrade. I
 ## 33. Render out of process with aerender.exe — never block the live session
 
 `renderQueue.render()` over the CDP bridge blocks AE's UI thread; a 4K render will time the
-bridge out, and per the bridge-safety rule you then have to stop calling AE altogether.
+bridge out, and per quirk 25 you then have to stop calling AE altogether.
 Instead: `app.project.save(new File(path))` (an untitled project gains a home, no loss), then
 shell out:
 
@@ -667,15 +675,15 @@ Two things that fixed it, and one that did not:
 
 ## 37. A geometry model is not the render — audit collisions from AE, not from the packer
 
-LIVE-VERIFIED. `check_overlap.py` swept every frame of the v4 cloud and reported **1 real
+LIVE-VERIFIED. `_build/check_overlap.py` swept every frame of the v4 cloud and reported **1 real
 collision**. The rendered frames showed words sitting on top of each other, including in
 the held final layout that carries the last five seconds of the spot. The sweep was not
 lying about its own numbers; it was auditing the *packer's* idea of where the words are,
 which is not where AE puts them.
 
 **On a 3D layer `sourceRect * scale` is NOT the on-screen box** — it skips the camera
-projection, and `Layer.toComp()` does not exist in this build (verified: `typeof L.toComp
-=== "undefined"` on a layer with `threeDLayer === true`). Project by hand:
+projection, and `Layer.toComp()` does not exist in ExtendScript — it is an expression method
+(quirks 160, 176; verified: `typeof L.toComp === "undefined"` on a layer with `threeDLayer === true`). Project by hand:
 
 ```jsx
 // anchor is [0,0], so scale multiplies the source rect about the layer origin
@@ -836,6 +844,8 @@ guard.
 
 ## 40. `saveFrameToPng` returns before the file is on disk
 
+**Same trap as quirk 27** (and quirk 99): wait on size-stable files.
+
 The call returns, the JSON payload comes back listing eight paths, and reading
 them immediately gives:
 
@@ -927,7 +937,7 @@ Both words either side of a gap may ignore a move, and they may ignore them
 The measurement that finds this is not the collision checker.
 `check_overlap.py` gates on intersection, so two words 1 px apart score exactly
 as well as two 100 px apart, and a pair that reads on screen as one run-on word
-scores clean. `gaps.py` reports the distribution of the *gap* instead.
+scores clean. `_build/gaps.py` reports the distribution of the *gap* instead.
 
 **General shape:** every tolerance that both parties to a constraint may spend
 independently costs the constraint twice. And a checker that gates on a
@@ -936,8 +946,8 @@ margin.
 
 ## 45. Read a logo's silhouette off its alpha, radially — never off the picture
 
-The YANOS mark looked like "a blue Я inside a ring". It is not. A radial profile
-of the alpha (`form_ya.py`, probe in `C:/dev/temp/probe_mark.py`) gives, as
+A client's mark looked like "a blue Я inside a ring". It is not. A radial profile
+of the alpha (`_build/form_ya.py`, a probe script) gives, as
 fractions of the mark's own diameter:
 
 | region | radius | opaque |
@@ -1012,7 +1022,7 @@ the entire clearance, so `form_ya.py` reported a clean pack while neighbours
 touched. Rounded outward the test is conservative: it can refuse a legal slot,
 never accept an illegal one — which is the direction you want to be wrong in.
 
-Verify with a checker that does **not** share the packer's grid. `ya_gaps.py`
+Verify with a checker that does **not** share the packer's grid. `_build/ya_gaps.py`
 reads the frozen layout and measures continuous-space gaps between ink boxes;
 re-using the packer's own `Field` to check the packer would only confirm its
 rounding back to itself.
@@ -1037,6 +1047,8 @@ slots at that size.
 looks *authored* rather than *generated* needs its own constraint.
 
 ## 50. `saveFrameToPng` returns before the file is closed
+
+**Same trap as quirk 27** (and quirk 99): wait on size-stable files.
 
 The JSX finishes and reports the paths, but PIL opening the first PNG straight
 away raised `OSError: image file is truncated (0 bytes not processed)`. The file
@@ -1132,7 +1144,7 @@ review — it answers "is there a big word here, does it fit". It cannot answer
 "does this frame look right", because the comp gives every word the brand colour
 it has carried for 28 seconds and parks a logo lockup bottom-right.
 
-`ya_check.py` was written to draw the same frozen layout in the real palette
+`_build/ya_check.py` was written to draw the same frozen layout in the real palette
 with the logo's footprint outlined, and it immediately caught two defects the
 size-ramped preview had shown cleanly for days: the 200 px offset (#53) and the
 red saturation (#54).
@@ -1170,7 +1182,7 @@ change between runs has to be set on the object, not passed to its constructor.
 
 ## 57. `setTemporalEaseAtKey(k, inEase, outEase)` — argument order bites
 
-The helper in `gen_cloud.py` is `easeKey(p, k, inf0, inf1)` and it calls
+The helper in `_build/gen_cloud.py` is `easeKey(p, k, inf0, inf1)` and it calls
 `p.setTemporalEaseAtKey(k, eb, ea)` where `eb` carries `inf1` and `ea` carries
 `inf0`. So **`inf0` is the OUT influence and `inf1` is the IN influence** —
 the reverse of how the parameter names read.
@@ -1199,6 +1211,8 @@ reasoning about it.
 
 ## 58. The emitted JSX is written as ASCII
 
+**See quirk 19** (the same ASCII-only rule).
+
 `gen_cloud.py` writes the `.jsx` with a plain `open(...).write()`, so a single
 Cyrillic character anywhere in the template — including in a *comment* — raises
 `UnicodeEncodeError` at write time, tens of thousands of characters into the
@@ -1212,7 +1226,7 @@ Word content survives because it goes through `js()`, which escapes to `\uXXXX`.
 The brand pack ships the mark as `.WEBP`. `app.project.importFile` fails on it,
 and it fails at *import* — so with a `try/catch` around the block the layer is
 simply absent and the shot renders looking finished but empty. Convert to PNG in
-the Python step (`mark_fit.py` does the crop and the write in one pass) and
+the Python step (`_build/mark_fit.py` does the crop and the write in one pass) and
 import that.
 
 ## 60. A window-clipping containment test accepts boxes that hang off the mask
@@ -1220,7 +1234,7 @@ import that.
 `form_ya.py`'s `Field.legal()` tests a candidate slot with `win()`, which
 **clips the window to the grid** and then computes `need` from the clipped
 indices. A box hanging off the letterform is therefore only tested on the part
-still on the grid — and passes. `mark_probe.py` measured the result: 32 of 112
+still on the grid — and passes. `_build/mark_probe.py` measured the result: 32 of 112
 packed boxes are not fully on the glyph, the worst 68% off, and some sit across
 the letter's internal counters.
 
@@ -1240,7 +1254,7 @@ letter's shoulder. A word cut mid-stroke does not read as "behind the mark", it
 reads as a clipping bug.
 
 The obvious fix — shrink until nothing overhangs — turned out not to exist.
-`coll_fit.py` bisects from 0.60 down to 0.02 and never finds a clear scale,
+`_build/coll_fit.py` bisects from 0.60 down to 0.02 and never finds a clear scale,
 because the knock-out is not the solid slab it looks like: it carries the mark's
 internal blue strokes, so it is a thin branching shape and the centre of its own
 bounding box is *on* blue (`LETTER[lf_cx, lf_cy] == 0`). There is no useful
@@ -1277,7 +1291,7 @@ Windows unless the file is pinned.
 ## 63. `lint-jsx.js` false-positives on a correctly terminated payload
 
 The linter warns `last statement does not call JSON.stringify(...)` on payloads that do exactly
-that. It looks at the last *line*, and the house pattern
+that. It looks at the last three lines (quirk 170), and the house pattern
 
 ```javascript
 JSON.stringify(M.run("label", function () {
@@ -1514,6 +1528,8 @@ not reliable with non-ASCII paths, so the fix is to mirror the assets to an ASCI
 
 ## 78. Setting `app.project.workingSpace` opens a modal — and it silently shifts every import
 
+**See quirk 93:** the same working space later measured 0.4–0.7/255 — measure before blaming it.
+
 Two things, one line of code.
 
 The project was on a **Rec.709 Gamma 2.4** working space, so every imported sRGB PNG was
@@ -1639,6 +1655,8 @@ other layer's `rest` is read, and never emit keys for layer A after layer B's re
 
 ## 86. `sourceRectAtTime(0)` includes the Text Animator's offset — read the rect BEFORE adding the cascade
 
+**Same trap as quirk 81:** measure before adding a Text Animator.
+
 Rows that persist across a cut were placed 7 px right / 11 px high on the next slide. Their
 travel targets were computed from `L.sourceRectAtTime(0, false)` taken after `cascade()`
 had been added: at t = 0 the selector offset is −RAMP, so every word is displaced by the
@@ -1697,7 +1715,7 @@ frame, invisible inside an 800 ms move. Read the new rect with `sourceRectAtTime
 then keys on `ADBE Vector Rect Size`, `… Position`, `… Roundness` between the two slides'
 boxes (with the #89 inset applied to both). Trim Paths from the draw-on stays at 100 and
 does not interfere. Pass both boxes explicitly — after the first keys, `.value` returns the
-first key, not the current state (#85 family).
+first key, not the current state (#81, #85).
 
 ## 93. Colour management sanity check: `saveFrameToPng` returned #7459F9 as exactly (116, 89, 249)
 
@@ -1724,13 +1742,16 @@ centred paragraph to RIGHT. ExtendScript evaluates it as `((a ? X : b) ? Y : Z)`
 "center" the inner result CENTER is truthy, so the outer picks RIGHT; for "right" the inner
 gives `true`, so RIGHT again (correct by accident); only "left" falls through to LEFT.
 Probe: three 2-line layers built with the same function came back 7414 / 7415 / 7414.
-Use `if / else` (or parenthesise every nested ternary) in anything sent to AE.
+Use `if / else` (or parenthesise every nested ternary) in anything sent to AE. `M.text` itself used
+this ternary until 2026-09-25 (fixed with if/else).
 
 **Verification lesson:** an ink-box comparison cannot see justification — the block's bbox
 is identical for left / centre / right. Multi-line text needs a per-line x-extent check
-(tools/verify_deck.py `line_ranges`), which is what finally exposed this.
+(`assets/cloudru-art/tools/verify_deck.py`, `line_ranges`), which is what finally exposed this.
 
 ## 96. Figma MCP responses over ~19.5 KB fail to parse ("EOF while parsing a string at column 19xxx")
+
+**Cause found in quirk 100** (U+2028, not size); a ~20 KB cap also exists (quirk 109).
 
 `get_metadata` on three of eighteen frames and one combined `use_figma` dump died with the same
 SSE-parse error at column 19 664–21 364 — the transport truncates long replies. Not the file,
@@ -1768,7 +1789,7 @@ Every "EOF while parsing a string at column 19xxx" from `get_metadata` / `use_fi
 to ONE thing: a text node containing U+2028 (LINE SEPARATOR — what Figma stores for a
 Shift+Enter soft break; hard breaks are `\n`, and some come through as U+000B). The MCP
 server serialises it raw (JSON.stringify does not escape U+2028), the SSE layer splits on
-it as a line end, and the client sees a truncated frame. Size was a red herring: an 8-node
+it as a line end, and the client sees a truncated frame. Size was not the cause here (a ~20 KB cap also exists, quirk 109): an 8-node
 dump with two U+2028 failed, a 26-node dump without any succeeded.
 Fix inside `use_figma`: sanitise every string you return with a char-code loop
 (`{133,8232,8233,11,12}` → `<hex>` markers) — NOT a regex literal: the tool call is JSON, so
@@ -1833,7 +1854,7 @@ picks up a neighbour's descenders or the dot of the next line. Measure the text 
 glyph components (scipy.ndimage.label, 8-connected) that touch its *core* — the dense rect —
 plus small detached marks (≤0.28·size tall) within its span and within 0.4·size above / 0.15·size
 below, never a component clipped by the rect edge. Builder and verifier must share one
-implementation (tools/inkmeasure.py), or "both wrong the same way" passes the check
+implementation (`assets/cloudru-art/tools/inkmeasure.py`), or "both wrong the same way" passes the check
 (a 2-line text drawn on one line passed the bbox check; only the per-line extent check caught it).
 
 ## 107. Line bands: threshold per run, not per element
@@ -1845,6 +1866,8 @@ of the peak, ≥2 px), then keep rows ≥8 % of THAT run's peak. Two lines whose
 next ascenders still part at the sparse valley.
 
 ## 108. Figma text boxes lie about their height (and INK text needs its plate)
+
+**Superseded by quirk 119:** size the box to (n + 1.2) line boxes and stop growing at any visible node.
 
 Boxes are routinely smaller than their content: a 23 px box holding two 44 px lines, a 51 px box
 holding two lines — the render simply overflows. Grow the measurement box downward (up to three
@@ -1973,13 +1996,16 @@ itself. Dump `numProperties` + matchNames once per unfamiliar effect instead of 
 
 ## 121. Imported footage keeps its extension in `item.name`
 
-`importFile` names the FootageItem `page122_image-000.png` / `odk_A1_dark_bed_loop.mp4`, not the
+`importFile` names the FootageItem `page122_image-000.png` / `gen_A1_dark_bed_loop.mp4`, not the
 stem. A lookup by name without the extension finds nothing and the build "succeeds" with missing
 layers (the preshow came back with seven "missing" drawings). Either rename on import or search
-with the extension. Also: a directory import must filter by prefix — `M:/Minimax h3/out/*.mp4`
-pulled 63 unrelated clips into the project before the `odk_` filter existed.
+with the extension. Also: a directory import must filter by prefix — a generation output folder (`out/*.mp4`)
+pulled 63 unrelated clips into the project before the `gen_` filter existed.
 
 ## 122. Centre text by its measured box, not by justification
+
+**Probably quirk 95, not AE:** `M.text` set justification with the nested ternary that ExtendScript
+mis-parses (CENTER became RIGHT); fixed with if/else on 2026-09-25. Centring by the measured box stays right.
 
 Point text with CENTER_JUSTIFY set through `TextDocument.justification` did not centre on the
 anchor in AE 26.3 — the string ended at the anchor (rendered as right-aligned). Box text centres
@@ -1997,6 +2023,8 @@ original next to the upscale.
 
 ## 124. Building a multi-screen LED wall in one comp
 
+**Geometry superseded** by quirks 171 (4608x768) and 179 (4608x896); the method stands.
+
 Design in physical space at one pixel pitch (256 px/m here): SIDE 768×768 | DIAG 512×768 |
 MAIN 2048×1024 | DIAG | SIDE = 4608×1024, regions drawn as guide layers. Delivery comps take a
 SLOT comp (the whole wall) with anchor at the wall centre and position = comp centre − region
@@ -2012,12 +2040,12 @@ revolutions and `evolution = time·360·N/T`, drifts as `sin(2π·time/T)`.
 Five-second clips only serve a four-minute number when the brief carries the number's timeline:
 per segment tc_in/tc_out, which clip (loop bed vs event), and the exact start/end frames at the
 pipeline canvas (1536×672 for 21:9, 1024×1024 for 1:1). Events longer than 5 s are chains — clip
-k+1 starts with `--first <last frame of k>` (exact), and chains that must land on a designed
+k+1 starts with `--first <last frame of k>` (flags of the project's generation pipeline, not `scripts/gen.js`; exact), and chains that must land on a designed
 picture (a loop's anchor, an AE handoff) end with `--last <anchor>` plus a 6–10 frame crossfade in
 the edit. Anchors that come from existing takes are extracted with ffmpeg at the pipeline
 resolution; anchors that come from the archive are graded per era first (sepia / cold BW /
 vintage / clean), because a start frame sets the look of the whole clip. Write the pack as data
-(`shots3.py` in the generator's own list format + `timeline.csv`) so the other agent queues it
+(in the generator's own shot-list format plus a CSV) so the other agent queues it
 without re-reading prose.
 
 ## 126. Hue/Saturation matchNames are off by one from the panel order
@@ -2029,6 +2057,8 @@ magenta and the mistake is invisible on neutral photos. Dump the effect once (na
 setting anything by number; the review captures caught it, the numeric result did not.
 
 ## 127. `"text" + err` inside a catch throws its own error in ES3
+
+**See quirk 1** (the same `+` family in ES3).
 
 Concatenating an Error object to a string (`out.notes.push("skipped: " + e1)`) raises
 `Object of type Error found where a Number, Array, or Property is needed` — from INSIDE the catch,
@@ -2066,6 +2096,9 @@ captures in the background and poll.
 
 ## 130. Levels (`ADBE Easy Levels2`) property map — LIVE-VERIFIED (AE 26.3)
 
+**Levels takes neither expressions nor keys in AE 26** (quirks 163, 181.2): animate with Brightness &
+Contrast 2, or fade the effect's own mix (quirk 183).
+
 `-0001` Channel, `-0002` Histogram, `-0003` Input Black, `-0004` Input White, `-0005` Gamma,
 `-0006` Output Black, `-0007` Output White, `-0008`/`-0009` Clip To Output Black/White. All
 levels are 0..1 (not 0..255); gamma is a plain multiplier (1 = none). Probe recipe for any
@@ -2084,20 +2117,25 @@ gap sweep gives first the sections (gap ≈ 2 s) and then the individual lines (
 beat period from the autocorrelation of the spectral flux over lags 0.3–1.2 s; lines of a verse
 almost always sit on a 2-bar grid, so `line = 2 * 4 * beat` places every line from one section
 start. To tell a repeat from new material, correlate per-band log-energy feature vectors of two
-windows: same section ≈ 0.15–0.28, unrelated ≈ 0.03. Tool: `tools/vocal_map.py` in the ODK project.
+windows: same section ≈ 0.15–0.28, unrelated ≈ 0.03. A small project-side script (`vocal_map.py`) does it.
 Verified on a 4:04 anthem: intro 14.7 s, 2 verse blocks and 2 chorus blocks of 34 s each at 109 bpm
 (bar 2.20 s), every stanza landing on the measured boundaries.
 
 ## 132. `M.capture` returns before the PNGs exist — never chain a cropper onto it
 
+**Same trap as quirk 27** (and quirk 99): wait on size-stable files.
+
 `saveFrameToPng` queues the write; the call that follows it in the same shell line runs while AE is
 still flushing. A crop/compose step chained after a capture (`node ae.js … && python crop.py`) dies
 on `FileNotFoundError` for files the capture "returned", and a file that does exist may still be
-half-written. Wait on size-stable files first (`review_sheet.py` polls; or
+half-written. Wait on size-stable files first (a project-side `review_sheet.py` polls; or
 `until [ -f f ] && [ "$(stat -c%s f)" -gt N ]; do sleep 4; done` plus a few seconds of slack), then
 crop. Cost of ignoring it: a whole build round looks failed when only the cropper was early.
 
 ## 133. `timeRemapEnabled = true` resets the layer's outPoint to the source duration
+
+**See quirk 183:** with this order and a remap expression, a slowed clip still rendered blank past its
+source length; keys over the whole life fixed it (cause not isolated).
 
 Setting `layer.outPoint` before enabling time remapping is silently undone: switching the flag on
 re-derives in/out from the footage length, so a 49-second corridor segment built from a 5.17 s clip
@@ -2108,11 +2146,11 @@ up as missing footage in a capture several seconds past the clip length.
 
 ## 134. Prefix matching picks the wrong clip when ids share a stem
 
-`odk_N3a_quality_…mp4` and `odk_N3a_sq_quality_…mp4` both satisfy `name.indexOf("odk_N3a_") === 0`,
+`gen_N3a_quality_…mp4` and `gen_N3a_sq_quality_…mp4` both satisfy `name.indexOf("gen_N3a_") === 0`,
 and a "take the last by name" tiebreak hands you the square version for the wide slot — silently, in
 a build that reports success. Any id scheme with a suffixed variant (`sq`, `loop`, `alt`) needs an
 anchored match, not a prefix: build it from the id and the known tier names,
-`new RegExp("^odk_" + id + "(loop)?_(quality|balanced|draft)")`. ExtendScript constructs RegExp from
+`new RegExp("^gen_" + id + "(loop)?_(quality|balanced|draft)")`. ExtendScript constructs RegExp from
 a string fine. Cheap rule: whenever generated assets are looked up by name, the lookup must be able
 to say no to a longer id, and the build log should print which file each slot resolved to so the
 mismatch is visible without opening the comp.
@@ -2138,7 +2176,7 @@ timestamps, which give the boundary as the first word of the next chapter — ex
 Two traps: whisper merges a long musical gap into the preceding segment, so read the *word* times,
 not the segment start (a segment beginning at 119.35 s had its second word at 143.54 s — the 24 s
 gap was the film's key transition); and VAD occasionally emits a stray one-word fragment at the gap
-start. Tool: `tools/transcribe.py`. Use it to compare two versions of a track as well — align the
+start. Tool: a project-side `transcribe.py`, not shipped with this skill. Use it to compare two versions of a track as well — align the
 per-second RMS envelopes first to find *where* they differ, then read the transcripts only there.
 
 ## 137. `setValue` on a keyframed property aborts the whole build, silently mid-loop
@@ -2151,7 +2189,7 @@ ran — so the review sheet showed a mix of new and stale frames and looked like
 Rules: never `setValue` a property you may have keyframed — branch earlier and don't create the
 element at all; and when a build loops over sibling comps, check the layer list of the LAST comp in
 the loop, not the first, before trusting a capture. `M.summary` or a layer-name probe catches it in
-seconds. Related to quirk #1 (`setValue` after keyframes) but the damage here is the aborted loop.
+seconds. No earlier quirk covers the throw itself; the damage here is the aborted loop.
 
 ## 138. Two emitters that both own a comp: the later build silently empties it
 
@@ -2167,7 +2205,9 @@ would have looked merely dark.
 
 ## 139. A 3D layer under a camera needs its POSITION compensated for depth, not just its scale
 
-LIVE-VERIFIED 2026-09-22 (ODK-Saturn pre-show). With the camera at `-CAMZ` looking at the `z = 0`
+**See quirk 37** (the same depth compensation in the word-cloud build).
+
+LIVE-VERIFIED 2026-09-22 (LED-wall show pre-show). With the camera at `-CAMZ` looking at the `z = 0`
 plane and zoom `CAMZ`, a layer at depth `z` is magnified by `CAMZ / (CAMZ + z)` — and so is its
 offset from the centre of the comp. Compensating only the scale leaves the composition wrong:
 a fragment authored at `x = 4060` on a 4608-wide wall at `z = -580` projects to 4622 and is gone.
@@ -2196,7 +2236,7 @@ edge across the wall, which reads as a render bug. The layer has to be bigger th
 WRONG `M.solid(n, c, 700, 1400)` + mask `[[0,0],[700,0],[700,1400],[0,1400]]`, feather 340
 RIGHT `M.solid(n, c, 1500, 2000)` + mask `[[420,320],[1080,320],[1080,1680],[420,1680]]`, feather 300
 
-It also appears when a script MOVES somebody else's masked layer (2026-09-23, ODK-Saturn awards): the
+It also appears when a script MOVES somebody else's masked layer (2026-09-23, LED-wall show awards): the
 client's white glow was a 2048 px solid filling MAIN, with the mask's feather running out exactly at the
 comp edge. The emitter shifted the layer 166 px left with the logo row, so the solid's edge landed
 inside the frame and cut the feather into a vertical line (-13 levels) the client spotted. To move
@@ -2204,7 +2244,9 @@ what a masked layer shows, move its MASK vertices (all keys) and leave the layer
 
 ## 141. A mask lives in LAYER space: on a scaled layer, comp coordinates put it somewhere else
 
-LIVE-VERIFIED 2026-09-22 (ODK-Saturn splash). The active band of the wall is x 768..3840, so the
+**See quirk 75** (the same layer-space rule).
+
+LIVE-VERIFIED 2026-09-22 (LED-wall show splash). The active band of the wall is x 768..3840, so the
 mask on the texture layer was given those vertices — but that layer is a clip scaled ~300% and
 shifted, and the mask scales with it. The right edge landed at 4248 and painted the side screen
 that was supposed to be off. It is invisible in a thumbnail: brighten the band 6x to see it.
@@ -2224,7 +2266,8 @@ that is identical on every frame is a static leak; one that changes is something
 LIVE-VERIFIED 2026-09-22. Params are ordinary match names: `CC Light Sweep-0001` Center,
 `-0002` Direction, `-0003` Shape (2 = smooth), `-0004` Width, `-0005` Sweep Intensity,
 `-0006` Edge Intensity, `-0007` Edge Thickness, `-0008` Light Color, `-0009` Light Reception
-(2 = composite). Center is in LAYER space, so drive it from `L.source.width/height`.
+(2 = composite). Center is in LAYER space, so drive it from `L.source.width/height` (on text and
+shape layers effect points are comp coordinates: quirks 160, 167).
 
 A cyclic scene must not pulse, so run the band across in the first quarter of the cycle and let
 it sit off the layer for the rest — off the layer means nothing on screen at all, no fade needed:
@@ -2258,7 +2301,7 @@ an ADD dot that wanders onto a screen which is meant to be off is a lit pixel on
 
 ## 145. Box text wraps before you can measure it, so a type fit overshoots
 
-LIVE-VERIFIED 2026-09-22 (ODK-Saturn award plates). Fitting a long line into a panel by measuring
+LIVE-VERIFIED 2026-09-22 (LED-wall show award plates). Fitting a long line into a panel by measuring
 `sourceRectAtTime` and scaling down does not converge: a box-text layer wraps inside its own box,
 so the measurement returns the WRAPPED block (width capped at the box, height doubled) rather than
 the real line width. An iterative shrink then chases the height guard and lands far too small — a
@@ -2313,7 +2356,7 @@ plain sentinel in the data and expand it in code: `c.replace("|", chr(13))`, and
 
 ## 149. The closed link: how to make a long bed out of a short clip without a loop
 
-LIVE-VERIFIED 2026-09-22 (ODK-Saturn). A 5 s generated clip looped over a 160 s window repeats
+LIVE-VERIFIED 2026-09-22 (LED-wall show). A 5 s generated clip looped over a 160 s window repeats
 thirty-two times, and cross-dissolving the seams only turns the repeat into mush. The fix is not a
 better dissolve, it is a different structure — generate 15 s links whose ENDPOINTS are pinned to
 the local clip's endpoints:
@@ -2367,7 +2410,7 @@ five aircraft takes in this batch were unusable, and the description of one of t
 
 ## 152. Archive stills as a memory: a feathered oval, a ceiling on the whites, and headroom
 
-LIVE-VERIFIED 2026-09-22 (ODK-Saturn intro and hymn). The client asked for the photographs to lie
+LIVE-VERIFIED 2026-09-22 (LED-wall show intro and hymn). The client asked for the photographs to lie
 on the wing screens "like the drawings, as a memory, a bit abstract, and the frame edges must not
 read". Three things made it work, and two of them were mistakes first.
 
@@ -2391,7 +2434,7 @@ the visible band and the crane still has room to travel.
 
 ## 153. A glass wipe that hides sloppy joints: fluted displacement, frozen holds, one shared matte
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn, "2 заставка общая", AE 26.3). Generated clips placed
+LIVE-VERIFIED 2026-09-23 (LED-wall show, the splash, AE 26.3). Generated clips placed
 end-to-end never match at the cut (a title that is 2 % bigger, a different grade, a jump from the
 title to a white sky). A pane of fluted glass sliding across the frame hides every one of them,
 provided the old/new boundary rides UNDER the glass instead of the cut happening all at once.
@@ -2419,7 +2462,8 @@ LIVE-VERIFIED 2026-09-23. Two failures that only showed on real frames.
 - On a white sky the pane read as a **white bar**: a Levels lift, a Soft Light tint, a bloom and a
   sheen each brighten, and on 255 they all clip. Soft Light with any blend value leaves pure white
   unchanged, Add and Screen cannot go above it. Glass that must read on white needs DENSITY:
-  Levels output black 0.02 / output white 0.965, a Multiply tint of a cool near-white
+  Levels output black 0.02 / output white 0.965, a Multiply tint (inside a precomp it needs an opaque
+  floor, quirk 156) of a cool near-white
   `[0.95, 0.968, 0.99]`, and a thin Multiply line at every rib trough (the ribs precomp through
   Levels input white 0.08). Highlights (Add) are for the dark parts only.
 - A periodic pattern that moves with a fast pane **strobes like a wagon wheel**: with strong easing
@@ -2447,7 +2491,7 @@ LIVE-VERIFIED 2026-09-23.
 
 ## 156. Blend modes over an empty comp background render as Normal: lay an opaque floor
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn "08 гимн"). The comp background colour is not a layer. Where
+LIVE-VERIFIED 2026-09-23 (LED-wall show, the hymn). The comp background colour is not a layer. Where
 nothing lies under a Multiply / Soft Light / Screen layer, it has nothing to blend with and is
 composited as Normal: a cool near-white Multiply tint over the black opening of a slideshow lit up
 as a pale slab (measured 99/255 against 0 without the glass layers; the Multiply tint alone
@@ -2492,7 +2536,7 @@ reads as gloss only with a crisp core: a soft band at 35 % mask opacity plus an 
 
 ## 159. Setting `inPoint` moves `outPoint`: always assign startTime -> inPoint -> outPoint
 
-LIVE-VERIFIED 2026-09-23 (AE 26.x, ODK-Saturn award screens). Trimming a layer "out first, then in"
+LIVE-VERIFIED 2026-09-23 (AE 26.x, LED-wall show award screens). Trimming a layer "out first, then in"
 silently shifts the out point. Measured on a 200 s solid: `outPoint = 32.16` gives (0, 32.16), then
 `inPoint = 3.1` gives **(3.1, 35.26)** — the layer slid instead of trimming. On a precomp layer after
 `startTime = 32.16; outPoint = 64.3`, assigning the SAME in point (`inPoint = 32.16`) restored the out
@@ -2518,7 +2562,7 @@ face came out uniformly dark and the silver rim uniformly grey — every pixel g
 
 ## 161. Dimensional metal type that keeps a per-word text animator
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn award titles, Manrope ExtraBold 48 px on a light field, matching
+LIVE-VERIFIED 2026-09-23 (LED-wall show award titles, Manrope ExtraBold 48 px on a light field, matching
 the chrome «110» emblem). Construction that survives a word cascade with blur, because every part is
 an effect on a text layer that carries the same animator:
 
@@ -2541,7 +2585,9 @@ an effect on a text layer that carries the same animator:
 
 ## 162. A door transition: fly back out of one room into the next
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn "5 интро", 39 transitions). The outgoing shot stays inside an
+**Superseded by quirk 166.**
+
+LIVE-VERIFIED 2026-09-23 (LED-wall show intro, 39 transitions). The outgoing shot stays inside an
 arch and the arch recedes into the incoming shot, so the camera seems to fly backwards out of one
 room into another. All archive generations were pull-backs, so the move always reads as one motion.
 
@@ -2561,7 +2607,7 @@ room into another. All archive generations were pull-backs, so the move always r
 LIVE-VERIFIED 2026-09-23.
 
 - `ADBE Easy Levels2` parameters refuse expressions: "Can not set expression or expressionEnabled
-  on this property." Key them, or use `ADBE Brightness & Contrast 2` / keys.
+  on this property." They take no keys either (quirk 181.2): animate with `ADBE Brightness & Contrast 2`.
 - A luma matte built from a duplicate of the layer with `ADBE Threshold2` on it rendered solid black
   (solo render: rgb mean 0), so the "develop" reveal showed the whole photo at once. What works:
   `ADBE Gradient Wipe` on the layer itself, Gradient Layer = its own index, Invert Gradient on,
@@ -2573,7 +2619,8 @@ LIVE-VERIFIED 2026-09-23.
 - A shot split into two layers (one part under a circle matte, one part carrying the exit door)
   must keep one clock: write the time remap against a constant start, `time - 139.18`, never
   `time - inPoint`, because the second part's in-point differs.
-- ES5 `.indexOf` on strings works in AE 26 despite the linter warning; arrays still need a loop.
+- `String#indexOf` is ES3 and always works; only `Array#indexOf` is missing (the linter flags every
+  `.indexOf`).
 
 ## 164. Lettering that draws itself without installing the font
 
@@ -2592,6 +2639,8 @@ with fontTools and never touch the system font folder or restart AE:
 
 ## 165. Generated "archive" clips: they inherit the photo and invent the rest
 
+**See quirk 151** (look at the frames, not the description).
+
 LIVE-VERIFIED 2026-09-23. The client's folder of animated archive photos (Kling/Seedance
 image-to-video) is only as safe as its source photos plus whatever the model adds:
 
@@ -2607,7 +2656,7 @@ and check the band crop, not the full frame. And check a real scan before using 
 
 ## 166. A door that never shows the clip's edges: sweep in, hold, fly back, with parallax
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn "5 интро", replaces the door of quirk 162). The first door
+LIVE-VERIFIED 2026-09-23 (LED-wall show intro, replaces the door of quirk 162). The first door
 parented the outgoing shot to the door and matted it with the arch: a tall arch over a 2.35:1 clip
 left the clip's top and bottom edges visible inside the arch — "a crooked crop". The client's fix,
 which works: the door appears first and covers the edges, then flies back.
@@ -2618,7 +2667,7 @@ which works: the door appears first and covers the edges, then flies back.
   not just the jambs: a semicircle of radius 1600 cut the top corners of a 3072x768 band; 1760 did not).
 - Door scale in log space as a sum of three smooth terms — sweep in (ease-out to ~0.42), a slow
   drift through the hold (x0.92), fly back (ease in-out to ~0.06). A sum of smooth ramps has no
-  velocity jumps, unlike piecewise segments with a flat hold.
+  velocity jumps, unlike piecewise segments with a flat hold (a separate tail still jumped: quirk 178).
 - The outgoing room sits DEEPER than the doorway: parent it to its own null whose scale follows the
   door by perspective, `sR = K / (K + (1/sD - 1))`, K = 8. The room shrinks slower than the door,
   so the opening keeps showing the middle of the room and its edges stay hidden. Add a floor:
@@ -2630,6 +2679,8 @@ which works: the door appears first and covers the edges, then flies back.
   outer shade (on the new room), new room.
 
 ## 167. Effects on shape layers do not scale with the parent
+
+**Same mechanism as quirk 160:** effect points are in comp pixels.
 
 LIVE-VERIFIED 2026-09-23. Shape layers are continuously rasterised: their effects run after the
 layer transform, in comp pixels. A Gaussian Blur on a shape layer parented to a shrinking door keeps
@@ -2643,11 +2694,12 @@ LIVE-VERIFIED 2026-09-23. A halo made as a feathered ellipse mask on a small sol
 horizontal edges on the wall (the feather reached the layer bounds, quirk 140). Robust recipe: a black
 solid larger than the frame, `ADBE Ramp` radial from white at the centre to black at the radius you
 want, blend Screen, and squash it with a non-uniform scale for an ellipse. Black does nothing in
-Screen, so the layer's own edges can never show.
+Screen, so the layer's own edges can never show (inside a precomp, Screen needs an opaque floor:
+quirk 156).
 
 ## 169. Tidying a live project: what `usedIn` misses, and proof that no comp changed
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn `ODK110.aep`: 1058 -> 513 items, 552 unused removed, 55 moved,
+LIVE-VERIFIED 2026-09-23 (an LED-wall show project: 1058 -> 513 items, 552 unused removed, 55 moved,
 9 folders made, 2 emptied folders dropped — all in about 1 s, one undo group).
 
 - `FootageItem.usedIn` lists comps that hold a LAYER with that source. An expression that pulls
@@ -2666,7 +2718,7 @@ LIVE-VERIFIED 2026-09-23 (ODK-Saturn `ODK110.aep`: 1058 -> 513 items, 552 unused
   `<project>.aep_AME/tmpAEtoAMEProject-<comp>.aep` (4 MB copies next to a 42 MB project), and the
   queue renders those. Reorganising the main project does not touch queued renders; still keep comp
   names and folders when the user says the comps go out through the encoder.
-- Emitters that find a folder by name (`folderMake("I2 archive clips")`) recreate it at the root on
+- Emitters that find a folder by name (`folderMake("I2 archive clips")`, a project emitter helper) recreate it at the root on
   their next run: when a tidy renames or nests a folder, patch the name in the live emitters.
 - "Collect Files" leaves `(Footage)/<panel folder path>/...` on disk plus `<project>Report.txt`;
   after that, panel folders and disk paths are independent — reorganising the panel needs no relink.
@@ -2674,6 +2726,8 @@ LIVE-VERIFIED 2026-09-23 (ODK-Saturn `ODK110.aep`: 1058 -> 513 items, 552 unused
   is Save As and would repoint the open project.
 
 ## 170. `ae.js --timeout` is in milliseconds; "CDP timeout (0s)" means units, not a modal
+
+**See quirk 63** (the same linter false positive).
 
 LIVE-VERIFIED 2026-09-23. `--timeout 300` failed at once with "CDP timeout (0s) — a modal dialog is
 probably blocking AE", but there was no modal: the payload kept running in AE and finished (the file
@@ -2685,12 +2739,12 @@ the last three lines; the payload returns normally.
 
 ## 171. Moving a finished comp onto a bigger canvas without losing editability
 
-LIVE-VERIFIED 2026-09-23 (AE 26, ODK-Saturn: ten 2048x512 comps moved into the MAIN area of a
+LIVE-VERIFIED 2026-09-23 (AE 26, LED-wall show: ten 2048x512 comps moved into the MAIN area of a
 4608x768 LED wall, 31-78 top-level layers each, glass wipes with ~70 position expressions).
 
 - `comp.width/height` grow the canvas from the top-left; nothing moves. Add a null with anchor
   [0,0] at the region's corner ([1280,128]) and hang every top-level video layer on it with
-  `layer.setParentWithJump(null)` (exists in AE 26): unlike `layer.parent = x` it keeps the child's
+  `layer.setParentWithJump(ctrl)` (`ctrl` = that null; exists in AE 26): unlike `layer.parent = x` it keeps the child's
   values, keys and expressions, so the content moves by exactly the null's offset and the null's
   space IS the old comp. Expressions reading other layers' `transform.position` stay consistent
   (both sides live in null space); only `thisComp.width/height`, `toComp/fromComp` and comp-space
@@ -2741,7 +2795,9 @@ pixels — Repeat Edge Pixels only acts at the COMP boundary.
 
 ## 173. Renaming a live project to a naming scheme: what breaks and how to prove nothing did
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn: 104 comps and 26 folders renamed to the client's TZ numbering,
+**See quirk 169** (mutating a collection while iterating it).
+
+LIVE-VERIFIED 2026-09-23 (LED-wall show: 104 comps and 26 folders renamed to the client's TZ numbering,
 26 comps moved, precomps regrouped by number).
 
 - `item.name = ...` on a comp does NOT rewrite `comp("old name")` in expressions: two glass
@@ -2753,17 +2809,17 @@ LIVE-VERIFIED 2026-09-23 (ODK-Saturn: 104 comps and 26 folders renamed to the cl
   nothing changed — key it by `id` (or sort it); the inventory diff by id showed 0 changes.
 - Numbered folders repeat across bins after such a scheme (`00_PREVIZ/06_…`, `02_NUMBERS/06_…`,
   `03_PRECOMPS/06_…`): emitters that find a folder by name alone pick the wrong one. Look folders up
-  by FULL path (`folderPathMake("03_PRECOMPS/05_Интро")`), and clean up an emitter's own precomps by
+  by FULL path (`folderPathMake("03_PRECOMPS/05_Интро")`, a project emitter helper), and clean up an emitter's own precomps by
   an explicit list or a tag — not by a name prefix that the screen comps and previz now share.
 - Comp names become render file names: underscores, a zero-padded number first (`07_Номер_Путь_MAIN`)
   so the panel and Explorer sort the show in running order.
-- Tooling trap: `\uXXXX` typed into a bash heredoc that writes a Python patch arrived as real
-  Cyrillic in the emitter. Put non-ASCII values through `json.dumps` placeholders in the emitter
-  (as it already did for its other names) and write patch scripts with a file tool, not a heredoc.
+- Tooling trap: `\uXXXX` typed into any tool call (a bash heredoc, the Write tool) arrives decoded as
+  real Cyrillic (quirks 100, 181). Put non-ASCII values through `json.dumps` / `ensure_ascii` in the
+  emitter (as it already did for its other names).
 
 ## 174. A generated "loop" that starts and stops: retime it to constant speed from its own motion profile
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn diagonal turbines, `S1sq_loop`, 24 fps, 124 frames, first ~ last).
+LIVE-VERIFIED 2026-09-23 (LED-wall show diagonal turbines, a 24 fps loop of 124 frames, first ~ last).
 A generated clip whose first and last frames match is not a usable loop by that fact alone: this
 fan turned exactly one blade pitch with an ease-in and an ease-out — frame-to-frame difference
 0.3 at the start, ~10 in the middle, 0.25 at the end — so a plain cycle stops every 5 s (the
@@ -2775,35 +2831,40 @@ best inner seam was 10.5 against a normal step of 2-8).
 - Cumulative sum, normalised to 0..1 = a lookup table "share of the turn -> source frame".
 - Time remap by expression: `u = (time % PER) / PER`, binary-search the table, interpolate the
   fractional frame, `f / fps`. `layer.frameBlendingType = FrameBlendingType.FRAME_MIX` and the
-  comp's frameBlending on, so the slowed middle frames blend instead of stepping.
+  comp's frameBlending on, so the slowed middle frames blend instead of stepping. (Later: Frame Mix
+  pulses, and on turbine blades both Frame Mix and Pixel Motion read as judder — quirks 181, 184.)
 - PER = cycle / N with N whole turns (96.48 / 19): the show loop wraps without a jump too.
 - Result, measured on 50 rendered frames across the joint: steps 1.7-2.9 (one 3.8 at the joint)
   instead of 0.25-10.6.
 
 ## 175. Emitters inside a converted comp: default positions, prefixes, string reads, scripted save
 
-LIVE-VERIFIED 2026-09-23 (the award emitter rebuilding 15 screens in 4608x768 comps).
+**See quirks 134 and 173** (prefix matching), **1** (an array inside a string) and **182** (the scripted save).
+
+LIVE-VERIFIED 2026-09-23 (AE 26, LED-wall show: the award emitter rebuilding 15 screens in 4608x768 comps).
 
 - `comp.layers.add(item)` places the layer at the CURRENT comp's centre. In the old 2048x512 comp
   that was the right spot by accident; in the 4608x768 one the award titles landed at (2304, 384)
   and, hung on the MAIN-offset null, went onto the right diagonal under the turbine. Set every
   emitted layer's position explicitly.
 - Select comps by the exact name, not a prefix: `06_Награждение_14_` matched the title precomp
-  `06_Награждение_14_титр` before the screen itself.
+  `06_Награждение_14_титр` before the screen itself (quirks 134, 173).
 - Concatenating an effect colour value into a string (`"x = " + prop.value`, Leave Color's
   Color To Leave) threw "invalid numeric result (divide by zero?)" and aborted the build after the
-  effect was set; `JSON.stringify(prop.value)` of the same property works.
+  effect was set (a colour value is an array: quirk 1). WRONG `"x = " + prop.value`; RIGHT
+  `"x = " + JSON.stringify(prop.value)`.
 - `app.project.save()` from a script blocked for 2 min behind a modal (the file was written when
   the user closed it). `app.project.dirty` exists in AE 26: check it, copy the saved file as the
-  backup, and let the user press Ctrl+S when a save is due.
+  backup, and let the user press Ctrl+S when a save is due. (Later the scripted save worked when run in
+  the background with a watch on AE's windows: quirk 182.)
 
 ## 176. Collapse Transformations on a 3D precomp of 2D layers renders it FLAT; a photo-wall camera without moving the camera
 
-LIVE-VERIFIED 2026-09-23 (AE 26, Classic 3D; the ODK-Saturn hymn faces mosaic — 126 photo tiles).
+LIVE-VERIFIED 2026-09-23 (AE 26, Classic 3D; a hymn faces mosaic on the wall — 126 photo tiles).
 
 - A precomp whose layers are all 2D, placed as a 3D layer with Collapse Transformations on, renders
   as a flat 2D layer: z position and X rotation are ignored, magnification stays 1 — although
-  `toComp()` on that layer reports the full 3D projection (300 wall px -> 1030 screen px) and the
+  an expression's `toComp()` on that layer reports the full 3D projection (300 wall px -> 1030 screen px) and the
   camera's focus expression reads the right distance. Collapse OFF renders the 3D correctly, but the
   precomp is rasterised at its own size first (a 600 px tile magnified 3.4x goes soft).
   RIGHT: make the layers INSIDE the precomp 3D (`threeDLayer = true` on every tile and the background)
@@ -2817,7 +2878,7 @@ LIVE-VERIFIED 2026-09-23 (AE 26, Classic 3D; the ODK-Saturn hymn faces mosaic �
 
 ## 177. Spreading a one-screen picture onto the neighbouring screens: 2D plates scale, a 3D camera widens
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn hymn: MAIN 2048x512 -> MAIN + both diagonals, a 3072x768 band).
+LIVE-VERIFIED 2026-09-23 (LED-wall show hymn: MAIN 2048x512 -> MAIN + both diagonals, a 3072x768 band).
 
 - A 2D source cannot keep its scale: the outpainted 21:9 plates (3136 px) exactly filled MAIN; to fill
   the band at the same scale they would need 4704 px. Without generating more width, scale the whole
@@ -2837,7 +2898,7 @@ LIVE-VERIFIED 2026-09-23 (ODK-Saturn hymn: MAIN 2048x512 -> MAIN + both diagonal
 
 ## 178. A clean "ink drawing" from a photo; light lines over a photo from inside a precomp; smooth multi-phase scale
 
-LIVE-VERIFIED 2026-09-23 (ODK-Saturn intro v3, AE 26).
+LIVE-VERIFIED 2026-09-23 (LED-wall show intro v3, AE 26).
 
 - Find Edges on an archive-style photo traces every brick and every grain and, on a moving clip,
   the lines crawl: the client called it "dirty". Cartoon (`ADBE Cartoonify`) with Render = Edges
@@ -2850,9 +2911,11 @@ LIVE-VERIFIED 2026-09-23 (ODK-Saturn intro v3, AE 26).
   it and composites as Normal (quirk #156), so the black paper of an inverted scan darkens the whole
   photo. Key the paper out instead: Shift Channels, Take Alpha From = Luminance (`property(1)` = 5),
   then Tint to the ink colour. The lines stay, the paper is transparent, and the layer stays Normal.
+  Unmasked layers only (quirk 181.3).
 - Effect property INDEX is not the matchName number. `ADBE Unsharp Mask2` `property(1)` is Color
-  Mode (0..1, `-0004`); Amount is `-0001` (index 2). Set effect values by matchName. (Levels:
-  `-0005` gamma, `-0006` Output Black, `-0007` Output White — see the Levels map above; writing
+  Mode (0..1, `-0004`); Amount is `-0001` (index 2). Set effect values by matchName (quirks 126, 130):
+  WRONG `fx.property(1).setValue(v)`; RIGHT `fx.property("ADBE Unsharp Mask2-0001").setValue(v)`. (Levels:
+  `-0005` gamma, `-0006` Output Black, `-0007` Output White — see quirk 130; writing
   "darker" into `-0006` lifts the blacks instead.)
 - A portal that sweeps in, holds and flies back: the old arch summed three eased phases and then ran
   a separate tail — the speed jumped where the tail began, which the client saw as jitter. One curve
@@ -2866,11 +2929,13 @@ LIVE-VERIFIED 2026-09-23 (ODK-Saturn intro v3, AE 26).
 
 ## 179. Growing a live wall to a taller screen (4608x768 -> 4608x896): what moves, what doesn't, what shows up
 
-LIVE-VERIFIED 2026-09-23 evening (ODK-Saturn, 26 masters, 96 screen comps; MAIN 2048x512 -> 2048x896, the other
+**See quirks 140** (the same glow solid) **and 183** (`replaceSource` scales anchor and masks).
+
+LIVE-VERIFIED 2026-09-23 evening (LED-wall show, 26 masters, 96 screen comps; MAIN 2048x512 -> 2048x896, the other
 screens re-centred at y 64..832).
 
 - 2D numbers: a null with anchor = the OLD wall centre, position = the NEW centre, scale = new/old height,
-  and every top-level video layer `setParentWithJump(null)` — the layers keep their values, so they stay
+  and every top-level video layer `L.setParentWithJump(ctrl)` (`ctrl` = that null) — the layers keep their values, so they stay
   editable exactly as before. Skip sound layers, cameras and (in a camera comp) the 3D layers.
 - A camera comp needs no translation: a two-node camera projects its point of interest to the CURRENT comp
   centre, so making the comp taller re-centres the 3D scene by itself. Scale it with the zoom (x new/old);
@@ -2879,8 +2944,8 @@ screens re-centred at y 64..832).
   at scale [100, 175] kept std 124.0 vs 124.1 outside. Stretching glass panes, grades and vignettes
   (scale y only; their masks follow) to the taller screen is safe; so is a Displacement Map on it.
 - A shared solid (the black frame of every converted comp) cannot be resized in place — replace it with a
-  new solid of the new size and give it its mask in comp px (tools that read the hole from the mask
-  vertices read layer px).
+  new solid of the new size and give it its mask in comp px (anything that reads the hole from the mask
+  vertices reads layer px).
 - The taller window shows MORE OF EVERY CLIP: the client's generated splash poster had its own logo row
   and a baked-in "С ДНЁМ ПРЕДПРИЯТИЯ!" title above and below the 512-px strip — both appeared, the title
   cut by the new bottom edge, and on the award screens the title does not belong at all. Before growing a
@@ -2895,12 +2960,15 @@ screens re-centred at y 64..832).
   the title keeps its weight next to the bigger picture.
 - A taller window also uncovers CUTS that used to sit on the old screen edge: the client's white glow was
   a 2048x512 solid whose mask feather (187 px) ran past its top edge — hidden while that edge was the top of
-  the 512 strip, a hard line (-36 levels) inside the 896 MAIN. Pad such solids (+300 px each side, anchor
-  and mask vertices shifted by the same amount, `replaceSource`) so every feather ends inside its layer.
+  the 512 strip, a hard line (-36 levels) inside the 896 MAIN. Pad such solids (+300 px each side via `replaceSource`, then set the anchor
+  and mask vertices shifted by the same amount — `replaceSource` scales them, quirk 183) so every
+  feather ends inside its layer.
 
 ## 180. A thinner cut than the font family has; a loop made longer in place; `M.exprErrors` without `M.use`
 
-LIVE-VERIFIED 2026-09-24 (ODK-Saturn pre-show: 60 -> 180 s loop plus a slogan "тонким шрифтом" in Tektur).
+**See quirks 146** (`M.exprErrors` without `M.use`) **and 147** (client hand edits).
+
+LIVE-VERIFIED 2026-09-24 (LED-wall show pre-show: 60 -> 180 s loop plus a slogan "тонким шрифтом" in Tektur).
 
 - **Thinner than the lightest weight.** Tektur stops at wght 400 (stem 7 px on a 50 px cap = 0.14, a Regular).
   WRONG: a negative Offset Paths (`ADBE Vector Filter - Offset`) in every letter group. Letters without counters
@@ -2908,7 +2976,7 @@ LIVE-VERIFIED 2026-09-24 (ODK-Saturn pre-show: 60 -> 180 s loop plus a slogan "�
   counter stops cutting the fill. The client caught it on the first look ("с багами").
   RIGHT: thin the outline before it reaches AE. Flatten the glyph contours (~1.2 px steps), find each ring's ink
   side from its nesting depth and signed area, move every edge by d toward the ink, mitre the joins (bevel past
-  4d), then apply the skew and send straight segments (ODK `tools/tektur_thin.py`). At 80 px with d = 1.8 px:
+  4d), then apply the skew and send straight segments (a project-side `tektur_thin.py`). At 80 px with d = 1.8 px:
   stem 3 px on a 56 px cap (a Light), counters open, chamfers intact. Preview it with a PIL XOR fill (one
   polygon mask per ring, XOR = even-odd) before spending an AE build.
 - **Thin display type: no glow, Normal blend.** Glow 26 px at 0.45 around 3-px strokes read as "не резко"; Add
@@ -2936,7 +3004,10 @@ LIVE-VERIFIED 2026-09-24 (ODK-Saturn pre-show: 60 -> 180 s loop plus a slogan "�
 
 ## 181. A number re-cut from chained generations: joins, reversals, a hero at the frame edge, five AE traps
 
-LIVE-VERIFIED 2026-09-24 (ODK-Saturn «Мы — дети галактики», 227 s: dark space -> clock -> galaxy -> Da Vinci
+**See quirks 12 and 18** (ease arity), **147** (client hand edits) **and 169** (mutating a collection while
+iterating it).
+
+LIVE-VERIFIED 2026-09-24 (LED-wall show, a 227 s number: dark space -> clock -> galaxy -> Da Vinci
 in a golden ring -> the ring turns into a turbine; the client's Seedance clips plus AE-built transitions).
 
 - **Measure the joins before planning.** Clips generated from first/last-frame anchors chain frame to frame.
@@ -3008,4 +3079,141 @@ in a golden ring -> the ring turns into a turbine; the client's Seedance clips p
     sky. The last source frame holds for about 4 comp frames at 50 fps before the wrap.
 - **Rebuild scripts must not delete what the user added.** A "clean everything that is not mine" step is fine
   on the first run. From then on, remove only the layers found in the v1 backup comp, and report any others as
-  `kept`. Also duplicate the current state into `_OLD` before each client-driven rebuild (`snap`).
+  `kept`. Also duplicate the current state into `_OLD` before each client-driven rebuild (`snap`, a project helper).
+
+## 182. Solo as a render accelerator, and its trap; aerender and memory for an unattended re-render with sound
+
+LIVE-VERIFIED 2026-09-24 (LED-wall show: six 4608x896 numbers re-rendered with their music, run remotely, the user away).
+
+- **The user's speed trick.** A number already rendered to a movie goes back into its master as layer 1 with
+  **Solo** on. AE then renders only soloed layers of that kind, so the live stack underneath (dozens of clips,
+  Pixel Motion, nested comps) costs nothing.
+  - An opaque full-frame layer on top alone did not speed the render; Solo did. Do not also "switch off
+    the covered layers": that repeats what Solo already does.
+- **The trap: layers added to a comp that already has soloed layers come in soloed** (`layers.add` returned
+  `solo == true`).
+  - The new layers render, but the client's clip that they dissolved into was not soloed: the dissolve went
+    to black. Capture the edited range before rendering; `saveFrameToPng` respects Solo, so it shows this.
+  - RIGHT: when editing a soloed master, solo every layer the edited range needs. Move the pre-render's
+    in-point to the end of the edited range, where its frames equal the live ones. Check that step: a hold/change
+    pattern of the 24 fps source at 50 fps (~0.07 / ~9.7 levels) is normal, a mismatch is not.
+  - `layer.solo = true` on a disabled layer throws "Solo flag can not be set on a layer if the layer is not
+    enabled". Unsolo before disabling a layer, and solo only enabled ones.
+- **Music in a soloed master.** Solo is per layer type: soloing the music layer mutes the clips' own audio.
+  Still set `audioEnabled = false` on the clips, so the mix does not depend on the Solo state.
+- **aerender 26.3** (run it under a watchdog: `led-wall-pipeline.md` §17):
+  - `-s/-e` take comp frames; `-close DO_NOT_SAVE_CHANGES`; it renders the SAVED file.
+  - OM «H.264 - Match Render Settings - 15 Mbps» writes AAC 48 kHz stereo from the comp's audio plus H.264 VBR.
+    A 3 s test averaged ~17 Mbps.
+  - Timing: ~25 s to start, then the render, then ~30 s of finalising after the last PROGRESS line. Exit code 0.
+    Judge success by ffprobe duration plus an audio stream, not by the exit code. Finalising can also hang
+    (quirk 184).
+- **Memory before a second AE instance.** After a capture-heavy session the GUI AE held 69.7 GB, with 11 GB
+  free. `app.purge(PurgeTarget.IMAGE_CACHES)` brought it to 8 GB (73 GB free) without touching the project
+  or undo. Purge before every aerender batch.
+- **Scripted save.** `app.project.save()` over the bridge took 2 s this time (quirk 175 had hung behind a modal).
+  Run it as a background call and watch AE's windows from outside the bridge (a small Win32/UIA script that lists
+  AfterFX's top-level windows and closes a dialog) in case a dialog appears. A `.ps1` with Cyrillic must be UTF-8
+  **with BOM**: Windows PowerShell 5.1 reads BOM-less files as ANSI and the parser breaks.
+
+## 183. A slowed clip went blank past its source length (cause not isolated); Hue/Sat refuses keys; looped footage; a stale effect
+
+LIVE-VERIFIED 2026-09-24 (LED-wall show, a finale: a 5.17 s sky clip slowed to fill a 27.3 s turbine core).
+
+- **A slowed clip that vanished halfway.** It rendered at 2-5 s and showed nothing from 5.2 s on, which is the
+  source's own length, although the layer read back `outPoint` 27.29, `activeAtTime(10) == true`,
+  opacity 100, and the remap expression returned 1.86 s. Frame blending off and effects off changed nothing.
+  - WRONG: `L.parent = P; L.inPoint = 0; L.outPoint = 27.29; L.timeRemapEnabled = true;` then
+    `Time Remap.expression = "time * d / 27.29"`.
+  - RIGHT: `L.timeRemapEnabled = true` FIRST, then in/out, then two LINEAR keys over the whole life
+    (`setValueAtTime(0, 0)`, `setValueAtTime(27.29, d)`), and delete the default key at the source's end AFTER
+    adding yours (quirk 181.1). Verified by capture at 6, 10, 18 and 25 s.
+  - Check a stretched remap by CAPTURING a frame past the source's end. Read-backs do not show this.
+  - The fix changed several things at once (the flag order, keys instead of the expression). Quirks 133,
+    174 and 180 had remap expressions past the source length that rendered fine: treat the order as a
+    precaution and the capture as the test.
+- **Hue/Saturation's master params take no keys either** (Levels: quirk 181.2). In AE 26 `canVaryOverTime` is
+  false for Master Hue / Saturation / Lightness and Channel Control; the Colorize params are keyable.
+  To fade a grade over time, key the effect's own mix:
+  `fx.property("ADBE Effect Built In Params").property("ADBE Effect Mask Opacity")` (Compositing Options →
+  Effect Opacity), 100 → 0.
+- **Looped footage.** A FootageItem interpreted with Loop 100x reports `source.duration` = 100 × the clip
+  (1004 s for a 10 s turbine). A wrap expression `time % source.duration` is then a no-op, and the footage's
+  own loop does the looping. Read `mainSource.loop` before writing a loop expression.
+  - To find a clean loop period, compare frames with a mean absolute difference. Here frame 240 ≈ frame 0
+    (1.7 vs 3-4 between neighbours), so the period is 240 frames = `duration - frameDuration`.
+  - Both cuts of the sky clip (the take and its `loop` version) jump at their loop point (30 vs ~1.8). For a long
+    hold, use ONE slow pass instead of looping.
+- **Stale effect references, again (quirk 3).** `var lv = parade.addProperty("ADBE Easy Levels2")`, then
+  adding two more effects, then `lv.property(...)` threw "Object is invalid". Fetch each effect again by
+  match name after the last `addProperty`.
+- **Parenting to a scaled parent** (quirk 29, `.parent` keeps the world transform) also rescales the child: a
+  rim ring parented to a turbine keyed 225 → 1250 % came out at 8 %, a small grey ring in the middle of the sky.
+  Set Scale explicitly after `.parent`, like Position.
+- **`replaceSource` onto a source of another size SCALES the layer's anchor and mask vertices** by the size
+  ratio. A mirrored centre extension (3072-wide comp → the 4608-wide pre-render) moved from anchor 3072 to
+  4608 and slid off the wing, where only black showed. Read anchor and masks from the ORIGINAL layer, then
+  set them after the swap.
+  - The pattern worked: a words-free copy of the wings over a soloed pre-render, only where the words were.
+    The side stack (floor, the mirrored centre taken from the pre-render itself, the wings) went into its own
+    comp via `copyToComp`, used as 4 short soloed layers masked to the side screens. It matched the pre-render
+    at 2.1-2.6 mean abs diff, the same as the decoder baseline on MAIN (2.0).
+- **A save while aerender instances run** can raise the modal "Could not rename the file ...Prefs-indep-
+  composition.<pid>.<n>.txt". The bridge call times out, but the save itself had finished (check the file time).
+  Screenshot the dialog with `PrintWindow`: UIA reads no text in AE's dialogs. Then close it from outside with
+  Enter or `WM_CLOSE`.
+
+## 184. aerender at scale: a finalisation hang and a watchdog that sees it, a 25 fps template from a script, the GPU switch, shared layers rendered once
+
+LIVE-VERIFIED 2026-09-24/25 (LED-wall show delivery: 26 walls of 4608x896 and 66 screen files, an unattended
+night, then a fixed deadline).
+
+- **A night that died: what the logs show and what they do not.** Three aerender instances (~19-25 GB each), the
+  GUI AE, a browser upload and video encodes ran at the same time.
+  - From ~21:10 no process could start: every agent tool call failed with `EPERM: operation not permitted,
+    uv_spawn`, and from 22:00 the System log shows services failing with "Access is denied". At 00:25 Tcpip 4231
+    reported the ephemeral TCP ports exhausted. In the morning the PC needed a hard reset (Kernel-Power 41).
+  - There is no Resource-Exhaustion event, and 10-17 GB of RAM were free in the hour before, so it was not a
+    plain RAM shortage. The cause is not established. The next day a VPN client held 150+ bound sockets: check the
+    socket count (`Get-NetTCPConnection`) before a long unattended run.
+  - Three renders printed their LAST frame, hung 20-30 min in finalisation until
+    `After Effects warning: Failed to write XMP metadata`, and then hung for hours. The movies were complete: all
+    frames, full duration.
+  - Precaution (the cause is unknown): do not stack loads. At most 2 aerender instances next to the GUI AE on a 94 GB machine, GUI caches
+    purged, no uploads or encodes during the peak. Keep the queue resumable (outputs that exist are skipped) and
+    judge files, not exit codes, so the next session can take over where the night stopped.
+- **Watchdog trap.** A hung aerender keeps printing the same `PROGRESS: 0:01:36:23 (4824)` line every minute, so
+  "time since the last PROGRESS line" never fires.
+  - RIGHT: count only a NEW frame number as progress.
+  - On a stall after the last frame, ffprobe the output. If its duration = frames / render fps, accept the file and
+    kill the process tree instead of re-rendering.
+- **A 25 fps render template for aerender, from a script.**
+  - `rq.setSettings({"Use this frame rate": 25})` flips "Frame Rate" to "Use this frame rate" by itself.
+    Passing `{"Frame Rate": "Use this frame rate"}` throws "Invalid Value".
+  - Then `rq.saveAsTemplate("Best 25fps")`, `rq.remove()` and `app.preferences.saveToDisk()`: without the last
+    call aerender cannot see the template.
+  - `aerender -RStemplate "Best 25fps"` with the OM "Match Render Settings" then writes 25/1 H.264, and the
+    PROGRESS frame numbers count 25 fps frames.
+- **The project's renderer is a project setting, and aerender honours it.** `app.project.gpuAccelType` was
+  SOFTWARE (1816) and the GPU sat at 2-10 %. Set `GpuAccelType.CUDA` (1813; check `app.availableGPUAccelTypes`),
+  save, then queue, and restore the user's setting afterwards. Measured on MAIN-only award renders of 2412 frames
+  at 25 fps, each next to a second render: 13.6 min on Software, 9.3-9.6 min on CUDA.
+- **Render the unique part once per master, the shared part once per show.** The award diagonals (a 2048²
+  footage retimed by a LUT expression with Pixel Motion) cost most of every award render. With them disabled, a
+  96.48 s splash fell from 47.5 min (4824 frames at 50 fps, 0.59 s a frame) to 2.4 min (2412 frames at 25 fps,
+  0.06 s a frame).
+  - Render MAIN only, with the shared layers disabled and a marker appended to their `comment`, so a script can
+    re-enable exactly those afterwards.
+  - Build the shared picture once and compose each wall in ffmpeg: overlay at the screen origins, `hflip` for the
+    mirrored side. Recipe: `led-wall-pipeline.md` §17.
+- **ffmpeg limits for walls.** `h264_nvenc` refuses frames wider than 4096 ("Could not open encoder … Invalid
+  argument"). Encode the 4608-wide walls with libx264 (`-preset faster`, 15M) and the screens (≤ 2048) with NVENC.
+  `fps=25` on a 50 fps render drops every other frame exactly.
+- **Repeating blades judder under any retime: play the loop at its own speed.**
+  - On the diagonals' turbine, Frame Mix stepped unevenly (steps alternating 1.2 / 2.6). Pixel Motion measured
+    smooth (the frame-step spread fell to 0.09), yet on the wall the client still saw judder («дрожит»). A
+    step-size metric does not see motion-estimation artefacts. Repeating blades are the worst case for them:
+    every blade looks like its neighbour, so the vectors can match the wrong one.
+  - RIGHT: no retime and no frame blending. For a 24 fps loop in a 25 fps render, set stretch 96 %, frame
+    blending off and time remap off, so each output frame is one source frame and the loop plays 4 % fast. The
+    ffmpeg equivalent is `-stream_loop -1 -i loop.mp4 -vf "setpts=N/(25*TB)" -r 25`.
