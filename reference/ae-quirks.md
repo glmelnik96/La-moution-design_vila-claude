@@ -3219,6 +3219,52 @@ night, then a fixed deadline).
     footage item itself does the repeating: interpret it with Loop N× (`mainSource.loop`, quirk 183) so the
     layer covers the whole comp. The ffmpeg equivalent is `-stream_loop -1 -i loop.mp4 -vf "setpts=N/(25*TB)" -r 25`.
 
+## 185. Dynamic Link to Premiere: guide layers, their audio, unsaved edits, a second AE
+
+LIVE-VERIFIED 2026-09-25 (AE 26.3 + Premiere 26.3.2; a spike: three labelled test clips cut into an 18 s sequence,
+graphics comps linked back). The Premiere half of the round trip (import, placement, export, the traps on that
+side) is in premiere-autopilot `references/after-effects-link.md`.
+
+- **Guide layers stay out of the picture.** A magenta guide solid and the edit's plate as a guide layer were absent
+  from Premiere's export of the linked comp, and absent from `comp.saveFrameToPng` too. So the edit can live inside
+  every graphics comp as a guide layer: the designer sees the shot, Premiere gets only the graphics with alpha.
+- **Their audio does not.** With the plate as a guide layer and `audioEnabled` left on, Premiere put the comp's
+  audio on A2 under the V2 clip, and the export measured -18.07 dB RMS under the graphic against -24.11 dB
+  elsewhere: +6.0 dB, the dialogue doubled.
+  - WRONG: `L.guideLayer = true;`
+  - RIGHT: `L.guideLayer = true; L.audioEnabled = false;` for every reference layer in a comp that goes to Premiere.
+- **Linked audio is conformed once and never refreshed.** Premiere writes `<aep name> <comp>.aep 48000.cfa/.pek`
+  next to the .aep. Turning the guide's audio off afterwards did not change the export: not unsaved, not after a
+  save (still -18.07 dB). Only removing the audio track item in Premiere fixed it (-24.09 dB). So give a linked comp
+  no audio from the start.
+- **Unsaved edits reach Premiere, from the project that is open in the GUI.** A text change made over the bridge and
+  NOT saved was in Premiere's next export. A comp from an .aep that is not open in the GUI came from the SAVED file:
+  Dynamic Link started a second, headless `AfterFX.exe` (~3.2 GB) to serve it and left it running.
+- **Cost.** Premiere's export of an 18 s sequence with 11 s of linked graphics took 13.7 s against 1.9 s without
+  them. A re-export with unchanged comps took 3-4.5 s: Premiere caches the linked frames and re-renders what changed.
+- **A comp that grows.** `comp.duration` 4 -> 5 s, saved: Premiere's project item still reported `getOutPoint()` = 4,
+  a re-import made a duplicate item (also "4"), yet a freshly placed clip ran 5 s and the old track item could be
+  extended to 5 s (outPoint, then end). Design comps at their final length; if one grows, extend the track item.
+
+## 186. Graphics over an edit: the edit as a guide plate, slots on the frame grid, QA in a preview comp
+
+LIVE-VERIFIED 2026-09-25 (same spike as 185).
+
+- **The plate.** Premiere renders the sequence to `plate/<seq>_plate.mov` (18 s in 1.9 s, frame-exact at both cuts).
+  Import it once. Each graphic gets its own comp at the sequence size and fps, one comp per graphic, lasting the
+  slot. Add the plate as a guide layer with `startTime = -slotStart`, so comp time 0 is the slot's first frame and
+  the shot under the graphic is the right one. Turn its audio off (185).
+- **Slots on the frame grid.** A marker at 6.5 s at 25 fps is frame 162.5. Premiere's `overwriteClip(item, 6.5)`
+  landed on frame 163 (6.52 s, rounded up), while an AE layer took `startTime = 6.5` as given. The two apps then
+  differ by half a frame, and keyframes evaluate between frames. RIGHT: convert every slot to whole frames first:
+  `f = Math.round(sec * fps)`, AE `f / fps`, Premiere ticks `f * (254016000000 / fps)`.
+- **QA needs a comp where the plate is NOT a guide.** `saveFrameToPng` drops guide layers, so a capture of a
+  graphics comp shows the graphic on transparency. Build `PREVIEW_<seq>` with the plate as a normal layer and the
+  graphics comps nested at their slot starts. A guide layer inside a precomp does not render in the parent, so
+  nothing doubles. Captures at 0.48 / 2.0 / 4.8 / 8.0 / 13.0 s matched the plate time exactly (2.0 s showed
+  "A 00:00:04.000", clip A starting at 2 s). Premiere's linked render of the same frame came out at PSNR 34.4 dB
+  against the AE capture: the difference is H.264 compression only.
+
 ## 187. `CR.FONT.SEMIBOLD` is not a real PostScript name: SemiBold text renders in Times
 
 LIVE-VERIFIED 2026-09-25. `brand/cloudru-motion-tokens.json` (and so `CR.FONT.SEMIBOLD`, `ae-mock.js`,
@@ -3235,3 +3281,21 @@ lower third in a serif, and `M.text` raised no warning, because AE echoes any na
   used once, the list held both `SBSansDisplay-Semibold` and the phantom `SBSansDisplay-SemiBold`.
 - Fixed 2026-09-25: the token, the mock and `lib.test.js` use `SBSansDisplay-Semibold`; in the live AE
   `app.fonts.getFontsByPostScriptName(CR.FONT.SEMIBOLD)[0].location` read back `...\SBSansDisplay-SemiBold.otf`.
+
+## 188. AE holds every imported footage file open, so a re-render cannot replace the plate
+
+LIVE-VERIFIED 2026-09-25 (the spike of 185, after a re-edit).
+
+- **The re-render failed before it started.** After a cut, Premiere was to render the new plate over `plate.mov`.
+  Moving the old file aside failed with `EBUSY`. The Windows Restart Manager (`RmGetList`, no admin rights
+  needed) named one holder: the AE window with the graphics project open. The headless Dynamic Link AE did not
+  hold the file.
+- **`FootageItem.replace(new File(other))` lets go at once.** Right after the replace, nothing held `plate.mov`,
+  and AE held the new file.
+- **So a live build alternates between two files.**
+  - Premiere renders to `plate.b.mov` whenever `plate.mov` is held (premiere-autopilot `prexport.freePath`).
+    The plan then names that file.
+  - `gfx-build.js` switches the `PLATE` item to the file the plan names, and reports `switchedFrom`.
+  - `--refresh-plate` reloads the same file after it was re-rendered in place.
+- The same holds for any footage a script re-renders while AE has it imported: write to a new name, then
+  `replace()`.

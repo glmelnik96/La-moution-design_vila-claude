@@ -93,6 +93,7 @@ Full rules are in `SKILL.md` §3–§7. The ones that cause real damage if misse
 | `reference/deck-pipeline.md` | A Figma deck must become a 1:1 AE film (§5c): dumps → figspec → deck → build_film → capture_film, QA sheets. |
 | `reference/art-kit.md` | Cloud.ru deck backgrounds or glow panels in AE: planet bitmap + orbit vector, Figma→AE placement math, motion. |
 | `reference/led-wall-pipeline.md` | A multi-screen LED wall for an event (§5d): one wall comp in physical px, SYS precomps, audits, delivery (§17). |
+| `reference/gfx-for-edit.md` | Graphics over a Premiere edit (§5e, with premiere-autopilot): plan → comps, the template contract, QA. |
 
 ## Record what you learn
 
