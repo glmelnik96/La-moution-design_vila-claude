@@ -89,7 +89,7 @@ test('text() follows the quirk #9 font sequence and reports fallback as a warnin
       return { fa: a.__font, fb: b.__font, pos: M.pos(a).value };
     }))`));
   assert.strictEqual(v.ok, true);
-  assert.strictEqual(v.fa, 'SBSansDisplay-SemiBold');
+  assert.strictEqual(v.fa, 'SBSansDisplay-Semibold');   // the real PostScript name (quirk 187)
   assert.strictEqual(v.fb, 'ArialMT');
   assert.deepStrictEqual(v.pos, [80, 400]);
   assert.strictEqual(v.warnings.length, 1);

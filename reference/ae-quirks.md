@@ -3218,3 +3218,20 @@ night, then a fixed deadline).
     blending off and time remap off, so each output frame is one source frame and the loop plays 4 % fast. The
     footage item itself does the repeating: interpret it with Loop N× (`mainSource.loop`, quirk 183) so the
     layer covers the whole comp. The ffmpeg equivalent is `-stream_loop -1 -i loop.mp4 -vf "setpts=N/(25*TB)" -r 25`.
+
+## 187. `CR.FONT.SEMIBOLD` is not a real PostScript name: SemiBold text renders in Times
+
+LIVE-VERIFIED 2026-09-25. `brand/cloudru-motion-tokens.json` (and so `CR.FONT.SEMIBOLD`, `ae-mock.js`,
+`lib.test.js`) says `SBSansDisplay-SemiBold`. The installed font's PostScript name is `SBSansDisplay-Semibold`,
+lower-case b, as quirk 80 and `deck.py`/`figspec.py` already use. `M.text(..., {font: CR.FONT.SEMIBOLD})` set a
+lower third in a serif, and `M.text` raised no warning, because AE echoes any name back (quirk 80).
+
+- On AE 26.3 the phantom font is visible to a script: `app.fonts.getFontsByPostScriptName("SBSansDisplay-SemiBold")[0]`
+  reports family `SBSansDisplay` and location `C:\Windows\Fonts\times.ttf`, where the real name reports family
+  `SB Sans Display` and its own `.otf`. That is a cheap real-font check: a location that is not the font's own file
+  means a substitute.
+- On AE 26.3 `app.fonts.allFonts` is an array of families, each an array of font objects, and `postScriptName` /
+  `styleName` read fine on the inner objects (quirk 80 saw `undefined` one level up). After the bad name had been
+  used once, the list held both `SBSansDisplay-Semibold` and the phantom `SBSansDisplay-SemiBold`.
+- Fixed 2026-09-25: the token, the mock and `lib.test.js` use `SBSansDisplay-Semibold`; in the live AE
+  `app.fonts.getFontsByPostScriptName(CR.FONT.SEMIBOLD)[0].location` read back `...\SBSansDisplay-SemiBold.otf`.

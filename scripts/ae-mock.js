@@ -219,7 +219,8 @@ const FACTORY = {
 class TextDocument {
   constructor(text) { this.text = text; this.font = 'ArialMT'; this.fontSize = 36; this.fillColor = [0, 0, 0]; this.applyFill = true; this.applyStroke = false; this.tracking = 0; this.justification = ParagraphJustification.LEFT_JUSTIFY; this.autoLeading = true; this.leading = 0; this._attached = false; }
 }
-const AVAILABLE_FONTS = ['ArialMT', 'Arial-BoldMT', 'SBSansDisplay-Regular', 'SBSansDisplay-SemiBold', 'SBSansDisplay-Medium', 'SBSansDisplay-Bold', 'Verdana', 'Verdana-Bold'];
+// PostScript names as AE resolves them on the user's machine: SemiBold is "Semibold" (quirk 187).
+const AVAILABLE_FONTS = ['ArialMT', 'Arial-BoldMT', 'SBSansDisplay-Regular', 'SBSansDisplay-Semibold', 'SBSansDisplay-Medium', 'SBSansDisplay-Bold', 'Verdana', 'Verdana-Bold'];
 
 class TextProperty extends Property {
   constructor() { super('Source Text', 'ADBE Text Document', null, PropertyValueType.TEXT_DOCUMENT); this._doc = new TextDocument(''); }
