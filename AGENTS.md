@@ -39,6 +39,7 @@ node --test                     # must be green before you touch AE or render an
 ```bash
 node --test
 node scripts/ae.js 'JSON.stringify({ok:true, comp: (app.project.activeItem instanceof CompItem)? app.project.activeItem.name : null})'
+node scripts/ae.js --lib 'JSON.stringify({v: M.VERSION, green: CR.HEX.GREEN})'
 ```
 
 `comp: null` means no composition is selected — ask the user before proceeding. If the
@@ -49,21 +50,28 @@ panel rather than retrying.
 
 Full rules are in `SKILL.md` §3–§7. The ones that cause real damage if missed:
 
-- **Brand first.** Beat sheet with token eases/durations before code; no bounce, no rotation,
-  no shadows/gradients/round corners, one green accent per frame, exits 70% of entrances.
-- **Mutate only the active comp.** Never touch other comps or project items unasked. The
-  lib tags its layers (`comment = "CR_FX"`) and `M.clean()` removes only those.
+- **Brand first (Cloud.ru work without a supplied design).** Beat sheet with token eases/durations
+  before code; no bounce, no rotation, no shadows/gradients/round corners, one green accent per frame,
+  exits 70% of entrances. Supplied designs and other clients' briefs keep only the motion rules
+  (SKILL.md §5b–§5d).
+- **Touch only the comps the task names.** Find them by exact name (quirk #175); never touch other
+  comps or project items unasked; snapshot to `_OLD` before a client-driven rebuild and remove only
+  your own layers (#181); extend a comp in place rather than rebuilding it (#180); switch an emitter
+  off once the client edits its comp by hand (#147). The lib tags its layers (`comment = "CR_FX"`)
+  and `M.clean()` removes only those.
 - **Wrap every mutation** in one undo group (`M.run` does it), so a single Ctrl+Z reverts it.
 - **Lint every payload** — `ae.js` does it automatically; a rejected payload is a modal you
   did not have to ask the user to dismiss. Never bypass with `--no-lint` unlinted.
 - **Small, verifiable steps.** Read the comp → mutate → read it back → capture beats → look.
-- **On a CDP timeout, stop calling AE.** A modal dialog is blocking the panel; further calls
-  just queue more dialogs. Ask the user to dismiss it.
+- **On a CDP timeout, stop calling AE.** First rule out a long build (AE busy on the CPU, #143) and
+  a `--timeout` given in seconds (it takes ms, #170). Otherwise a modal dialog is blocking the panel;
+  further calls just queue more dialogs. Ask the user to dismiss it.
 - **Confirm cost before generating.** Show model + settings + estimated credits and wait for
   an explicit yes. Draft cheap first, hero quality only once the composition is proven.
 - **No git operations** unless the user explicitly asks.
 - **Prefer `@file.jsx` over inline jsx** for anything non-trivial — Windows shell escaping
-  will otherwise corrupt the payload.
+  will otherwise corrupt the payload. Emit non-ASCII text from Python with `ensure_ascii`: tools
+  decode `\uXXXX` typed into them (#181).
 
 ## Reference docs — read on demand
 
@@ -80,6 +88,11 @@ Full rules are in `SKILL.md` §3–§7. The ones that cause real damage if misse
 | `reference/generation-recipes.md` | Prompt skeletons, parameter shapes, credit discipline. |
 | `reference/live-verify-checklist.md` | First local session after cloud work: what to verify against the real AE. |
 | `reference/motion-art-direction.md` | Non-Cloud.ru showcase style ("GRID & RUPTURE") — only when explicitly asked. |
+| `reference/motion-best-practices.md` | A piece looks correct but cheap: the market baseline the brand adapts (premium entrance, three motion layers, holds, follow-through, springs ζ ≥ 0.8, hidden cuts). |
+| `reference/product-demo-motion.md` | Animating a supplied PNG/Figma frame (SKILL.md §5b): the target level, measured beat rhythm, which brand rules still apply. |
+| `reference/deck-pipeline.md` | A Figma deck must become a 1:1 AE film (§5c): dumps → figspec → deck → build_film → capture_film, QA sheets. |
+| `reference/art-kit.md` | Cloud.ru deck backgrounds or glow panels in AE: planet bitmap + orbit vector, Figma→AE placement math, motion. |
+| `reference/led-wall-pipeline.md` | A multi-screen LED wall for an event (§5d): one wall comp in physical px, SYS precomps, audits, delivery (§17). |
 
 ## Record what you learn
 
@@ -90,6 +103,6 @@ recorded. This channel is full of behaviour that is expensive to rediscover — 
 
 ## Scratch space
 
-`_build/` holds generated jsx payloads and Python generators from past sessions (the
-Slavneft tag-cloud spot and the code-block animation). Treat it as scratch: safe to add to,
+`_build/` holds generated jsx payloads and Python generators from past sessions (a tag-cloud
+spot, a code-block animation, a logo-mark fit, A/B test payloads). Treat it as scratch: safe to add to,
 useful as worked examples of measuring/auditing, not an API. `out/` is git-ignored render output.
