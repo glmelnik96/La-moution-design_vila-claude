@@ -309,10 +309,24 @@ class LayerCollection {
   addNull() { return this._push(new Layer(this.comp, 'Null', 'null')); }
 }
 
+// Comp markers (CompItem.markerProperty) as the gfx templates use them: comment-only MarkerValues.
+class MarkerValue { constructor(comment) { this.comment = comment; } }
+class MarkerProperty {
+  constructor() { this.keys = []; }
+  get numKeys() { return this.keys.length; }
+  keyTime(i) { return this.keys[i - 1].t; }
+  keyValue(i) { return this.keys[i - 1].v; }
+  setValueAtTime(t, v) { this.keys = this.keys.filter((k) => Math.abs(k.t - t) > 1e-9); this.keys.push({ t, v }); this.keys.sort((a, b) => a.t - b.t); }
+  removeKey(i) { this.keys.splice(i - 1, 1); }
+}
+class FolderItem { constructor(name) { this.name = name; this.parentFolder = null; } }
+class FootageItem {}
+
 class CompItem {
   constructor(name, w, h, par, dur, fps) {
     this.name = name; this.width = w; this.height = h; this.duration = dur; this.frameRate = fps; this.frameDuration = 1 / fps;
     this._layers = []; this.layers = new LayerCollection(this); this.resolutionFactor = [1, 1]; this.time = 0; this.saved = [];
+    this.markerProperty = new MarkerProperty();
   }
   get numLayers() { return this._layers.length; }
   layer(i) { if (typeof i === 'string') return this._layers.find(l => l.name === i); return this._layers[i - 1]; }
@@ -333,7 +347,10 @@ function makeApp() {
       activeItem: null,
       get numItems() { return items.length; },
       item(i) { return items[i - 1]; },
-      items: { addComp(name, w, h, par, dur, fps) { const c = new CompItem(name, w, h, par, dur, fps); items.push(c); return c; } }
+      items: {
+        addComp(name, w, h, par, dur, fps) { const c = new CompItem(name, w, h, par, dur, fps); items.push(c); return c; },
+        addFolder(name) { const f = new FolderItem(name); items.push(f); return f; }
+      }
     }
   };
   return app;
@@ -344,7 +361,7 @@ function sandbox() {
   const app = makeApp();
   const ctx = {
     app, CompItem, File, Folder, KeyframeEase, KeyframeInterpolationType, PropertyValueType, PropertyType,
-    MaskMode, ParagraphJustification, TrackMatteType, Shape, console
+    MaskMode, ParagraphJustification, TrackMatteType, Shape, MarkerValue, FolderItem, FootageItem, console
   };
   vm.createContext(ctx);
   const prelude = ['es-json.jsx', 'lib/tokens.jsx', 'lib/cloudru-motion.jsx']
@@ -354,4 +371,4 @@ function sandbox() {
   return ctx;
 }
 
-module.exports = { sandbox, CompItem, Layer, Property, PropertyGroup, KeyframeEase, KeyframeInterpolationType, PropertyValueType };
+module.exports = { sandbox, CompItem, Layer, Property, PropertyGroup, KeyframeEase, KeyframeInterpolationType, PropertyValueType, MarkerValue, FolderItem, FootageItem };

@@ -1,6 +1,6 @@
 ---
 name: ae-motion-live
-description: Cloud.ru motion design in two engines — a live, already-open After Effects (ExtendScript over CDP, port 8092, with the cloudru-motion.jsx library) and a dependency-free HTML motion engine rendered with headless Chrome — plus AI asset generation via the Phygital sidecar. Use for any brand animation, title/KPI/divider/scheme/logo scenes, explainer spots, web motion, or AE scripting. Triggers on "анимация", "моушен", "After Effects", "AE", "заставка", "ролик Cloud.ru", "HTML-анимация", "motion".
+description: Cloud.ru motion design in two engines — a live, already-open After Effects (ExtendScript over CDP, port 8092, with the cloudru-motion.jsx library) and a dependency-free HTML motion engine rendered with headless Chrome — plus AI asset generation via the Phygital sidecar. Use for any brand animation, title/KPI/divider/scheme/logo scenes, explainer spots, web motion, or AE scripting. Also the After Effects half of graphics over a Premiere edit (lower thirds, key thoughts, callouts, chapter cards, intro/outro linked back through Dynamic Link) together with premiere-autopilot. Triggers on "анимация", "моушен", "After Effects", "AE", "заставка", "ролик Cloud.ru", "HTML-анимация", "motion", "графика на ролик", "плашки", "титры поверх видео".
 ---
 
 # ae-motion-live — Cloud.ru motion, in After Effects and in HTML
@@ -30,7 +30,7 @@ look before you leap and confirm intent.
 
 **Brand + tests (always):**
 ```bash
-node --test            # 57 tests: lib against the AE mock, lint, tokens in sync, HTML core, renderer/bridge/gen CLIs
+node --test            # 73 tests: lib against the AE mock, lint, tokens in sync, HTML core, renderer/bridge/gen CLIs, gfx (graphics over an edit)
 ```
 
 **AE channel (when AE work is requested):**
@@ -163,6 +163,21 @@ One wall comp in physical pixels, per-screen delivery comps, SYS precomps for ev
 numbers laid out from a single timeline module that also writes the timing-aware generation brief:
 `reference/led-wall-pipeline.md`; lessons in quirks #120-#184. Rendering unattended, cutting per-screen
 files, checking and uploading them: §17 there (aerender traps: quirks #182, #184).
+
+## 5e. Graphics over a Premiere edit (with premiere-autopilot)
+
+The edit lives in Premiere (premiere-autopilot, Workflow I). This skill builds its graphics: one comp
+per slot of `gfx-plan.json`, from `TPL_<type>` templates fitted to any length by time remap, and
+returns them through Dynamic Link. `reference/gfx-for-edit.md` has the procedure, the template
+contract and QA. The traps are quirks 185–188:
+- guide audio leaks through Dynamic Link;
+- slots must sit on the frame grid;
+- QA goes through the preview comp;
+- the SemiBold PostScript name;
+- AE holds the plate file open, so a re-edit renders `plate.b.mov` and the build switches to it.
+
+    node scripts/gfx-build.js --plan <film>_gfx/gfx-plan.json
+    node scripts/gfx-build.js check-kit --aep <scratch.aep> --out <dir>
 
 ## 6. Generation workflow
 
