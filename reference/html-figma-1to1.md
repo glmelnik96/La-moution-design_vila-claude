@@ -107,6 +107,13 @@ the scripts → `<project>/tools/`; the fonts' OTFs → `<project>/fonts/`).
 The solid intro letters then covered the «0+» age mark in two frames (it showed through at 50 %): legal marks go
 above decorative layers — flag it to the designer rather than copy it.
 
+**Not every storyboard frame is a rest.** A frame that shows a move in progress — the stack one slot higher,
+right before it leaves — is a pass-through. Held for 0.36 s between an eased step and an eased exit it read as a
+freeze («не нужен фриз, когда три карточки поднимаются вверх»). One move instead: F6 → off the top with
+`[0.35, 0.05, 0.7, 0.4]` over 1.32 s (starts at once, ~35 px/frame through the F7 slot, 90 px/frame at the end);
+the header slips out (−94 px, 0.3 s, ease-in) just before the top rule reaches it, timed numerically so nothing
+passes under it or re-emerges from behind it. Hold only the frames that carry a message.
+
 ## 5. Render
 
 - `film.js page.html --video out.mp4 --hd | --2k | --outw N` — the design frame rasterised at DPR N/FW
