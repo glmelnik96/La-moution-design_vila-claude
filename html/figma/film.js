@@ -53,6 +53,8 @@ function ffmpegBin() {
       fs.mkdirSync(path.dirname(path.resolve(o.video)), { recursive: true });
       const N = Math.round(meta.d * fps);
       const p = spawn(ff, ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-c:v', 'png', '-framerate', String(fps), '-i', 'pipe:0',
+        // yuv420p needs even sizes: a 728x90 frame at 2560 wide is 316.5 tall — crop the odd row/column
+        '-vf', 'crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0',
         '-c:v', 'libx264', '-preset', 'slow', '-crf', String(o.crf), '-pix_fmt', 'yuv420p', '-movflags', '+faststart', o.video], { stdio: ['pipe', 'inherit', 'inherit'] });
       const done = new Promise((res) => p.on('close', res));
       const t0 = Date.now();
