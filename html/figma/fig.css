@@ -1,0 +1,25 @@
+/* fig.css — fonts and base styles for Figma-exact HTML motion (design space 791.0024 x 1406.2266). */
+@font-face { font-family: 'SB Sans Display'; src: url('../fonts/SBSansDisplay-Regular.otf') format('opentype'); font-weight: 400; }
+@font-face { font-family: 'SB Sans Display'; src: url('../fonts/SBSansDisplay-Medium.otf') format('opentype'); font-weight: 500; }
+@font-face { font-family: 'SB Sans Display'; src: url('../fonts/SBSansDisplay-SemiBold.otf') format('opentype'); font-weight: 600; }
+@font-face { font-family: 'SB Sans Text'; src: url('../fonts/SBSansText-Regular.otf') format('opentype'); font-weight: 400; }
+@font-face { font-family: 'SB Sans Text'; src: url('../fonts/SBSansText-Medium.otf') format('opentype'); font-weight: 500; }
+
+html, body { margin: 0; height: 100%; background: #26d07c; overflow: hidden; }
+body.fig-preview { background: #111; }
+
+.fig-stage { position: absolute; left: 0; top: 0; overflow: hidden; background: #26d07c; transform-origin: 0 0; }
+.fig-stage * { box-sizing: border-box; }
+.fig-abs { position: absolute; left: 0; top: 0; }
+.fig-text {
+  position: absolute; left: 0; top: 0; white-space: pre; margin: 0;
+  font-kerning: normal; font-synthesis: none; text-rendering: geometricPrecision;
+  font-variant-ligatures: normal;
+}
+.fig-clip { position: absolute; left: 0; top: 0; overflow: hidden; }
+.fig-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+
+/* dev controls from motion.js — keep them off the stage */
+.cr-controls { position: fixed; left: 8px; bottom: 8px; z-index: 10; display: flex; gap: 8px; align-items: center;
+  font: 12px/1 monospace; color: #ddd; background: rgba(0,0,0,.6); padding: 6px 8px; border-radius: 4px; }
+.cr-controls input { width: 240px; }
