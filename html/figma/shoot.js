@@ -79,9 +79,12 @@ async function openFrame(B, page, o) {
   if (o.w && o.h && !o.outw) { await metrics(B, o.w, o.h, 1); await open(B.cdp, page); return { FW: o.w, FH: o.h, dpr: 1 }; }
   const fr = await B.cdp.eval('window.Fig ? { w: Fig.FW, h: Fig.FH } : { w: innerWidth, h: innerHeight }');
   const dpr = o.outw ? o.outw / fr.w : 1;
-  await metrics(B, Math.floor(fr.w + 1e-6), Math.floor(fr.h + 1e-6) + (Number.isInteger(fr.h) ? 0 : 1), dpr);
+  const vh = Math.floor(fr.h + 1e-6) + (Number.isInteger(fr.h) ? 0 : 1);
+  await metrics(B, Math.floor(fr.w + 1e-6), vh, dpr);
   await open(B.cdp, page);
-  B.clip = { x: 0, y: 0, width: fr.w, height: fr.h, scale: 1 };
+  // Chrome floors the captured device size: 1653.75 x (2560 / 2940) = 1439.9999 → 1439 rows. A quarter device pixel
+  // of slack (inside the viewport) keeps 1440.
+  B.clip = { x: 0, y: 0, width: fr.w, height: Math.min(vh, fr.h + 0.25 / dpr), scale: 1 };
   return { FW: fr.w, FH: fr.h, dpr: dpr };
 }
 

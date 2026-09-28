@@ -34,6 +34,10 @@ the scripts → `<project>/tools/`; the fonts' OTFs → `<project>/fonts/`).
   a whole section under a dark overlay = parked. Re-render the sections, crop and diff against the previous crops
   (`figma_changes.py sections.json`), dump only the changed frames again, build the intended state, verify each
   frame in the look it actually has (a `?look=figma` switch) and list the leftovers for the designer.
+- **The linked nodes may not be where the edits are.** «The design changed» with links whose renders come back byte for
+  byte identical and whose dump is unchanged: list the page's top-level nodes — designers duplicate a section per
+  iteration and edit the copy (here 729 → 733 → 736, the old links stayed in the chat). Take the newest ids, diff their
+  crops against the last round, and say which sections you built.
 
 ## 2. Build components (`fig.js`)
 
@@ -113,6 +117,31 @@ freeze («не нужен фриз, когда три карточки подн�
 `[0.35, 0.05, 0.7, 0.4]` over 1.32 s (starts at once, ~35 px/frame through the F7 slot, 90 px/frame at the end);
 the header slips out (−94 px, 0.3 s, ease-in) just before the top rule reaches it, timed numerically so nothing
 passes under it or re-emerges from behind it. Hold only the frames that carry a message.
+
+## 4b. One story, several ad formats
+
+When the vertical is approved and the client adds formats (16:9, a 728x90 banner…), each format is its own Figma
+section with its own geometry — and usually only the key frames (5 instead of 12). Retell the approved story, do not
+re-invent it:
+
+- Same beats, same eases, same micro UI; only the directions follow the layout: stacked options push in the vertical's
+  order (the storyboard's in-between sketch), side-by-side ones left to right; a banner's cropped word row is a
+  horizontal fly-through (the vertical fly ease turned sideways, blur threshold above the middle speed so the key
+  frame stays sharp).
+- Code: one data file per format (`layout-*.js`: every rect, text, handle offset, dot region straight from the dumps)
+  and one shared build + choreography (`concept-wide.js`, `timeline-wide.js`) — the 9:16 page stays on its own
+  concept file with a flag for the approved changes.
+- The designer's per-frame drift carries over into each format (a word 15 units higher in one box, font sizes 195 vs
+  196.2, a headline 10 up between two frames, handle offsets per box): reproduce it, it is what verification compares.
+- Dot-pattern tile origins jump between frames (the body frame moved): write each origin as its equivalent within one
+  pitch and tween it through the transition — the grid glides a few units instead of jumping.
+- Anything that slides inside a box needs clipping at both box edges once the box no longer touches the frame edge
+  (a squeezed-out word slid over the headline).
+- Light-on-dark words that the Figma file misspells: scale the same word's outline from another format of the same
+  font (vector glyphs scale exactly) and place it with the line model; the size class closest to the target is best
+  (the 75-unit source landed 0.5 units high at 196).
+- 2K for other shapes: 16:9 = 2560 x 1440 (`--outw 2560`); a 728x90 banner at 2560 is 316.5 tall — film.js crops to
+  even sizes for yuv420p.
 
 ## 5. Render
 

@@ -258,7 +258,7 @@
   }
 
   // ───────── dot grid (Figma pattern fill: 4px white dot on a 20px tile, x0.8584, spacing 0.8 tile) ─────────
-  // o: { x, y, w, h (or the prop names ax, ay, aw, ah), ox (tile origin x), masks: [[x,y,w,h]…] (union clip, frame coords) }
+  // o: { x, y, w, h (or the prop names ax, ay, aw, ah), ox / oy (tile origin), masks: [[x,y,w,h]…] (union clip, frame coords) }
   let uid = 0;
   function dots(parent, o) {
     const TILE = 20 * 0.8584216833114624, PITCH = TILE * 1.8, DOT = 4 * 0.8584216833114624;
@@ -274,9 +274,9 @@
     // da: dot opacity (1 = the Figma pattern fill; less = a quieter grid)
     const pick = (a, b) => (a != null ? a : b);
     const ax = pick(o.ax, o.x), ay = pick(o.ay, o.y), aw = pick(o.aw, o.w), ah = pick(o.ah, o.h);
-    const c = comp(rootEl, { x: 0, y: 0, ax: ax, ay: ay, aw: aw, ah: ah, ox: pick(o.ox, ax), mask: pick(o.mask, 0), da: pick(o.da, 1) }, function (p) {
+    const c = comp(rootEl, { x: 0, y: 0, ax: ax, ay: ay, aw: aw, ah: ah, ox: pick(o.ox, ax), oy: pick(o.oy, 0), mask: pick(o.mask, 0), da: pick(o.da, 1) }, function (p) {
       area.setAttribute('fill-opacity', r3(Math.max(0, Math.min(1, p.da))));
-      pat.setAttribute('x', r3(p.ox)); pat.setAttribute('y', 0);
+      pat.setAttribute('x', r3(p.ox)); pat.setAttribute('y', r3(p.oy));
       area.setAttribute('x', r3(p.ax)); area.setAttribute('y', r3(p.ay));
       area.setAttribute('width', r3(p.aw)); area.setAttribute('height', r3(p.ah));
       if (p.mask >= 0.5) area.setAttribute('clip-path', 'url(#' + id + 'c)'); else area.removeAttribute('clip-path');
