@@ -3408,3 +3408,30 @@ LIVE-VERIFIED 2026-09-28 (a client review left as comment pins on the storyboard
 - Also seen in the same round: a section parked by the designer shows up as the whole section under a dark
   overlay (every pixel remapped, e.g. #26D07C → (35, 69, 52)) — ask whether that variant still lives before
   re-rendering it.
+
+## 198. A fractional text baseline lands on a whole pixel — Chrome and Figma may pick different ones
+
+LIVE-VERIFIED 2026-09-28 (a two-node headline: one node at y 570, the next at y 678.23, SB Sans Text 115, line 100 %).
+
+- Both rasterisers put a text baseline on a device pixel. With the baseline at 776.59 (Figma's metrics model) the
+  Figma export drew it on 776, Chrome on 777: +0.89 px on the ink centroid at 1:1, the same glyph columns. Moving the
+  node by −0.25 flipped Chrome to 776 (−0.04); nothing in between — a step function.
+- **Tried and dropped:** pre-snapping the baseline in `text()` — rounding to the nearest device pixel changed nothing
+  (Chrome snaps on its own terms after the transform), flooring fixed that line and broke three others by the same
+  amount. There is no single rule that reproduces Figma's pick across styles.
+- **RIGHT:** keep the exact metrics model; expect up to one device pixel on texts whose baseline fraction sits near .5
+  and read them with `inkshift.py` (identical bboxes, dy ≈ ±0.9 = this, not a layout error). At a delivery DPR the
+  pixel is smaller (2K 9:16: 0.55 design units).
+
+## 199. A frame's stroke in the dump can be invisible in the render: its children cover it
+
+LIVE-VERIFIED 2026-09-28 (a 16:9 header frame, 3 px inside stroke #000, not clipping, three green child frames
+filling it edge to edge).
+
+- The render showed no border at the top and sides — the children, not the frame's stroke, are on top. Drawn from the
+  dump the header got a black box around it and a doubled line at its foot (the stroke plus the rule under it): the
+  whole header region went to 21 000 px off.
+- **RIGHT:** before drawing a container's stroke, look at the render: if child fills cover the frame, the stroke is
+  gone. Keep strokes that belong to the leaf rectangles.
+- Related capture trap: a clip of 1653.75 CSS px at DPR 2560/2940 is 1439.9999 device px and Chrome floors it to 1439
+  rows — `shoot.js` gives the clip a quarter device pixel of slack inside the viewport (16:9 2K = 1440 again).
