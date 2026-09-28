@@ -28,6 +28,11 @@
   const clipOn = (p) => (p.cT != null && p.cT > -9e4) || (p.cB != null && p.cB < 9e4) || (p.cL != null && p.cL > -9e4) || (p.cR != null && p.cR < 9e4);
   const edge = (v, lo) => (v == null || (lo ? v < -9e4 : v > 9e4)) ? null : v;
 
+  function mixRgba(c1, c2, k, a) {
+    const t = Math.max(0, Math.min(1, k || 0));
+    return 'rgba(' + Math.round(c1[0] + (c2[0] - c1[0]) * t) + ',' + Math.round(c1[1] + (c2[1] - c1[1]) * t) + ',' +
+      Math.round(c1[2] + (c2[2] - c1[2]) * t) + ',' + r3(a) + ')';
+  }
   function h(tag, cls, parent) { const e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; }
   function s(tag, attrs, parent) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
   function svgRoot(parent) { return s('svg', { class: 'fig-svg', width: 1, height: 1 }, parent); }
@@ -114,12 +119,13 @@
     // rounds layout offsets and glyph baselines separately — split across both, identical Figma
     // baselines came out 0.2 or 0.8 px off depending on the element.
     ts.left = '0px'; ts.top = '0px';
-    const rgb = o.color || [34, 34, 34];
+    const rgb = o.color || [34, 34, 34], rgb2 = o.color2 || rgb;
     const n = o.n || (String(o.s).split('\n').length);
     let wCache = null;
-    const c = comp(rootEl, { x: o.x || 0, y: o.y || 0, op: o.op != null ? o.op : 1, a: o.a != null ? o.a : 1, ry: 0,
+    // colour = mix(color, color2, k) at alpha a — e.g. a struck word going from black to a solid dim green
+    const c = comp(rootEl, { x: o.x || 0, y: o.y || 0, op: o.op != null ? o.op : 1, a: o.a != null ? o.a : 1, k: 0, ry: 0,
       cT: null, cB: null, cL: null, cR: null }, function (p) {
-      ts.color = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + r3(p.a) + ')';
+      ts.color = mixRgba(rgb, rgb2, p.k, p.a);
       ts.transform = 'translate(' + r3(ox) + 'px,' + r3(top + p.ry) + 'px)';
       if (clipOn(p)) {
         // clip in stage coords → inset() on the glyph box, compensating the reveal offset
@@ -145,10 +151,10 @@
     const rootEl = group(parent);
     const svg = svgRoot(rootEl);
     const path = s('path', { d: ol.d }, svg);
-    const rgb = o.color || [34, 34, 34];
-    const c = comp(rootEl, { x: o.x || 0, y: o.y || 0, op: o.op != null ? o.op : 1, a: o.a != null ? o.a : 1, ry: 0,
+    const rgb = o.color || [34, 34, 34], rgb2 = o.color2 || rgb;
+    const c = comp(rootEl, { x: o.x || 0, y: o.y || 0, op: o.op != null ? o.op : 1, a: o.a != null ? o.a : 1, k: 0, ry: 0,
       cT: null, cB: null, cL: null, cR: null }, function (p) {
-      path.setAttribute('fill', 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + r3(p.a) + ')');
+      path.setAttribute('fill', mixRgba(rgb, rgb2, p.k, p.a));
       svg.style.transform = 'translate(' + r3(ol.ox) + 'px,' + r3(ol.oy + p.ry) + 'px)';
       if (clipOn(p)) {
         const elTop = p.y + ol.oy + p.ry, elLeft = p.x + ol.ox;      // svg box is 1x1 at the path origin
@@ -252,7 +258,7 @@
   }
 
   // ───────── dot grid (Figma pattern fill: 4px white dot on a 20px tile, x0.8584, spacing 0.8 tile) ─────────
-  // o: { x, y, w, h, ox (tile origin x), masks: [[x,y,w,h]…] (union clip, frame coords) }
+  // o: { x, y, w, h (or the prop names ax, ay, aw, ah), ox (tile origin x), masks: [[x,y,w,h]…] (union clip, frame coords) }
   let uid = 0;
   function dots(parent, o) {
     const TILE = 20 * 0.8584216833114624, PITCH = TILE * 1.8, DOT = 4 * 0.8584216833114624;
@@ -265,7 +271,11 @@
     const cp = s('clipPath', { id: id + 'c' }, defs);
     (o.masks || []).forEach(function (m) { s('rect', { x: m[0], y: m[1], width: m[2], height: m[3] }, cp); });
     const area = s('rect', { fill: 'url(#' + id + 'p)' }, svg);
-    const c = comp(rootEl, { x: 0, y: 0, ax: o.x, ay: o.y, aw: o.w, ah: o.h, ox: o.ox != null ? o.ox : o.x, mask: 0 }, function (p) {
+    // da: dot opacity (1 = the Figma pattern fill; less = a quieter grid)
+    const pick = (a, b) => (a != null ? a : b);
+    const ax = pick(o.ax, o.x), ay = pick(o.ay, o.y), aw = pick(o.aw, o.w), ah = pick(o.ah, o.h);
+    const c = comp(rootEl, { x: 0, y: 0, ax: ax, ay: ay, aw: aw, ah: ah, ox: pick(o.ox, ax), mask: pick(o.mask, 0), da: pick(o.da, 1) }, function (p) {
+      area.setAttribute('fill-opacity', r3(Math.max(0, Math.min(1, p.da))));
       pat.setAttribute('x', r3(p.ox)); pat.setAttribute('y', 0);
       area.setAttribute('x', r3(p.ax)); area.setAttribute('y', r3(p.ay));
       area.setAttribute('width', r3(p.aw)); area.setAttribute('height', r3(p.ah));
@@ -300,7 +310,7 @@
   // Wait for every @font-face in use, then build. Verification mode (?frame=) applies one state and
   // mounts a still timeline so the renderer can capture it like any other page.
   function ready(fn) {
-    const fams = ['400 20px "SB Sans Display"', '500 20px "SB Sans Display"', '600 20px "SB Sans Display"', '400 20px "SB Sans Text"', '500 20px "SB Sans Text"'];
+    const fams = ['400 20px "SB Sans Display"', '500 20px "SB Sans Display"', '600 20px "SB Sans Display"', '400 20px "SB Sans Text"', '500 20px "SB Sans Text"', '600 20px "SB Sans Text"'];
     Promise.all(fams.map(function (f) { return document.fonts.load(f, 'ВЫБЕРИ Выбери'); })).then(function () { return document.fonts.ready; }).then(fn);
   }
 
