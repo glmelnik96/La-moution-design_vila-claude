@@ -108,7 +108,8 @@ Rule of thumb for time: brand tokens are milliseconds — `sec(MS.base)`; frames
 |---|---|
 | `ease: 'spring:m3_expressive'` / `'spring:snappy'` / `{ stiffness, damping }` | closed-form damped spring; **time-based** — omit `dur`, the tween takes the spring's settle time (`Motion.spring(name).duration`). ζ ≥ 0.8 for Cloud.ru. |
 | props `blur` (px), `letterSpacing` (em), `rotateX rotateY z` | blur is a transition aid (0 at rest); 3D props add `perspective(1200px)` |
-| `opts.mblur: 1` | velocity-driven motion blur on `x`/`y` above 30 px/frame (wipes, whip pans) |
+| `opts.mblur: 1` | velocity-driven motion blur on `x`/`y` above 30 px/frame (wipes, whip pans) — isotropic `blur()`; for one-axis smear on big type use an SVG `feGaussianBlur stdDeviation="0 σ"` driven by the known speed (reference/html-figma-1to1.md §4) |
+| `ease: (u) => progress` | any function of the normalised time works as an ease — e.g. a pass-through `0.5 + 0.5·(a·v + (1−a)·v³)`, `v = 2u − 1`: fast in, slowest (never stopped) at the midpoint, fast out |
 | `Brand.words(el)` / `Brand.chars(el)` | word / character spans (chars only for code) |
 | `Brand.highlight(wordEl)` | the one green word: returns its underline (`scaleX: [0, 1]`, 5–8 frames after the word lands) |
 | `Brand.odometer(parent, { digits, cls })` | rolling digit columns, prop `n`, `set: od.set` |

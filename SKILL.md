@@ -191,7 +191,9 @@ and the deliverable is video or HTML: follow `reference/html-figma-1to1.md`.
 4. Choreography keyed exactly to those states; micro UI only inside transitions.
 5. `verify_anim.py` after every timing change; `film.js --hd | --2k` (DPR, not a CSS scale).
 Report typos and per-frame designer drift: reproduce the drift, fix typos behind a verbatim switch.
-Traps: quirks 189–196 (LINE strokes, Chrome baselines, light-text weight, DPR renders, motion.js nulls).
+Review rounds: comments come as screenshots (quirk 197) → a «comment → change» table; `figma_changes.py`
+finds the frames the designer actually changed; changed looks stay verifiable behind `?look=figma`.
+Traps: quirks 189–197 (LINE strokes, Chrome baselines, light-text weight, DPR renders, motion.js nulls).
 
     node tools/film.js v1.html --video out/v1_2K.mp4 --2k        # tools = copies of html/figma/*
     python tools/verify_anim.py v3.html "figma/frames/s3_f%02d.png" --mask 3:92-1053

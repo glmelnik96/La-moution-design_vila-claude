@@ -3394,3 +3394,17 @@ LIVE-VERIFIED 2026-09-28 (a 3.07 px rule between two ink halves at y 701.42).
 - Figma: the edge row = 42 % ink + 58 % rule. Browser, rule drawn over the ink half: the half's 42 % coverage
   first lets 58 % of the background through, the rule then covers only 58 % of that → 82 % green (conflation).
 - **RIGHT:** draw the thin element first and the neighbours on top — the edge rows then come out as in Figma.
+
+## 197. Figma comments are out of reach: no MCP tool reads them, the Plugin API has no comments
+
+LIVE-VERIFIED 2026-09-28 (a client review left as comment pins on the storyboard).
+
+- The Figma MCP server has no comment tool; `use_figma` runs the Plugin API, which exposes no comments either.
+  Dev Mode annotations (`node.annotations`) are readable — they were empty; the reviewer used pins.
+- The REST API (`GET /v1/files/:key/comments`) needs the user's personal token — do not ask for credentials.
+  Figma in the built-in browser needs the user's login as well.
+- **RIGHT:** ask for screenshots (or the text) of the comments, map each one to its frame, answer with a table
+  «comment → what changes» and treat every named change as an acceptance criterion.
+- Also seen in the same round: a section parked by the designer shows up as the whole section under a dark
+  overlay (every pixel remapped, e.g. #26D07C → (35, 69, 52)) — ask whether that variant still lives before
+  re-rendering it.
