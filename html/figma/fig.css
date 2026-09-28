@@ -4,6 +4,7 @@
 @font-face { font-family: 'SB Sans Display'; src: url('../fonts/SBSansDisplay-SemiBold.otf') format('opentype'); font-weight: 600; }
 @font-face { font-family: 'SB Sans Text'; src: url('../fonts/SBSansText-Regular.otf') format('opentype'); font-weight: 400; }
 @font-face { font-family: 'SB Sans Text'; src: url('../fonts/SBSansText-Medium.otf') format('opentype'); font-weight: 500; }
+@font-face { font-family: 'SB Sans Text'; src: url('../fonts/SBSansText-Semibold.otf') format('opentype'); font-weight: 600; }
 
 html, body { margin: 0; height: 100%; background: #26d07c; overflow: hidden; }
 body.fig-preview { background: #111; }
