@@ -119,7 +119,8 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 ## 5b. Animating a supplied frame (PNG / Figma) — free mode
 
 The input is a finished design; the job is **motion only**. Layout fidelity is not the
-deliverable — a plain rebuild of the frame's elements as DOM boxes is enough. The target level
+deliverable — a plain rebuild of the frame's elements as DOM boxes is enough (pixel-exact rest frames
+from a Figma storyboard → §5f). The target level
 and the measured rhythm live in `reference/product-demo-motion.md`; its §5 says which brand
 rules still apply (all the motion ones; none of the visual stop-list).
 
@@ -178,6 +179,22 @@ contract and QA. The traps are quirks 185–188:
 
     node scripts/gfx-build.js --plan <film>_gfx/gfx-plan.json
     node scripts/gfx-build.js check-kit --aep <scratch.aep> --out <dir>
+
+## 5f. A Figma storyboard as a pixel-exact HTML animation
+
+When the input is a Figma storyboard (frames = states), every rest frame must equal its Figma frame,
+and the deliverable is video or HTML: follow `reference/html-figma-1to1.md`.
+1. ASCII-only layer dumps, one frame per call (quirk 189); renders cropped from the section at 1:1.
+2. `html/figma/fig.js` components: SVG geometry, text placed on Figma's baseline by measurement, Figma
+   outlines for light-on-dark text.
+3. One state per frame (`?frame=F8`) → `verify.py` / `inkshift.py` until mean < 1/255, text ±0.3 px.
+4. Choreography keyed exactly to those states; micro UI only inside transitions.
+5. `verify_anim.py` after every timing change; `film.js --hd | --2k` (DPR, not a CSS scale).
+Report typos and per-frame designer drift: reproduce the drift, fix typos behind a verbatim switch.
+Traps: quirks 189–196 (LINE strokes, Chrome baselines, light-text weight, DPR renders, motion.js nulls).
+
+    node tools/film.js v1.html --video out/v1_2K.mp4 --2k        # tools = copies of html/figma/*
+    python tools/verify_anim.py v3.html "figma/frames/s3_f%02d.png" --mask 3:92-1053
 
 ## 6. Generation workflow
 

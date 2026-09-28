@@ -136,8 +136,12 @@
       const sx = 'scaleX' in st ? st.scaleX : ('scale' in st ? st.scale : 1);
       const sy = 'scaleY' in st ? st.scaleY : ('scale' in st ? st.scale : 1);
       const r = st.rotate || 0, rx = st.rotateX || 0, ry = st.rotateY || 0, z = st.z || 0;
-      let t = (rx || ry || z) ? 'perspective(1200px) ' : '';
-      t += 'translate3d(' + fmt(x) + 'px, ' + fmt(y) + 'px, ' + fmt(z) + 'px)';
+      // 2D translate unless a 3D prop is in play: translate3d promotes the element to its own compositor
+      // layer, which rasterises text on that layer's pixel grid — soft glyph edges and px-snapped positions
+      // in every rendered frame (quirk #194). Live web assets that need GPU layers can add will-change.
+      const is3d = !!(rx || ry || z);
+      let t = is3d ? 'perspective(1200px) translate3d(' + fmt(x) + 'px, ' + fmt(y) + 'px, ' + fmt(z) + 'px)'
+                   : 'translate(' + fmt(x) + 'px, ' + fmt(y) + 'px)';
       if (sx !== 1 || sy !== 1) t += ' scale(' + fmt(sx) + ', ' + fmt(sy) + ')';
       if (r) t += ' rotate(' + fmt(r) + 'deg)';
       if (rx) t += ' rotateX(' + fmt(rx) + 'deg)';

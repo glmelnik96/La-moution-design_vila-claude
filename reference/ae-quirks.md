@@ -3299,3 +3299,98 @@ LIVE-VERIFIED 2026-09-25 (the spike of 185, after a re-edit).
   - `--refresh-plate` reloads the same file after it was re-rendered in place.
 - The same holds for any footage a script re-renders while AE has it imported: write to a new name, then
   `replace()`.
+
+## 189. Figma MCP: replies over ~20 KB break the transport, and Cyrillic costs 6–12× in them
+
+LIVE-VERIFIED 2026-09-28 (a storyboard dump for §5f).
+
+- **Symptom.** `get_metadata` / `get_design_context` / `use_figma` fail with `Failed to parse SSE message … EOF while
+  parsing a string at line 1 column 20xxx`. Nothing is wrong with the call: the reply is longer than the client
+  reads in one SSE message.
+- **Cyrillic makes it worse.** Layer names and texts travel as `\uXXXX` escapes inside JSON inside JSON: a 6 KB
+  dump of a Russian frame arrived as > 21 KB. `txt.slice(0, 6000)` did not help.
+- **RIGHT:** `use_figma` read-only scripts that return ASCII only — transliterate names/characters (a 33-letter map),
+  one frame per call, skip repeated chrome. Exact texts: read them off the render or ask for one node at a time.
+- `get_screenshot` returns a short-lived URL (fine at any size); it never upscales past 1:1 — use
+  `download_assets(defaultScale = …)` for delivery-scale references.
+
+## 190. A Figma LINE paints its CENTER stroke over [y − weight, y]; a VECTOR line is centred
+
+LIVE-VERIFIED 2026-09-28 against renders of the same storyboard.
+
+- **Measured.** LINE at y 1053, 2 px, CENTER → ink rows 1051–1052. LINE at y 1139, 7 px → rows 1132–1138. So the
+  whole stroke sits above the node's y (on its local −y side, which rotates with the node: a −135° diagonal is
+  shifted by (+0.71, +0.71) px, a +135° one by (−0.71, +0.71)).
+- **A VECTOR drawn as a straight line with the same stroke is centred** ([y − 3.5, y + 3.5]).
+- **The same layer can change type between storyboard frames** (a strike-through was a LINE in one frame and a
+  VECTOR in the next): check `type` per frame; `fig.js` `hline` = LINE; the strike component takes a `yo` offset.
+
+## 191. Chrome does not put the baseline where the font metrics say; measure it
+
+LIVE-VERIFIED 2026-09-28 (SB Sans Display / Text, Chrome 153, Windows).
+
+- **Figma:** baseline = line top + (L − (asc + desc)·S)/2 + asc·S with the exact hhea metrics — every storyboard
+  text matched this to ±0.2 px (auto-height and fixed boxes alike; CAP-trimmed boxes start at the cap top).
+- **Chrome (LayoutNG) rounds ascent and descent to whole px and floors the half-leading** — the same CSS
+  (`line-height: 116.619px`) put SB Sans Text 106 px 0.94 px higher, 171 px 0.99 px higher.
+- **WRONG:** trusting the formula; also splitting the offset between `top` and `transform` — Chrome rounds layout
+  offsets and glyph baselines separately, identical Figma baselines came out 0.2 or 0.8 px off.
+- **RIGHT (`fig.js` text):** a zero-height `inline-block` with `vertical-align: baseline` inserted before the first
+  character; `(marker.top − box.top) / stageScale` = Chrome's first baseline; place the glyph box so it lands on
+  Figma's; layout at left/top 0, all fractions in `transform`. Result ±0.2 px on every text.
+
+## 192. Light-on-dark browser text renders ~10 % heavier than Figma; greyscale AA is not the default either
+
+LIVE-VERIFIED 2026-09-28.
+
+- Headless Chrome on Windows anti-aliases with ClearType (colour fringes) — `--disable-lcd-text` is mandatory for
+  Figma comparisons (and looks right on LED walls/DOOH too).
+- Even greyscale, white/green-on-ink text measured ink mass 1.11 / 1.04 vs Figma (dark-on-green: 0.98–1.01).
+  `--text-contrast` / `--text-gamma` changed nothing.
+- **RIGHT:** export those TEXT nodes as SVG (`download_assets(defaultFormat 'svg')`) and draw Figma's outlines
+  (`html/figma/extract_outlines.py`, `Fig.text({ outline })`): ink mass 0.996–1.000. Keep live text where it
+  matches (dark on light) — outlines are not editable.
+
+## 193. Render delivery sizes with a device scale factor, not a CSS scale()
+
+LIVE-VERIFIED 2026-09-28 (791-unit Figma frames → 1080×1920 and 1440×2560).
+
+- A stage `transform: scale(1.3654)` magnified Chrome's per-element baseline rounding: legal text +0.81 px,
+  one headline +1.26 px against a Figma export at the same scale.
+- `Emulation.setDeviceMetricsOverride({ width: floor(FW), height: ceil(FH), deviceScaleFactor: outW / FW })` with the
+  page laid out in Figma units, clip `{ width: FW, height: FH }` → exactly outW × outH; the legal text went to −0.19.
+  What remains (≤ 1.3 device px) is Chrome rounding glyph baselines to device pixels, where Figma does not.
+- `html/figma/film.js --hd / --2k / --outw N` reads `Fig.FW/FH` from the page and does this.
+
+## 194. motion.js: translate3d blurred text; `null` in a tween became 0; element order decides overrides
+
+LIVE-VERIFIED 2026-09-28. Fixed in `html/engine/motion.js` (+ test).
+
+- **translate3d** promoted every moving element to a compositor layer, rasterised on that layer's pixel grid: softer
+  glyphs, snapped positions in every rendered frame. Now a 2D `translate()` unless rotateX/rotateY/z are in play
+  (live web assets that need GPU layers can add `will-change`).
+- **`null` is interpolated as 0**: `{ cL: null }` in a set meant "clip everything left of x 0" — words vanished.
+  Use far sentinels (`Fig.NOCLIP = { cT: -1e5, cB: 1e5, cL: -1e5, cR: 1e5 }`).
+- **Elements are applied in the order of their first tween.** A controller component created later (one progress
+  prop driving four layers) overrides those layers' own tracks — give it an `on` prop and switch it off where the
+  layers take over, or both fight.
+- **A later `set` wins silently**: moving a start time made an F5 state (mask off) land after the mask-on key.
+  `verify_anim.py` catches it; eyes do not.
+
+## 195. Figma frames whose body starts at x 0.53 show the section colour in column 0
+
+LIVE-VERIFIED 2026-09-28.
+
+- Frames scaled in Figma kept a body frame at x 0.53 (and x 1 in the end card): column 0 of every export blends
+  the section background (#444) — a dark hairline down the left edge. On a screen that is a defect.
+- Fill the stage with the background colour; ignore column 0 in pixel diffs (`verify.py`, `verify_anim.py`).
+- The same frames carry the dot-grid pattern fill from the body origin — 0.53 / 1 px phase shifts between frames:
+  keep them (invisible) so each rest frame matches.
+
+## 196. Shared fractional edges: Figma blends by coverage, the browser composites in order
+
+LIVE-VERIFIED 2026-09-28 (a 3.07 px rule between two ink halves at y 701.42).
+
+- Figma: the edge row = 42 % ink + 58 % rule. Browser, rule drawn over the ink half: the half's 42 % coverage
+  first lets 58 % of the background through, the rule then covers only 58 % of that → 82 % green (conflation).
+- **RIGHT:** draw the thin element first and the neighbours on top — the edge rows then come out as in Figma.

@@ -35,13 +35,13 @@ test('fromTo resolves from/during/after and applies transform + opacity strings'
   const tl = Motion.timeline({ fps: 25 });
   tl.fromTo(el, { y: [40, 0], opacity: [0, 1] }, { at: 1, dur: 0.4, ease: 'linear' });
   tl.seek(0);
-  assert.strictEqual(el.style.transform, 'translate3d(0px, 40px, 0px)');
+  assert.strictEqual(el.style.transform, 'translate(0px, 40px)');
   assert.strictEqual(el.style.opacity, '0');
   tl.seek(1.2);
-  assert.strictEqual(el.style.transform, 'translate3d(0px, 20px, 0px)');
+  assert.strictEqual(el.style.transform, 'translate(0px, 20px)');
   assert.strictEqual(el.style.opacity, '0.5');
   tl.seek(3);
-  assert.strictEqual(el.style.transform, 'translate3d(0px, 0px, 0px)');
+  assert.strictEqual(el.style.transform, 'translate(0px, 0px)');
   assert.strictEqual(el.style.opacity, '1');
   assert.strictEqual(tl.duration, 1.4);
 });
@@ -51,8 +51,19 @@ test('sequential tweens on the same prop: the latest started one wins; earlier o
   const tl = Motion.timeline();
   tl.fromTo(el, { x: [0, 100] }, { at: 0, dur: 1, ease: 'linear' });
   tl.fromTo(el, { x: [100, 300] }, { at: 2, dur: 1, ease: 'linear' });
-  tl.seek(1.5); assert.strictEqual(el.style.transform, 'translate3d(100px, 0px, 0px)');
-  tl.seek(2.5); assert.strictEqual(el.style.transform, 'translate3d(200px, 0px, 0px)');
+  tl.seek(1.5); assert.strictEqual(el.style.transform, 'translate(100px, 0px)');
+  tl.seek(2.5); assert.strictEqual(el.style.transform, 'translate(200px, 0px)');
+});
+
+test('2D translate by default; the 3D form (with perspective) only when rotateX/rotateY/z are used', () => {
+  const el = fake();
+  const tl = Motion.timeline();
+  tl.fromTo(el, { x: [0, 10] }, { at: 0, dur: 1, ease: 'linear' });
+  tl.seek(1); assert.strictEqual(el.style.transform, 'translate(10px, 0px)');
+  const el3 = fake();
+  const tl3 = Motion.timeline();
+  tl3.fromTo(el3, { x: [0, 10], rotateY: [0, 20] }, { at: 0, dur: 1, ease: 'linear' });
+  tl3.seek(1); assert.strictEqual(el3.style.transform, 'perspective(1200px) translate3d(10px, 0px, 0px) rotateY(20deg)');
 });
 
 test('stagger offsets each target; from:"end" reverses; duration grows accordingly', () => {

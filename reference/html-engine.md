@@ -69,6 +69,10 @@ document.fonts.ready.then(() => {                                       // measu
 | `tl.beatList()` / `tl.beatList('all')` | review stills per scene (first, +0.6 s, +1.4 s, mid, last) / every tween edge |
 | `Motion.mount(tl, { controls, autoplay })` | exposes `window.__motion` (`seek`, `fps`, `duration`, `frames`, `beats`); adds the scrubber unless `?render` / `__RENDER__` |
 
+Transforms are a 2D `translate()` unless `rotateX rotateY z` are used — `translate3d` put every moving
+element on its own compositor layer and softened its text in renders (quirk #194). A pixel-exact rebuild
+of Figma frames has its own component layer: `html/figma/` (`reference/html-figma-1to1.md`).
+
 Props: `x y` (px, translate) · `scale scaleX scaleY` · `rotate` (deg; brand: 0/90/180 only) ·
 `opacity` · `width height` (px) · `clipL clipR clipT clipB` (% hidden per edge → `clip-path:
 inset`) · any custom prop through `set` (see `Brand.counter`, `Brand.drawOn`, `Brand.colorMix`).
