@@ -35,7 +35,8 @@ class CDP {
     await new Promise((res, rej) => { this.ws.onopen = res; this.ws.onerror = () => rej(new Error('ws error')); });
     this.ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && this.p.has(m.id)) { const q = this.p.get(m.id); this.p.delete(m.id); m.error ? q.rej(new Error(m.error.message)) : q.res(m.result); } };
   }
-  send(method, params) { const id = ++this.id; return new Promise((res, rej) => { this.p.set(id, { res, rej }); this.ws.send(JSON.stringify({ id, method, params: params || {} })); }); }
+  // every call times out (30 s): a stuck headless Chrome must fail the run, not hang it (quirk 215)
+  send(method, params) { const id = ++this.id; return new Promise((res, rej) => { const to = setTimeout(() => { this.p.delete(id); rej(new Error('CDP timeout: ' + method)); }, 30000); this.p.set(id, { res: (v) => { clearTimeout(to); res(v); }, rej: (e) => { clearTimeout(to); rej(e); } }); this.ws.send(JSON.stringify({ id, method, params: params || {} })); }); }
   async eval(x) { const r = await this.send('Runtime.evaluate', { expression: x, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception ? r.exceptionDetails.exception.description : r.exceptionDetails.text); return r.result.value; }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

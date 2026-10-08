@@ -3500,3 +3500,51 @@ LIVE-VERIFIED 2026-10-02 (Animate 2024 default HTML5 Canvas profile: export as s
   boxes and dots are sharp.
 - **RIGHT:** verify a canvas publish at stage size or 2×; tell the client Publish Settings → Image → Resolution 3
   for 3× phones (heavier atlas).
+
+## 212. MCP replies in slices: take them from the session transcript, do not retype them
+
+- A big read-only `use_figma` result (23 formats × 5 frames = 246 KB of JSON) must come back in slices (quirk 189).
+  Retyping 80 000 base64 characters into a file costs output tokens and invites a one-character error.
+- Every tool result is already on disk: Claude Code appends the conversation to
+  `~/.claude/projects/<project-slug>/<session-id>.jsonl` as it goes. Make each slice self-describing
+  (`<total>|<offset>|<checksum>|<data>`), then a script scans the JSONL, collects the slices of that checksum, joins
+  them, verifies the sum and decodes. Worked within seconds of the call returning.
+- Compress inside the plugin first: the sandbox has no `CompressionStream`, `TextEncoder` or `Blob`, and
+  `figma.clientStorage.setAsync` is «not a supported API», so each slice call recomputes everything. A 40-line LZW
+  (variable code width) cut the JSON 3× → four calls of 20 400 characters.
+
+## 213. A Figma frame's own fill shows wherever its children leave a gap
+
+- The state frames of one section had fills of their own — white, brand green or #222 — under every child. A dump
+  that walks only `frame.children` misses it. The gaps were small (the strip of a header band beside its plates), but
+  on three formats the HTML showed the page colour there and the diff tripled (mean 4 → 1.8 after the fix).
+- Read `frame.fills` and paint it as the first layer; in a fluid banner it extends with the background.
+
+## 214. Annotation marks: on the section above the frame, light red, and under later layers; a hidden pane stops rAF
+
+- Safe-zone marks (a pill top left, a circle top right, translucent bands over the headline) were usually children of
+  the state frame with solid red fills. One state had its bands as rectangles on the section, lying over the frame: not
+  in the frame's dump, but in the section render — the diff showed mean 24/255 until they were added from a
+  section-level overlap query (`section.children` whose bounds intersect the frame).
+- Other files draw them in #ff8a8a — detect «reddish» (R ≥ 0xE0, G and B ≤ 0xA0, R − max(G, B) ≥ 0x50), not pure red.
+- Figma paints them in order, so a later opaque layer (a button band) covers part of a band; a verification overlay
+  drawn on top must be cut by the opaque rectangles painted after it.
+- The built-in browser pane, when hidden, does not run `requestAnimationFrame`: a playing banner shows its t = 0 frame
+  forever (empty green) while `__motion` reports ready and evaluation works. Judge autoplay in headless Chrome
+  (navigate without the render flag, wait real time, screenshot) or a visible window.
+
+## 215. A headless Chrome call can hang without an error
+
+- In a verification run one `captureScreenshot` / navigation never answered: no exception, the batch sat for
+  minutes. CDP calls in `shoot.js` had no timeout. Give every CDP call one (30 s) so the run fails and says where;
+  group jobs by page so a story page is opened once and seeked many times.
+- Kill only the processes of that run: match their command lines (`tools/shoot.js`, the `fig-shoot-` profile dir).
+  Other Chrome processes on the machine may be the user's browser or another session's.
+
+## 216. Platform specs: read the source, and read which object a rule is about
+
+- A WebFetch summary of a platform PDF stated «15 s, 3 loops» — nothing like it was in the PDF. Read the document
+  itself (PDF text via PyMuPDF; HTML pages stripped to text).
+- SberSeller's «played once, replay on click» sits under **video inside an HTML creative**, not animation.
+- VC's «no frame change more often than every 4 s» does apply to an HTML animation's scenes (see
+  `banner-platforms.md`); Ведомости forbid relative paths in the HTML, so the only safe package is a single inline file.
