@@ -58,9 +58,17 @@ A Yandex page opened outside Yandex has no `yandexHTML5BannerApi`: guard the cal
 - Extending a layout past its Figma frame: whatever touches a frame edge goes on (keep a dot pattern's tile origin),
   rows of a repeated word repeat by their spacing, the frame's own fill extends too. Test at 320, 600, 849, 850, 1280,
   1920 and 2560 px.
+- Snap the viewBox origin to whole device pixels. Centring an 849-px column in an even-width container puts the
+  origin at x.5 (2000 → −0.5, 1280 → 359.5): every hard edge of the design lands between two pixels and blurs, and the
+  check against Figma read mean 2.3–2.9 instead of 0.00.
 
 ## Before sending
 
+- Check the files as delivered, not the dev page: unzip every archive, run its index.html without any render flag at
+  the slot size (fluid ones at the Figma frame sizes), collect errors, confirm autoplay moves, the click macro and the
+  loop length, and compare every rest mark with the state renders already verified against Figma (expect ≤ 0.05/255).
+  This caught what the dev page could not: data compaction rounded a 141-bar header's pitch to 2 decimals and the last
+  bar drifted 0.5 px — keep 3 decimals, 6 for scales and pitches.
 - Size table per banner against its platform (HTML bytes and zip bytes); the build should print it.
 - CPU: measure main-thread busy time over 10–12 s of real playback (CDP `Performance.getMetrics`, TaskDuration
   delta / elapsed). Skipping components whose props did not change brought a 23-format runtime to 2–3 %.
