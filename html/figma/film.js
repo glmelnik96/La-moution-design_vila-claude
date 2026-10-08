@@ -11,14 +11,14 @@ const { spawn, spawnSync } = require('child_process');
 const { launch, openFrame, sleep } = require('./shoot.js');
 
 function args(argv) {
-  const o = { page: null, out: null, w: null, h: null, outw: null, beats: null, every: null, video: null, fps: null, crf: 16, from: 0, to: null };
+  const o = { page: null, out: null, w: null, h: null, outw: null, beats: null, every: null, video: null, fps: null, crf: 16, from: 0, to: null, start: 0 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], n = () => argv[++i];
     if (a === '--hd') o.outw = 1080; else if (a === '--2k') o.outw = 1440; else if (a === '--outw') o.outw = Number(n());
     else if (a === '--out') o.out = n(); else if (a === '--w') o.w = Number(n()); else if (a === '--h') o.h = Number(n());
     else if (a === '--beats') o.beats = n().split(',').map(Number); else if (a === '--every') o.every = Number(n());
     else if (a === '--video') o.video = n(); else if (a === '--fps') o.fps = Number(n()); else if (a === '--crf') o.crf = Number(n());
-    else if (a === '--from') o.from = Number(n()); else if (a === '--to') o.to = Number(n());
+    else if (a === '--from') o.from = Number(n()); else if (a === '--start') o.start = Number(n()); else if (a === '--to') o.to = Number(n());
     else if (!o.page) o.page = a;
   }
   return o;
@@ -59,7 +59,7 @@ function ffmpegBin() {
       const done = new Promise((res) => p.on('close', res));
       const t0 = Date.now();
       for (let f = 0; f < N; f++) {
-        await seek(f / fps);
+        await seek((o.start + f / fps) % meta.d);            // --start: the loop rotated (first frame = poster)
         if (!p.stdin.write(await shot('png'))) await new Promise((r) => p.stdin.once('drain', r));
         if (f % 50 === 0) console.error('  frame ' + f + '/' + N + '  ' + ((Date.now() - t0) / 1000).toFixed(0) + 's');
       }

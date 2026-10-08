@@ -190,3 +190,43 @@ XFL, Animate opens it, saves the .fla, publishes and exports stills. Tools in `h
   0.71 % / 0.73 % / 1.75 % of pixels off by > 48 for 450x800 / 800x450 / 728x90.
 - One headless Chrome hung after ~20 canvas screenshots of the 728x90 (each frame alone was fine):
   `fla_canvas_shoot.js` relaunches Chrome every 8 stills.
+
+## 7. A family of resizes: the states as data, one runtime
+
+When an approved story has to run on many ad sizes (2026-10-08: 23 formats × 5 states for Yandex, SberSeller, VC,
+Ведомости, Habr and TG), building each format by hand (§4b) does not scale. Extract every state as data, classify it
+into roles, and let one runtime rebuild every state exactly and play the story on any of them.
+
+1. **Extraction, one read-only `use_figma` script.** Walk each state frame in paint order and flatten it into
+   primitives in frame coordinates, each with the intersection of its clipping ancestors: rectangles (SOLID and
+   PATTERN fills, stroke with weight and align, corner radius, ellipse flag), texts (characters, font, size,
+   lineHeight and letterSpacing with their units, alignment, autoResize, leadingTrim, fill), logo instances, frames of
+   repeated bars, booleans (the operand tree → rectangle cell algebra), vectors and lines. Solid red shapes are the
+   designer's safe-zone marks: keep them apart as annotations. Cull what a later opaque rectangle covers. Add the
+   frame's **own fill** as the bottom layer (quirk 213) and any annotation lying on the section over the frame
+   (quirk 214).
+2. **Getting it out.** The MCP reply breaks past ~20 KB (quirk 189): JSON → UTF-8 → LZW → base64 with an FNV-1a sum,
+   20 400-character slices. Do not retype the slices: they are in the session transcript (quirk 212). 246 KB of JSON
+   for 115 frames came back in four calls and was joined and checked by a script.
+3. **Roles.** A classifier names every primitive by colour, name and geometry: the header band (ink rectangles from
+   the top, grown by plates that start inside it), option boxes and their handles (small near-square ink rectangles →
+   nearest box corner), the words of a box (the box its left edge and vertical centre fall in — text frames are often
+   wider than the box), the phrase, the button band and button, the brand box, the legal line, the age mark, the
+   background. Print the role summary of every state and every unclassified item; refine until nothing is left over.
+4. **Text as glyph outlines** (fontTools: GPOS pair kerning, Figma's line model of §2), one shared glyph table per
+   page — no fonts to ship, the same pixels everywhere, ~10 KB per layout.
+5. **Scene and runtime.** Per role, one instance per distinct content with a per-state offset. The runtime rebuilds any
+   state (`?frame=Fn`) and plays the approved story keyed to them, exposing its rest points (`__MARKS`). Where the
+   designer drifted between states (a header 1.7 px taller in two of them, a second copy of the button 0.15 px off),
+   reproduce each state and swap instances while something else moves.
+6. **Verify twice.** States against the Figma crops, the annotations drawn (`?ann=1`) and cut by the opaque layers
+   painted after them. Got mean 0.4–4.2 / 255, the high end on 5-px text. Then the story at its marks against the
+   states: 0.00–0.01 in all 23. Filmstrips every 0.4 s with marks and presses framed are the art-direction pass. Read
+   every format's strip: the generic story broke where data differed (a button present in F5 as its own instance never
+   appeared until handled).
+7. **Story details that held across sizes**: copies of a word on one line enter together; stacked options push in the
+   storyboard's order, side-by-side ones left to right; a «press» at the end scales the button about its centre
+   (never up — it must stay in frame) by max(0.95, 1 − 0.24·short/long side) and darkens it, once: in the last state
+   if the button is there, else after a beat at the end of the state that shows it.
+8. **Fluid sizes and delivery**: `reference/banner-platforms.md` (100%×250 with two layouts, a 2:1 contained box,
+   click macros, limits, CPU, moderation rules that change timing).

@@ -194,6 +194,10 @@ Report typos and per-frame designer drift: reproduce the drift, fix typos behind
 Review rounds: comments come as screenshots (quirk 197) → a «comment → change» table; `figma_changes.py`
 finds the frames the designer actually changed; changed looks stay verifiable behind `?look=figma`.
 More formats of an approved story: one layout file per format + a shared build/choreography (§4b of the reference).
+A whole family of ad sizes (tens of formats): extract every state as data, classify roles, one runtime plays the
+story on all of them (§7); package per platform — click macros, limits, moderation rules that change timing, fluid
+100%-formats — with `reference/banner-platforms.md`. Traps: quirks 212–216 (transcript slices, frame fills, annotation
+overlays, hidden-pane rAF, CDP hangs, reading platform specs).
 Sources for Adobe Animate (FLA, HTML5 Canvas): convert the finished HTML with `html/figma/fla/` through a running
 Animate (§6) — exact custom-ease tweens, live text, masks; verified against the HTML frame by frame.
 Traps: quirks 189–205 (LINE strokes, Chrome baselines, light-text weight, DPR renders, motion.js nulls, hidden strokes,
