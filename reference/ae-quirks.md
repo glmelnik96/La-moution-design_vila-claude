@@ -3435,3 +3435,68 @@ filling it edge to edge).
   gone. Keep strokes that belong to the leaf rectangles.
 - Related capture trap: a clip of 1653.75 CSS px at DPR 2560/2940 is 1439.9999 device px and Chrome floors it to 1439
   rows — `shoot.js` gives the clip a quarter device pixel of slack inside the viewport (16:9 2K = 1440 again).
+
+## 200. Animate does not kern CFF fonts (no legacy `kern` table): GPOS kerning has to go into letter spacing
+
+LIVE-VERIFIED 2026-10-02 (Animate 2024 24.0.15, SB Sans Text Medium / Display, static text, autoKern on or off).
+
+- «ТАТА» at 100 px laid out with glyph origins at the plain advances (20, 79.4, 148.1, 207.5) — Figma and Chrome kern
+  it to (20, 72.3, 133.9, 186.2). The fonts carry kerning only in GPOS (`kern` feature, pair lookups); `autoKern`
+  reads the legacy table and changes nothing. On real copy: «развернуться» +3.4 % of the size, «облачные и
+  ИИ-сервисы» −1.6 %.
+- **RIGHT:** compute the line with fontTools (advances + GPOS pair adjustments, formats 1/2) and write one text run
+  per change of spacing: letterSpacing = tracking + kern(pair) after each character, 0 after the last (Figma adds no
+  trailing tracking — then Animate's right/centre alignment matches too). The text stays editable.
+
+## 201. Static text in Animate: origin at tx, first baseline at ty + round(ascent × size), tracking at 0.1 px
+
+LIVE-VERIFIED 2026-10-02 (25 face/size pairs, instances scaled so a pixel = 0.2 local units).
+
+- The first glyph origin sits exactly at the text matrix tx (ink left = tx + lsb). The baseline sits at ty plus the
+  hhea ascent times the size ROUNDED to whole px (Text 0.982: 60.31 px → 59, 42.67 → 42; Display 0.96: 121.93 → 117).
+  The field's 2 px gutter lies outside the matrix point (addNewText at top 300 → ty 302).
+- letterSpacing survives a save with one decimal (−7.31 → −7.3); size is kept to 0.05 px (bitmapSize in twips).
+- Right/centre alignment counts the tracking after the last character (like Chrome); see 200 for the fix.
+- **RIGHT:** ty = Figma baseline − round(ascent × size_px), tx = the Figma glyph origin; left-align and compute the
+  offset of right/centre lines yourself (Figma line width = advances + kerning + tracking between characters).
+
+## 202. A mask layer masks with its first shape only
+
+LIVE-VERIFIED 2026-10-02 (a dot grid clipped to the union of three overlapping rectangles: three drawing objects in
+the mask frame).
+
+- Only the first rectangle clipped; the other two were ignored (Animate's own still and the published canvas).
+- **RIGHT:** one shape per mask frame. For a union of rectangles: compress coordinates, mark covered cells, emit the
+  boundary between covered and empty cells with the fill on the right (`xfl.shape_union`).
+
+## 203. HTML5 Canvas publish: custom eases and tweened masks are baked per frame, filters are dropped
+
+LIVE-VERIFIED 2026-10-02 (classic tweens with separate position/scale/colour curves; a tweened mask instance; a blur
+filter tweened 0 → 20 on a cached instance).
+
+- Tweens with custom eases come out as `.wait(1).to({…}, 0)` per frame — exact, whatever the curve. A mask layer with
+  a tweened instance comes out as `mask_graphics_N` per frame. A BlurFilter (static or tweened) is not in the output.
+- **RIGHT:** carry any curve as a custom ease (it survives publishing); leave filters out of a canvas banner and say
+  so (a motion blur in the HTML version does not transfer).
+
+## 204. An FLA is a zip Python's zipfile refuses; write XFL and let Animate save the FLA
+
+LIVE-VERIFIED 2026-10-02 (FLA saved by Animate 2024).
+
+- `zipfile` raises «Bad magic number for central directory» (unzip: «missing 63 bytes»). The local file headers are
+  fine: walk `PK\x03\x04` records (data descriptors after deflated entries) to read DOMDocument.xml, LIBRARY/*.xml.
+- An uncompressed XFL folder (`name.xfl` = `PROXY-CS5`, DOMDocument.xml, LIBRARY, PublishSettings.xml, META-INF)
+  opens with `fl.openDocument('…/name.xfl')`; `fl.saveDocument(doc, '….fla')` writes a proper FLA. HTML5 Canvas =
+  `filetypeGUID="3CE50BB6-55CF-47A6-B591-01286DDDC64C"`, xflVersion 23.0. Edges are in twips, matrices in px,
+  layers top to bottom, folder children and masked layers point at their parent with `parentLayerIndex`, classic
+  tween = `tweenType="motion"` + `<CustomEase target="position|scale|color|…">` points (kept to 6 decimals).
+
+## 205. Published static text and complex shapes are 2× bitmaps
+
+LIVE-VERIFIED 2026-10-02 (Animate 2024 default HTML5 Canvas profile: export as spritesheet, resolution 2).
+
+- Static text and the vector logo were exported as `CachedBmp_N` sprites in an atlas at 2× the stage; plain shapes
+  stayed vector. On a 2× screen it is crisp; at 11× (a 728x90 shot at Figma scale) text and logo are soft while
+  boxes and dots are sharp.
+- **RIGHT:** verify a canvas publish at stage size or 2×; tell the client Publish Settings → Image → Resolution 3
+  for 3× phones (heavier atlas).
