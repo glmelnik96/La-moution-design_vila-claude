@@ -230,3 +230,18 @@ into roles, and let one runtime rebuild every state exactly and play the story o
    if the button is there, else after a beat at the end of the state that shows it.
 8. **Fluid sizes and delivery**: `reference/banner-platforms.md` (100%×250 with two layouts, a 2:1 contained box,
    click macros, limits, CPU, moderation rules that change timing).
+
+### 7b. A motion copied from the client's own banner
+
+When the client points at a finished banner («возьми анимацию как тут») — an Adobe Animate / CreateJS export:
+- The timeline is plain JS: custom eases are baked per frame as `.wait(1).to({x:…, y:…}, 0)` keys on the symbol. Read
+  the x of every frame, normalise it to progress 0..1 and play that table as the ease (linear interpolation, plus an
+  inverse to find when a given progress is reached). Keep its geometry relative to the frame (here the line switched on
+  with its leading edge at 86 % of the width and off with its tail at 10 %), so every width gets the same pass.
+- To watch it: load it in headless Chrome, `createjs.Ticker.paused = true`, then per frame `exportRoot.gotoAndStop(n);
+  stage.update()` and read `canvas.toDataURL()` — `Page.captureScreenshot` hung on that canvas page (quirk 215).
+- The copied move still has to cross the storyboard state exactly: solve where the curve reaches the progress that puts
+  the line at its Figma position and shift the start so that moment is on a frame; the state becomes a pass-through.
+- Here: a wide banner's line of the intro word, cropped at both edges in Figma, did not read when it faded in place; the
+  reference's fly-through (65 px/frame in, 7.4 at the slowest just past halfway, 54 out, 1.73 s at 60 fps) read and was
+  applied to all seven wide formats; stacked word columns kept their in-place entrance.

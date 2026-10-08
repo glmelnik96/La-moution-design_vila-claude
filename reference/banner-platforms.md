@@ -46,6 +46,11 @@ A Yandex page opened outside Yandex has no `yandexHTML5BannerApi`: guard the cal
   match the page; no colour mismatch or cut elements at the joins. A mockup drawn full-bleed in brand colour is a risk
   to raise, not to fix silently. Habr and Yandex overlay a menu icon and an «Реклама» tag in the top corners.
 - **Sber**: the «play once, replay on click» rule is for **video inside** an HTML creative; animation may loop.
+- **Marking for the whole animation** (Yandex and VC in the client's sheet: «маркировка указывается на самом баннере в
+  течение всей анимации»): the legal line and the age mark stay on screen from the first frame to the loop seam. A
+  storyboard whose intro frame has no legal line (and an approved story whose legal bar left before the loop restarted)
+  breaks it; keep the next state's legal line and «0+» on through the intro and the seam, and say it differs from the
+  mockup because of the brief.
 
 ## Fluid formats
 

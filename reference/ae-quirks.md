@@ -3540,6 +3540,9 @@ LIVE-VERIFIED 2026-10-02 (Animate 2024 default HTML5 Canvas profile: export as s
   group jobs by page so a story page is opened once and seeked many times.
 - Kill only the processes of that run: match their command lines (`tools/shoot.js`, the `fig-shoot-` profile dir).
   Other Chrome processes on the machine may be the user's browser or another session's.
+- A CreateJS (Adobe Animate) banner page made `captureScreenshot` time out every time; reading the frame from its canvas
+  (`canvas.toDataURL()` after `exportRoot.gotoAndStop(n); stage.update()`) worked. The timeout also caught one random
+  hang in a long verification run of ordinary pages — re-run that format rather than trusting a partial log.
 
 ## 216. Platform specs: read the source, and read which object a rule is about
 
