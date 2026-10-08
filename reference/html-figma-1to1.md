@@ -88,7 +88,8 @@ the scripts → `<project>/tools/`; the fonts' OTFs → `<project>/fonts/`).
 - Always-moving layers (a scrolling pattern) keep their style exact, not their phase: flood (eased boost)
   + constant crawl, rows wrapping, lower edge riding the top panel's rule.
 - Tempo the user approved: holds 0.25–0.65 s, brand box 1.9 s, the next element starting while the
-  chrome is still landing, the end card opening while the page is still leaving; loops 10.4–13.4 s.
+  chrome is still landing, the end card opening while the page is still leaving; loops 10.4–13.4 s. The one
+  exception is the payoff state (the answers on ink boxes): the client asked for +1 s there — 1.7 s, nothing moving.
   A first cut with 0.8–1.2 s holds and a 3 s end card was sent back: «сократи пустые экраны, паузы».
 - «More technological» = micro UI from the design's own vocabulary, only inside transitions (rest frames
   stay Figma): selection handles popping pairwise, a caret blinking after the headline. Tried and sent back
@@ -152,3 +153,40 @@ re-invent it:
   1.3 device px — Chrome rounds glyph baselines to device pixels, Figma does not).
 - 2K for vertical DOOH = 1440×2560 (say so; 1152×2048 is the other reading). About 30 s per 12 s loop at 2K
   (one headless Chrome, CRF 16) — re-render everything after each round rather than patching videos.
+
+## 6. Adobe Animate sources (FLA)
+
+When the client wants the banners as FLA (HTML5 Canvas is what ad networks take from Animate), convert the finished
+HTML version — do not rebuild it by hand. Animate must be installed (Creative Cloud): the tools write an uncompressed
+XFL, Animate opens it, saves the .fla, publishes and exports stills. Tools in `html/figma/fla/` (copy to `tools/`,
+`fla/hook.js` next to an extraction page that loads it after fig.js / the project's composites file).
+
+1. `fla_extract.js page.html model.json` — the hook records every primitive (`Fig.rect/text/logo/dots` with its
+   options) and every tween (start, duration, ease); the script seeks each frame and stores each component's applied
+   props (`comp.cur`). Everything downstream comes from what the HTML actually rendered.
+2. `fla_build.py model.json OUT W H name` — stage px = Figma units × W/FW (real banner size, not the Figma scale).
+   One layer folder per component, one symbol instance per part (a box = fill + 4 stroke edges + 4 handles; a word =
+   static text + a mask layer for its clip; a dot grid = rows of a one-row symbol inside a mask of its region; a
+   brand box = halves revealed by masks). Per-frame states (scale, position, alpha) become keyframes + classic tweens:
+   each span's custom ease is the exact normalised sub-curve of one of the recorded cubic-bezier eases, or a cubic
+   polynomial (x-controls 1/3, 2/3), checked on every frame (0.015 px, 0.0004 scale, 0.002 alpha); a span nothing fits
+   is split at a recorded tween boundary or the worst frame. Result here: 10–20 keys per layer, ~95 layers, 200–290
+   tweens per banner, Figma states as frame labels on their own layer. Project composites (here the brand box) need a
+   converter of their own; layer names are a per-project map.
+3. `fla_finish.py BUILD name OUT frames` — runs the JSFL (open XFL → save FLA → publish → PNG stills).
+4. `fla_verify.py page.html OUT W` — Animate's own stills vs the HTML at stage size, every 4th frame of the loop
+   (got ≤ 1 % of pixels off by > 48/255 for 450x800 and 800x450, ≤ 2.5 % for 728x90 = small-text antialiasing);
+   `fla_canvas_shoot.js` shoots the published canvas at any DPR for the same check; reopen the saved .fla once.
+- Text stays live (static text) and lands on Figma's line via the calibration in quirks 200–201; tell the client the
+  fonts and that kerning lives in per-letter tracking. Filters do not publish (quirk 203): motion blur stays out.
+
+## 6b. Checking Animate's output
+
+- JSFL from the shell: `Animate.exe file.jsfl` (starts Animate or hands the script to the running one); a script
+  reports through `FLfile.write` into a log the shell polls; wrap every step in try/catch (no alerts, no modal).
+- Never let Python `zipfile` judge an FLA: Animate's zip has a central directory it rejects (quirk 204).
+- Compare at stage size or 2×: published static text and complex shapes are 2× bitmaps (quirk 205), so a 1:1-Figma
+  shot of a 728x90 (11×) is blurry by design, not misplaced. Got (canvas 2× vs HTML 2×, every 8th frame): median
+  0.71 % / 0.73 % / 1.75 % of pixels off by > 48 for 450x800 / 800x450 / 728x90.
+- One headless Chrome hung after ~20 canvas screenshots of the 728x90 (each frame alone was fine):
+  `fla_canvas_shoot.js` relaunches Chrome every 8 stills.
