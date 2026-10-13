@@ -227,6 +227,10 @@ Rules:
 - **Match the comp.** Pass the target aspect/resolution so the asset needs no
   cropping. Node 94 has an explicit `aspect_ratio` enum (`1:1 16:9 9:16 4:3 3:4`);
   node 98 takes any width/height in 32px increments — set it to the comp size.
+- **Do not name the venue when you want the content.** "Panorama for a three-screen LED stage backdrop"
+  made Nano Banana draw a hall with three screens, bezels, ceiling and a glossy floor (4 of 4 variants). Ask
+  for the picture itself instead: "an abstract full-frame graphic, edge to edge, not a photo of screens or a
+  room". Keep the stage only in your own layout notes.
 
 **Transparent backgrounds / assets to composite (critical for AE layers):**
 
@@ -316,3 +320,338 @@ init: start_img=frame01.png, end_frame=frame02.png
 > License note: the image-prompt guidance above is written from Apache-2.0
 > (replicate/skills) material and paraphrased inference-sh ideas; video-prompt
 > guidance is distilled from MIT/permissive prompting guides. Safe to keep.
+
+## Runway web app in the browser pane (Unlimited mode only)
+
+> **Runway detects scripted generation (2026-10-10).** After a night of scripted jobs, about 40 Generates fired by JS
+> `click()`, Runway showed a modal: «Are you using an autoclicker?». It said that triggering generations
+> automatically is against its Terms of use and leads to suspension. That is bot detection on the user's account.
+> - Stop every scripted Generate at once and tell the user. Do not dismiss the modal and carry on.
+> - Since then, start a Runway generation from a script only if the user explicitly says how to proceed, knowing
+>   about the warning.
+> - Preparing stills, prompts and keyframe choices for the user to submit by hand is fine.
+> - The notes below record how the UI behaves, not permission to automate it.
+
+LIVE-VERIFIED 2026-10-08. When the user allows only free generations, use Runway's Unlimited mode and never Credits.
+- **Check the mode before every Generate:** the `credit-info-button` popover has two toggles; Unlimited must carry
+  `aria-checked=true`. The toggles have no labels of their own: the first `[aria-checked]` in the open popover is
+  Unlimited, the second Credits (LIVE-VERIFIED 2026-10-10). A JS `click()` on the button toggles the popover. Unlimited models seen: images Nano Banana Pro (Gemini 3 Pro Image), video Seedance 2.5.
+- **Two generations at once.** A third is refused with "wait for your last generation to complete, or switch to
+  Credits Mode". Four images per run take a few minutes.
+- **Controls.** Prompt: `[aria-label="Text Prompt Input"]` (click, Ctrl+A, Delete, type). The first three `<select>`s
+  are count (1 | 4), aspect (21:9 … 9:16, Auto) and resolution (1K | 2K | 4K). 21:9 2K = 3168×1344,
+  9:16 2K = 1536×2752. Before clicking Generate from page JS, guard on the prompt's first words, the three
+  selects and the mode.
+- **Originals, without the download dialog.** A result `<img>` is
+  `img.runwayml.com/unsafe/xl/<base64 of the original PNG URL with ?_jwt>.jpg`; `atob` the middle part and fetch
+  the PNG with urllib into the project folder. The list is virtualised: click "View latest" first.
+- **References.** Drag a result onto the Reference slot (it shows "Image 1"); "Remove Image 1" clears it. A master
+  used as a reference with "keep the exact composition" yields state variants that line up (2 of 4 held the layout
+  to a few px) — see `led-wall-pipeline.md` §18.
+- **Video, Keyframe tab:** "First Video Frame" / "Last Video Frame" slots. The same still in both gives a loop
+  that closes almost seamlessly (seam 0.8 vs a normal step 0.7 in one test) with a locked camera ("Static locked
+  camera, no zoom, no pan"). "Select" opens the asset browser: Sessions → the session → double-click the tile
+  (dispatch mousedown/up/click/dblclick on its `<img>`). "Upload" opens the native file dialog: fill it with
+  `WM_SETTEXT` + `BM_CLICK` from a script (no coordinate clicks). The aspect follows the uploaded image.
+  - Pick a still by name, not by position (LIVE-VERIFIED 2026-10-09). A tile's `src` is
+    `…/unsafe/…/<base64 of the original URL>.webp`. Decode it (`-` → `+`, `_` → `/`, then `atob`), match the
+    `…_N.png` slug, and fire the events on that `<img>`.
+  - Simpler (LIVE-VERIFIED 2026-10-10): every tile in the session folder carries its display name as a leaf text
+    node — `Nano Banana Pro - <first ~80 characters of the prompt, «:» and «,» turned into «_»>_N.png`. Find the
+    leaf whose text equals the name, walk up at most six parents to the tile's `<img>`, fire the events on it.
+    The folder is lazy: scroll its scroll container 500 px at a time until the leaf appears. The same picker
+    serves the Image tool's «Add an image reference» button.
+  - Once the First slot is filled, its "Select" button is gone. The Last slot's picker is then its folder icon.
+    "Remove image" (aria-label) clears a filled slot.
+  - The Video tool's prompt box is `[aria-label="Prompt"]`. The Image tool's is "Text Prompt Input".
+- **A transition between two different stills lands near the targets, not on them.** Seedance 2.0, glass model →
+  real plant at night, 1470×630: grey NCC of the first frame against its still 0.87, of the last frame against its
+  still 0.79 (against the other candidates ≤ 0.52). Plan the cut so the last ~0.5 s dissolves into the sharp still.
+  NCC against every candidate still also tells you which stills a job used when the notes lost track.
+  - Same-composition chains land much closer (LIVE-VERIFIED 2026-10-10). Blue hour «lights off» → night «lights
+    on», where both stills came from one master: the last frame against the loop made from the night still had
+    NCC 0.999.
+  - Seedance front-loads the event. In that clip all the lights were on within the first ~2 s; the rest was the
+    sky slowly darkening. A 1 s dissolve into the clip hid the moment.
+  - Fix in AE: hold frame 0 through the dissolve, play the event at half speed with frame mix, then run at 1×.
+    A piecewise-linear time remap via `linear()` does all three in one expression.
+  - **The handoff from a centre-screen clip to the full wall** (LIVE-VERIFIED 2026-10-11). The last keyframe is cut
+    from the wall itself: capture the delivered wall comp at the handoff time. Take the rectangle the centre still
+    covers on the wall: its size times every scale in the chain (still in the centre comp × centre comp on the wall).
+    Reflect-pad the rows that fall outside the wall, then resample to the still's own size. The first keyframe is
+    the still the centre shows at that moment.
+  - **Upload a local frame to a keyframe slot without coordinate clicks** (LIVE-VERIFIED 2026-10-11). Start
+    a small PowerShell helper in the background (it waits for the Open dialog, types an ASCII path, presses Enter),
+    then click the slot's «Upload» button by its `ref`. The helper fills the dialog and the slot fills in a second or two. Use it for frames Runway never made, such as
+    a clip's last frame cut with ffmpeg. Video cards also carry «Use frame» and «Use frame options».
+- **Unlimited limits:** video tops out at 720p (picking 1080p reverts). Seedance 2.0 runs two jobs at a time,
+  Seedance 2.5 only one; use 2.0 for simple motion. Durations 4–15 s.
+- **Duration: set it, then press Escape — never Enter.** (LIVE-VERIFIED 2026-10-09.) The Duration button opens a
+  slider with a number box («Duration in seconds»). Enter in that box can submit the form. Once, two identical
+  jobs appeared where one was intended. Close the popover with Escape and read the button's text (`5s`, `10s`)
+  before Generate.
+  - The number box is 32×18 px. A triple-click that misses it lands in the prompt underneath, and the typed «10»
+    replaced the whole prompt once. Typing into the box also failed to stick at least once.
+  - Reliable: focus the `[role="slider"]` from page JS, then press ArrowRight with the tool's key action. Its
+    `aria-valuenow` is an index: 0 = 4 s, so 5 s → 10 s is five presses. Read `aria-valuenow` and the button text
+    back.
+- **Truncated file names:** a result's PNG name holds only the first ~80 characters of the prompt slug; match on
+  the opening words, not on a term from the middle of the prompt.
+- **Which variant is which.** The slug ends in `_N.png`, where N is the result's index in its run of four. N
+  matched the downloaded vN every time; the thumbnail-vs-file NCC was 0.9986. The base64 substring of `_N.png`
+  depends on alignment, so take it from a real `src`, not from encoding the name.
+- **Reference in the Image tool, reliably:** the bottom "References" button opens a panel whose "Recents" holds
+  every image used as a reference before; one dispatched click on its `<img>` sets it as Image 1. A real mouse drag
+  from the feed also works, but missed three times in a row once the tile's hover toolbar sat under the cursor (it
+  then selected page text).
+- **The 2-job limit fails silently from script.** With two jobs running, a JS `click()` on an enabled-looking
+  Generate does nothing: no error, no new feed item. Counting "Generating" in `innerText` is not enough, because
+  the virtualised feed drops off-screen cards. After every Generate, check that a new card appeared at the
+  bottom of the feed and the thumbnail rail grew by one.
+- **Seedance 2.0 crops a 21:9 still by 2.5–3 %.** A transition and a loop made from the same still carried the same
+  zoom and a ~18 px shift at 1470 px. A ±1.5 % scale search missed it: band-pass NCC was 0.26–0.37, against
+  0.93–0.97 at ±4 %. Fit once per still; the fit holds for every clip made from it.
+- **A 9:16 still (1536×2752) is not cropped by scale.** Seedance 2.0's 720×1280 frame is the still scaled to 720 wide
+  and centre-cropped by 5 px top and bottom (plain NCC 0.997). On that black-oil frame the phase-correlation fit
+  returned NCC 0.04: dark, low-texture images defeat it. Try the plain width-fit, centre-crop mapping first.
+- **The Runway UI reports progress as a percentage, then «In queue».** A count of the word "Generating" misses
+  both. The feed also stops at a scrolled position, so click «View latest» before reading the job cards.
+- **The newest image can be sent straight to a tool from its card.** Use the card's Actions menu: «Use in image»
+  adds it as a reference, and «Use in video» sets it as the first keyframe. The References → Recents list holds only
+  images that were already used as references.
+- **The session folder in the asset browser loads lazily, newest first.** (LIVE-VERIFIED 2026-10-09.) After a few
+  dozen results, an older still is not in the DOM. Scroll the dialog's own scroll container about 600 px at a time
+  and search again. Its `<img>` `src` decodes like a feed image. Then dispatch mousedown/up/click/dblclick on it.
+- **Do not track jobs by «Generating».** The feed is virtualised, so a queued video card off-screen drops out of
+  `innerText`. The status list then looks empty while the job still waits («In queue» / «Explore Mode»). Before
+  counting free slots, click «View latest» and scroll to the card.
+- **Which `Select` is which.** (LIVE-VERIFIED 2026-10-09.) The Keyframe slots carry `aria-label="Select"` buttons only
+  while empty. With the first slot filled, the first `Select` on the page is the LAST frame's, and a pick there
+  silently makes a first→last transition. Pick the button by x position. Choosing an asset over a filled slot does
+  not replace it: «Remove image» first. Read both slots back by decoding their `background-image`.
+- **«Use in video» replaces only the first keyframe.** (LIVE-VERIFIED 2026-10-09.) The aspect switches to the
+  image's ratio, but the old last frame stays. If its ratio differs, a «Match the output ratio / crop your image»
+  overlay covers that slot. To set a first=last loop:
+  1. Dismiss the overlay.
+  2. Hover the last slot and click its ✕ («Remove image»).
+  3. Click the slot's folder icon. The asset browser opens at the root every time: Sessions → the session.
+  4. Double-click the tile whose decoded `src` ends in the wanted `_N.png`. Tiles are newest first.
+  5. Read both slots' `background-image` to confirm. They are `<div>`s, not `<img>`s.
+- **Upscaling 720p Seedance for a wall (×3.6 blow-up).**
+  - SeedVR2 ×2 beat Lanczos and 4x-UltraSharp at 1:1. UltraSharp turned every lamp into a starburst; Lanczos stayed
+    mushy.
+  - Lanczos had won on clean local-model output at ×1.4. Re-test per source.
+  - Keep the clip's tone by taking the low frequencies from a Lanczos ×2.
+  - Cost: 70–96 min per 10 s clip at 2952×1252, mostly in the VAE decode. A 49-frame test underestimated it 2–3×.
+  - **Shimmer check (LIVE-VERIFIED 2026-10-09).** An upscale changes more from frame to frame than its source: on
+    a calm glass drop, 1.5–1.6×. That alone is not flicker, because added detail moves too. Compare per region:
+    - Detail = frame − Gaussian σ2. Ratio = mean |Δdetail| between frames / mean |detail|. Measure the upscale
+      and a Lanczos ×2 of the source on the same grid.
+    - Drop core: 0.50 vs 0.44 and 0.43 vs 0.42 — the change follows the detail.
+    - Floor rings: +5–8 %.
+    - Dark background: the ratio jumps (0.9 vs 0.2), but the upscale is cleaner there and the absolute step is
+      0.3 levels — invisible.
+    - Alternating flicker shows as an even/odd step ratio well above 1. Here it was 1.00–1.05.
+    - Smooth temporally only when the core ratio clearly exceeds the source's or the even/odd ratio departs from 1.
+  - **Static shots boil (LIVE-VERIFIED 2026-10-10).** On a locked-camera time-lapse, SeedVR2 redraws the static
+    detail (road, field, plant) a little differently every few frames. Measure the frame-to-frame change of the
+    static detail after flow alignment. Values for the static detail:
+
+    | Version | Static change | Sharpness vs Lanczos |
+    |---|---|---|
+    | Lanczos ×2 | 0.31 | — |
+    | Hybrid, 3-frame window | 0.80 | — |
+    | 13-frame window + damping of unstable detail | 0.63 | +35 % |
+    | Same, SeedVR2 detail weight 0.6 | 0.54 | +12 % |
+
+    - The 13-frame window helps less than its length suggests. SeedVR2 seems to draw detail shared across four
+      frames, so the window holds only 3–4 independent samples.
+    - On a wall the clip is blown up another ×2.1, and boiling reads worse than softness. For static shots, take
+      weight 0.6. If it still boils, plain Lanczos is the honest choice; weight 0.4 gains only ~+8 %.
+    - Clips that cut together frame to frame (a time-lapse ending on a loop's frame 0) need the same weight and
+      tone. Otherwise the sharpness jumps at the join.
+  - **Flat sky: measure each clip and take the calmest source (LIVE-VERIFIED 2026-10-10).** Measure the change
+    between frames on the flat sky. With a locked camera, skip the flow alignment there: on textureless sky the
+    flow only tracks noise.
+
+    | Clip | Lanczos | Clean SeedVR2 | Hybrid |
+    |---|---|---|---|
+    | Day, `column_rise_day` | 0.57 | 0.38 | — |
+    | Night, `road_dusk_night` | 0.85 | 0.72 | 1.02 |
+    | Night, `yar_night_loop` (dark, nearly still sky) | 0.14 | 0.40 | — |
+
+    - By day, SeedVR2 removes the boiling compression grain from the sky.
+    - At night, SeedVR2 adds noise to a calm dark sky, and the hybrid is worse than either source.
+    - The sky mix therefore takes, per clip, the calmest of SeedVR2, Lanczos and the hybrid. Stars stay in, because
+      their twinkle is already part of the measurement.
+  - **Pick finished upscales by exact name.** H3's pipeline writes working files next to the result before it
+    reports done: `_x2_sv`, `_x2_hyb`, a `_x2_vNN.mp4` that may be a placeholder copy of `_x2_sv`, and
+    `_x2_vNN.tavg.mp4` while it is still being written. A glob like `*_x2_v*.mp4` picked the half-written `.tavg`
+    once. Match `_x2_v\d+\.mp4$`, and rebuild from a version only after its done message.
+
+## Phygital+ web app and Kling web in the browser pane (LIVE-VERIFIED 2026-10-11)
+
+Used when the user is signed in to app.phygital.plus / kling.ai in the built-in browser. 28 Kling 2.6 transitions were
+made this way for an LED show (stills: Nano Banana in Phygital).
+- **One project, many nodes.** The user asked not to open a project per job. Put every job in one canvas: two
+  Import Files nodes and one Kling node per transition.
+- **Adding nodes.** Click a sidebar item (Import Files) and the node appears at the viewport centre. For Kling, type
+  «Kling» in the sidebar search and click the first result. Drag a node by its header to move it. The mouse wheel
+  pans the canvas vertically, so scroll down to an empty area for the next group.
+  - Nodes outside the viewport are not in the DOM. Scroll to them before reading their status.
+- **Frames.** «Upload» opens the native file dialog (the dialog helper in the background, then the click). A second
+  upload into the same node replaces its file. Wire the Import node's output port (right edge, near the bottom) to
+  the Kling node's «Start Frame» / «End Frame» by a drag.
+- **Settings.** Dropdowns: click, click «Search options...», type, ArrowDown, Enter. Model v2.6, 10 seconds,
+  Professional, sound off costs 1030 credits.
+  - Prompt: the native textarea setter plus `input`/`change` events.
+  - Run: the node's Generate button.
+  - Status text: «Queued...», «Generating N%», «Successful». A job took 5-7 min, and several ran at once.
+- **Originals.** The node plays a `blob:` URL. Its «Full Quality» button fetches
+  `phygital-plus-prod.s3.amazonaws.com/results/user/<uid>/<obj_id>.mp4`.
+  - Wrap `window.fetch` to catch that id.
+  - Then GET `app-server.phygital.plus/api/v2/storage-object/download-link?obj_id=<id>` with `credentials: 'include'`.
+    The response is `{file_name, download_link}`; download the signed link with urllib.
+  - Image previews are `previews/user/<uid>/<obj_id>/<preview_id>.webp`: the folder number is the original's id.
+  - The Full Quality viewer closes only with a real Escape key (the tool's key action), not a dispatched
+    `KeyboardEvent`. While it is open the canvas does not scroll.
+- **Kling web (kling.ai), VIDEO 2.6.** Start and end frames, 1080p, 10 s, no audio cost 50 credits.
+  - The feeds API needs a signed `__NS_hxfalcon`, so take results from the resource-timing entries:
+    `v15-kling.klingai.com/bs2/upload-ylab-stunt-sgp/<base>-output.mp4?x-kcdn-pid=112372`.
+  - Without `_multi_bitrate…` the base downloads the original (1920×1080, 10.08 s, 242 frames at 24 fps).
+  - The entries get cleared, so save the URLs as they appear.
+  - The player is MediaSource, so tell clips apart by NCC of their first and last frames against the keys.
+- **Kling 2.6 holds both keyframes.** First and last frames scored NCC 0.999-1.0 against their keys, so chains join
+  frame into frame.
+  - Sharpness can still jump at a seam inside Kling's own output: K1→K2 +11 %, K11→K12 -12 %.
+  - The fix was a 12-frame ramp of high-frequency detail on each side of the seam, done by the upscaling session.
+    Lanczos ×2 adds no jump of its own.
+- **Native file chooser in the browser pane.**
+  - It opens only from the fronted tab: `tabs_select` first.
+  - The first click after switching tabs may only focus the page. Leave the dialog filler waiting and click
+    «Upload» again.
+- **Runway Unlimited jobs the user starts.** Prepare the tab completely, and the user presses Generate (quirk:
+  autoclicker warning):
+  - Keyframe tab, both slots filled through the dialog helper;
+  - prompt typed;
+  - Duration slider at 10 s, 720p, audio off;
+  - the Unlimited toggle checked.
+  Two such jobs sat «In queue» for over an hour at 04:30-05:30 MSK.
+
+## Kling 3.0 in Runway and Phygital, many jobs at once (LIVE-VERIFIED 2026-10-12)
+
+39 transitions and loops for one build (an LED show, 2026-10-12): Kling 3.0 Pro in Runway, the remainder in Phygital.
+- **Runway, Kling 3.0 Pro.** 12 credits per second. Durations 3-15 s: the slider's index 0 is 3 s; from the default,
+  7 s is 2 ArrowRight presses and 10 s is 5. Output 1920×1080 or 1080×1920.
+  - Unlimited mode offers Kling 3.0 Pro too, free and at 1080p. Its queue is marked «THROTTLED»: about 15-20 min
+    per job.
+- **The mode can be wrong although it looks right.** Several tabs were prepared in parallel and showed Unlimited.
+  Some of them submitted in Credits: 336 credits were spent.
+  - Before every Generate, open the credit popover and switch Credits → Unlimited explicitly, even when Unlimited
+    looks selected.
+  - After submitting, check the job through the API: a free job has `options.exploreMode: true`.
+- **The API from page JS** (signed in). Send the header `Authorization: Bearer ` + `localStorage.RW_USER_TOKEN`.
+  - `GET https://api.runwayml.com/v1/tasks?limit=30&asTeamId=<team>` gives status, options and artifacts.
+  - `GET https://api.runwayml.com/v1/sessions/<session>/assets?asTeamId=<team>` lists every result of a session,
+    with cursor paging.
+  - Before the user cleans the project, compare that list with the files on disk (377 of 377 here).
+- **The browser pane holds at most 9 tabs.** Prepare Runway jobs in rounds of up to 9 tabs, one job per tab.
+  - A closed tab's id stops working; reopen the page with `preview_start {url}`.
+  - Stop any dialog filler that was waiting for a closed tab.
+- **Signed URLs without retyping.** Retyping a 400-character signed URL corrupts it. Print
+  `JSON.stringify([[name, url], ...])` from page JS instead.
+  - A project script then reads the pairs back from the session transcript (`.jsonl`). It takes the FIRST
+    `tool_result` line that contains a marker substring; later lines are the commands that quote it. It unescapes
+    `\"` and downloads with urllib.
+- **Phygital's Kling node now defaults to model v3.** Settings: Aspect, Duration 3-10 s, Mode
+  Standard / Professional / 4K, Sound.
+  - v3 Professional costs 1,245 credits for 10 s and 1,105 for 7 s (v2.6 Professional, 10 s: 1,030).
+  - Check the user's floor balance before a batch.
+  - The zoom menu, bottom right, has Zoom in, Zoom out and Zoom to fit.
+  - At «to fit» the node headers are small. Click empty canvas first to deselect, then drag from the exact header
+    coordinates; otherwise one drag moves every selected node.
+- **Kling 3.0 holds both keys closely.** A chain of two 9:16 clips, emblem → black drop → glass drop:
+  - first against last frame at the join: mean absolute difference 2.3 levels of 255;
+  - last frame against its key: 3.3 levels.
+  - A 0.2 s dissolve at the join and 0.7 s into the loop hid both.
+
+## Higgsfield CLI — the official way to generate from Claude Code (LIVE-VERIFIED 2026-10-13)
+
+Phygital banned the account after a night of browser-scripted generations (its Terms 6.2(h) forbid automated access),
+and Runway warns about «autoclickers». Higgsfield ships an official CLI for agents, so generation runs from the shell
+with no browser automation at all.
+- Setup: `npm i -g @higgsfield/cli`, then `higgsfield auth login` (OAuth in the browser; the user approves), then
+  `higgsfield workspace list` and `higgsfield workspace set <id>`. Every other command fails with «No workspace
+  selected» until a workspace is set.
+- `higgsfield account status` shows the plan and the credits. `higgsfield model list --video|--image` lists models;
+  `higgsfield model get <job_type>` lists the parameters.
+- Cost before spending: `higgsfield generate cost <model> --prompt x [--param v]`. Measured on Plus:
+  - `kling3_0` pro, 10 s, sound off: 15 credits (5 s: 7.5; std 10 s: 12.5; 4k 10 s: 60);
+  - `kling3_0_turbo` 1080p 10 s: 20; `seedance_2_5` 1080p 10 s: 120;
+  - `nano_banana_pro` 2k: 2 credits, 4k: 4.
+- Create: `higgsfield generate create kling3_0 --prompt "…" --start-image ./a.png --end-image ./b.png --duration 10
+  --mode pro --sound off --aspect_ratio 16:9 --json` prints the job id. Local paths are uploaded automatically.
+  `--image-references` (repeatable) gives Nano Banana Pro up to 14 references.
+- `higgsfield generate wait <job_id> --json` blocks until done; `result_url` is the original file (PNG / MP4) on a
+  CDN, downloadable with urllib.
+- Plus runs up to 6 videos and 8 images in parallel. 39 Kling clips (10 s) took ~15 min wall time in one batch.
+- Windows: the CLI is an npm shim `higgsfield.CMD`. Python's `subprocess.run(['higgsfield', …])` fails with
+  WinError 2; resolve it with `shutil.which('higgsfield')`.
+- A small batch runner over a JSON spec list pays off at once: parallel jobs, job ids kept in `<spec>.log.json` (a rerun
+  waits on a submitted job instead of paying again) and downloads into the spec's `out`.
+
+## Generated motion that the client reads as «boomerang» / «telescope» / «slop» (LED show, 2026-10-13)
+
+- **A clip generated as a transition between two different stills tends to reverse.** The model has to land in a
+  composition it was not heading to, so the camera, the liquid or the pipes turn back halfway. The client called it
+  «бумеранг» and «нефть течёт обратно». Generate one shot = one camera move from a single start frame; give an end
+  frame only when it is the same composition (a 2D blueprint growing into its 3D model, the same plant in other light).
+- Join shots with short dissolves on music phrases, not with forced end frames.
+- **Screen every clip before the edit:** Farneback optical flow on a small grey copy, 1 s means of (dx, dy) and of
+  the radial component. Flag a reversal when two 1 s means point against each other (dot < −0.5·|a||b|) inside one
+  shot, «telescope» when the radial expansion stays high for 4+ s, «stop» when the motion dies at the end.
+  A script that prints the flags next to a 5-frame strip per clip is enough.
+- Keep lateral moves in one screen direction across a sequence; mirror a clip (`Scale −x`) when it runs the other way.
+- **Two consecutive shots of the same object must move the same way.** A 2D→3D growth that drifts right, followed by
+  an orbit of the same model that drifts left, reads as one shot bouncing back, even with a dissolve between them;
+  so does a dissolve from the orbit's turned view back to the straight still it started from. Measure the mean
+  horizontal flow of the last 2 s of one clip and the first 2 s of the next before editing. Mirroring cannot fix it
+  when the join is a matched frame (the plant would flip); generate the next shot in the right direction instead.
+  In Kling, «the camera orbits to the right» made the content drift left; «orbits to the left, so the model glides
+  from left to right» drifted right (2 of 2 tries in the direction asked, one with an odd foreground shape).
+- **A stage photo as a reference makes the model draw a stage.** Asked for «an engineering stage environment like the
+  reference» (a photo of a set with an LED wall and light arches), Nano Banana drew a rectangular screen with the plant on
+  it inside the scene; the client saw it at once («это же прям экран»). For screen content say «full-bleed background
+  artwork for LED screens, not a photo of a stage: no screens, no panels, no frames, no rectangles in the picture».
+- **Kling, a living loop inside a still object** (light swirling inside a drop, 2026-10-13):
+  - start = end = the same frame: the motion lasted ~4 s and the rest of the 10 s clip was frozen;
+  - start frame only, «flows continuously from the first to the last second»: it moved all 10 s, but the swirl grew
+    out of nothing over the first ~4 s. Loop the later part only: clip time S0..end, the tail crossfaded 1 s into its
+    head (two layers, time remap `S0 + (time % L) * f` and `S0 + Lc + (time % L) * f` with a fading opacity), slowed
+    with Frame Mix to the loop length;
+  - check the object does not drift: compare the outline's x on one row in the first and last frame (here 0–4 px).
+- Land a camera move instead of dissolving away from it: an ease-out time remap to the clip's last frame, then hold
+  that frame (a slow push on Scale keeps it alive), e.g. Time Remap
+  `var u = Math.min(1, Math.max(0, (time - t0) / T)); last * (1 - (1 - u) * (1 - u));`
+  It starts at 2·last/T clip-seconds per second; pick T to match the speed of the clip before it.
+- Two clips from one still read as a repeat even when the moves differ. The client counts that as «повтор кадров».
+- Generated night views of a real plant: start from the client's own photos (or Nano Banana night versions of their
+  day photos) — the generator then keeps the real plant instead of inventing spherical tanks.
+- **But the real plant has red obstruction lights** (a row up every tall stack, one on each column top), and Kling
+  makes some of them blink. A note «убрать красные маячки» is not done by switching to the client's photos: scan every
+  clip for small, saturated red spots before the edit (R > 140, R > 2.2 G and > 2.2 B,
+  per sampled frame, with a strip of the reddest frames).
+- **Removing them without blotches** — Change Color / a hue key over the frame also caught the steam and the lamp
+  halos. Per pixel in Python works (a Python pass, ProRes out, swapped in with `replaceSource`):
+  - red means OpenCV hue <= 4 or >= 172 (<= 8° / >= 344°); sodium lamps and the steam they light sit at 12–40° and
+    stay out;
+  - keep small connected spots only (<= 2500 px at 1080p), so painted red — the stripes of a stack, red steelwork —
+    stays; a big glow counts only when it touches a light's pinkish-white core (V >= 230), within ~110 px
+    (~300 px and a lower V floor for a long red-lit steam plume);
+  - the glow and halo must be redder than the surroundings (red chroma minus its 60 px blur > 18), or a pink evening
+    sky round a stack turns into an olive disc;
+  - recolour, do not erase: hue to the lamps' amber (~34°), saturation ×0.85, value kept. The beacon becomes one more
+    plant lamp, and nothing has to be inpainted.
+  - Check with a difference map (changed pixels in green over the dimmed frame) at 3–4 times per clip.
+- Kling 3.0 clips are not always 1920×1080: from some start frames they come out 1928×1076. Read the size with
+  ffprobe before cropping or tiling them.
