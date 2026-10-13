@@ -209,8 +209,8 @@ Animate kerning/baselines/masks/filters/zip/bitmaps).
 ## 5g. A Figma deck as an animated HTML presentation (click-through, one offline file)
 
 When the user gives Figma slides and wants a presentation a speaker clicks through: every slide builds itself
-on arrival and rests on exactly its Figma frame. Follow `reference/html-deck-from-figma.md`; worked example
-with tools and beat sheet: `_build/gocloud-tech-2026/`.
+on arrival and rests on exactly its Figma frame. Follow `reference/html-deck-from-figma.md`; worked examples
+with tools and beat sheets: `_build/gocloud-tech-2026/`, `_build/gocloud-tech-2026-b/`.
 1. Cloud session: asset URLs need `www.figma.com` + `figma.com` in the environment's Allowed domains.
 2. Per slide: `get_design_context` + a read-only `use_figma` style dump (PATTERN fills, text segments, image
    transforms) + `get_screenshot` at frame width as the reference. Photos are cut out of the node exports with
@@ -220,6 +220,9 @@ with tools and beat sheet: `_build/gocloud-tech-2026/`.
 4. Verify: rest frames vs Figma (`compare.py`), beat stills, a real-time run as a speaker (`navtest.js`).
 5. Deliver one file (`build_single.py`, ~0.8 MB for seven slides) + a preview video; reviewer comments
    answered by name.
+6. Slides that repeat a background, logo or object (`_build/gocloud-tech-2026-b/`): keep them as chrome that builds
+   once and moves between slides; carry identical cards over to the next slide; nest all content in its card so a
+   wipe clips it (quirk 244, `tools/audit.js`); several files from one script (`DECK_ORDER`).
 
 ## 6. Generation workflow
 

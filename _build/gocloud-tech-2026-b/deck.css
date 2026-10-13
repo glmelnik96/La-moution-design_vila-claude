@@ -1,0 +1,54 @@
+/* GoCloud Tech 2026 · part B — animated deck. Stage = the Figma frame, 2304 x 1280, scaled to the window. */
+@font-face {
+  /* one Google Fonts subset (text= every glyph the deck uses): Cyrillic, Latin, «» – — → •, variable 400–700 */
+  font-family: 'Manrope'; font-style: normal; font-weight: 400 700; font-display: block;
+  src: url(fonts/manrope.woff2) format('woff2');
+}
+
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+body { -webkit-user-select: none; user-select: none; }
+body.idle { cursor: none; }
+
+.stage {
+  position: absolute; left: 0; top: 0; width: 2304px; height: 1280px;
+  transform-origin: 0 0; background: #222; overflow: hidden;
+}
+.layer { position: absolute; left: 0; top: 0; width: 2304px; height: 1280px; }
+.slide { position: absolute; left: 0; top: 0; width: 2304px; height: 1280px; overflow: hidden; visibility: hidden; }
+.slide.on { visibility: visible; }
+
+.a { position: absolute; left: 0; top: 0; }
+.t {
+  font-family: 'Manrope', sans-serif; white-space: pre; font-kerning: normal;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+.ln { position: absolute; left: 0; }
+.lt { position: absolute; left: 0; top: 0; }
+.seg { display: inline-block; }
+.chip { overflow: hidden; }
+svg.a { overflow: visible; }
+img.a { display: block; max-width: none; }
+
+/* odometer digit: the hidden final glyph keeps the advance, the column rolls inside a clip */
+.od { position: relative; display: inline-block; clip-path: inset(0 -12% 0 -12%); }
+.od > .of { visibility: hidden; }
+.od > .oc { position: absolute; left: 0; top: 0; white-space: pre; }
+
+.hud {
+  position: fixed; right: 18px; bottom: 14px; z-index: 5; pointer-events: none;
+  font: 500 13px/1 system-ui, -apple-system, 'Segoe UI', sans-serif; letter-spacing: .06em;
+  color: #9a9a9a; opacity: 0; transition: opacity .35s;
+}
+.hud.show { opacity: .85; }
+.help {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 6;
+  font: 400 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; color: #cfcfcf;
+  background: rgba(20, 20, 20, .92); border: 1px solid #3a3a3a; padding: 10px 16px;
+  opacity: 0; transition: opacity .35s; pointer-events: none; white-space: nowrap;
+}
+.help.show { opacity: 1; }
+.help b { color: #26d07c; font-weight: 600; }
+.boot { position: fixed; inset: 0; background: #000; z-index: 9; transition: opacity .4s; }
+.blank { position: fixed; inset: 0; background: #000; z-index: 8; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.blank.show { opacity: 1; }
+.boot.gone { opacity: 0; pointer-events: none; }

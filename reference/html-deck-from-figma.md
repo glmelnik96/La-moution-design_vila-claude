@@ -5,7 +5,8 @@ advances it on a screen, every slide builds itself on arrival and then rests on 
 the output must work offline as one file. Not a film (that is the AE deck pipeline, §5c) and not a looping ad
 (the storyboard pipeline, §5f). First built 2026-10-13 in a cloud session: GoCloud Tech 2026, seven 2304×1280
 slides of a supplied design (Figma `wPZx91jtPPRJ7tCdOSEqI2`). Worked example, tools and beat sheet:
-`_build/gocloud-tech-2026/` (`BEATS.md` there).
+`_build/gocloud-tech-2026/` (`BEATS.md` there). Second deck, same day: eight event-info slides that share a grid, a logo
+and a 3D object, delivered as three files (slides 1–3, 4–8, 1–8) — `_build/gocloud-tech-2026-b/` (§3b, §5).
 
 ## 0. Before anything: can the session reach Figma?
 
@@ -44,8 +45,12 @@ slides of a supplied design (Figma `wPZx91jtPPRJ7tCdOSEqI2`). Worked example, to
   `userSpaceOnUse` gradients verbatim, inline them so they can be animated.
 - Glyphs of a font you do not have (SB Sans Text Mono here): `download_assets(cell, svg)` outlines the text —
   the path goes into `Path2D` for canvas. Export a cell inside the frame: one outside its clip returned nothing.
-- Fonts: if the design uses Google fonts, an earlier HTML export of the same deck often carries them as base64
-  woff2 subsets; extract them rather than downloading.
+- Fonts: a Google font → one subset with exactly the deck's glyphs from `fonts.googleapis.com/css2?…&text=` (quirk 247);
+  an earlier HTML export's subsets may lack glyphs (→). Check coverage with fontTools before building.
+- QR codes are raster images in the file: rebuild them as vector from the module matrix (quirk 248).
+- One image placed several times with Figma filters: a 3D LUT bakes the filters into one master (quirk 246).
+- If a session is compacted, the `use_figma` dumps are still in the session transcript (`~/.claude/projects/…jsonl`):
+  extract them into `assets/dump/*.json` instead of calling Figma again.
 
 ## 3. Build (`deck.js` = runtime + one builder per slide)
 
@@ -78,6 +83,25 @@ slides of a supplied design (Figma `wPZx91jtPPRJ7tCdOSEqI2`). Worked example, to
 - Test hooks: `?render&slide=N` mounts that slide's timeline for `html/render/render.js` (`__motion`),
   `?slide=N&t=T|end` freezes one state.
 
+## 3b. Slides that share elements: chrome, carry-over, several files
+
+When every frame repeats the same background, logo or object, rebuilding them on each click reads as a stutter.
+- **Chrome** layers sit outside the slides (grid < object < slides < logo). The grid and the logo build once, when the
+  file opens; the slide's content waits for them (0.45 s). The object gets its own state per slide (placement or none)
+  and a small timeline per change, made from where it is *now* (so a click mid-move continues from there): enter
+  (after the outgoing slide has left), glide between placements, leave.
+- **Carry-over** (slides with the same headline and card, only the card's content changes): the slide has two timelines
+  on one DOM — *fresh* (the full build, for jumps, ← and file starts) and *carry* (from its predecessor's rest frame:
+  ghost copies of the old words and lists leave, the plate narrows, the new content rises; a card splits by a cut).
+  Before playing one, park the other at its end, so every element only it drives sits at rest. Carry only when the
+  predecessor is at rest; otherwise the normal leave + fresh build.
+- **Several files from one script**: `window.DECK_ORDER` per file, images only for its slides; a slide's predecessor
+  (carry, chrome) is the previous one *in that file*.
+- **No intersections**: everything lives inside its card and is clipped by the card's wipe (quirk 244); cards wipe in
+  place, lines rise from their own masks. Audit it (`tools/audit.js`).
+- The render hook replays the change exactly as in the room (`?render&slide=N`): the previous slide leaves, the chrome
+  moves, the build starts 0.2 s later — so per-slide MP4s concatenate into a seamless preview.
+
 ## 4. Choreography that worked (beats in `_build/gocloud-tech-2026/BEATS.md`)
 
 | Slide type | Build | Build length |
@@ -94,6 +118,18 @@ Reviewer asks met here: «show the field filling with zero cells, then the two i
 the funnel without bugs» (the raster had two lines missing the vanishing point by ~20 px and the output line
 3 px below the square).
 
+Deck B (event info, beats in `_build/gocloud-tech-2026-b/BEATS.md`), built as a story: the overview ends on the
+1st floor's technozones, the next three slides open them one by one.
+
+| Slide type | Build | Build length |
+|---|---|---|
+| overview: headline, three notes, two floor cards with plates | title card wipes, lines rise; dark notes wipe down one by one; each floor: card, label, green plates (word rises inside), grey plates cascading faster and faster | 2.7 s |
+| section with a zone card (+ the same card next with another zone) | header, tile, card wipe in; the plate wipes, its word rises; bullets: marker opens, line rises. Next slide (carry): old lists sink, the word leaves upward, the plate narrows, the new word and lists rise | 2.4 s / 1.7 s |
+| the card splits into two zones | carry: a cut runs down the card's middle, plate 1 narrows to its new word, plate 2 wipes in on the new half | 1.9 s |
+| how-to with two channels + a QR | header; offline: the path through the app step by step, arrows sliding in; online: lines, then the QR (eyes, then a diagonal wave of modules); the rule bar last | 2.6 s |
+| four QR codes | the card, the call to action, then the codes in reading order with their labels | 2.1 s |
+| programme with photo and speakers | header; the photo rises inside its pattern tile; host card; speakers in air-time order: card, name, company, the time plate with digits rolling, the topic | 3.4 s |
+
 ## 5. Verify
 
 ```bash
@@ -106,6 +142,10 @@ node _build/<deck>/tools/navtest.js page.html out/dir 1920 1080                 
 
 - Bars reached: mean |diff| 0.36–2.3 / 255 on the six slides kept as designed (the rebuilt funnel 4.2 by
   intent); glyph-run starts within 1 px of the render on every single-line text checked; ink ratio 0.99–1.02.
+  Deck B: 0.36–1.55 / 255 (QR edges and a fixed typo are the rest); per-line profiles (`lineshift.py`): 117 of 123 lines
+  at 0 px after the baseline compensation of quirk 243.
+- `tools/audit.js` per slide and per mode (carry / `&fresh`); `navtest.js` prints the mode (carry / fresh) and the
+  object's opacity after every click, so a missed carry or a cube left visible shows in the log.
 - `navtest.js` caught what stills cannot: the next slide's plates covering the outgoing slide mid-transition.
 - Look at the beat stills of every slide before sending; judge transitions from the real-time run.
 

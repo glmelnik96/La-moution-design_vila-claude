@@ -4059,3 +4059,64 @@ LIVE-VERIFIED 2026-10-13. A line-reveal wrapper that is absolute, has width auto
 the mask only needs its bottom edge.
 - Opaque helper plates of the incoming slide (#222 masks under texts) cover the outgoing slide during a transition. Give
   them a short fade-in.
+
+## 243. Chrome vs Figma baselines: Blink rounds the font metrics, Figma does not (±1 px per text style)
+
+LIVE-VERIFIED 2026-10-13 (GoCloud Tech part B, `_build/gocloud-tech-2026-b/tools/lineshift.py`). Text set on the Figma
+box with the textbook half-leading model (baseline = top + L/2 + (asc − desc)/2 · size) landed 1 px off on some styles
+only: 37 px / 126 %, 80 px / 120 %, 30 px / 120 % trimmed (all 1 px high), 38 px / 120 % trimmed (1 px low); 120/120,
+60/60, 40/48 and 28/42 were exact. Blink lays the line out with whole-pixel ascent and descent and floors the
+half-leading; Figma keeps them fractional and rounds only the final baseline. Figma also rounds a % line height to whole
+px (37 × 1.26 → 47) and uses CAP_HEIGHT leading trim (node top = cap top, h = (n − 1)·L + round(capH)).
+- WRONG: `top = y` (or, trimmed, `y − ((L − 1.366 s)/2 + (1.066 − 0.72) s)`) — the Figma float baseline, Blink's rounding.
+- RIGHT (Manrope: asc 1.066, desc 0.3, cap 0.72 em): `A = round(1.066 s)`, `D = round(0.3 s)`,
+  `cb = floor((L − A − D)/2) + A` (Blink's baseline offset), `fb = L/2 + 0.383 s` (Figma's);
+  box top = `y + fb − cb`, trimmed `y + 0.72 s − cb`. 117 of 123 lines then matched the render to the pixel; the six
+  left sit on half-pixel node y (553.5, 1013.5) where the two round .5 differently.
+- Measure it per line, not by eye: cross-correlate the row profile of ink inside each line box (ref vs HTML); both
+  renderers snap glyphs, so the shift comes out as a whole number.
+
+## 244. A card's wipe must clip what is in the card, or lines rise over the background
+
+LIVE-VERIFIED 2026-10-13. Cards wiped in (`clip-path: inset(0 R% 0 0)`) while their text, a sibling element, already rose:
+on three slides of eight the headline stood half over the 3D background before the card reached it — the "ugly
+intersection" a reviewer asks to rule out. Timing gaps do not fix it for good (any retime brings it back).
+- RIGHT: create every text, plate, list and QR inside its card element and place it relative to the card (helpers take
+  frame coordinates and subtract the parent's); the card's clip then clips them, and nothing can show outside it.
+- Audit the rest frames (`tools/audit.js`): every line has a filled ancestor, no glyph run pokes out of it, no two cards
+  overlap, the logo box overlaps no card. Count the list items too: an `.lt` holding only absolute spans is 0 px wide.
+
+## 245. Two boxes meeting on a half pixel show an antialiasing seam
+
+LIVE-VERIFIED 2026-10-13. A white card built as two halves + a 20 px bridge (to split it in two later) showed a darker
+hairline at x = 1427.5 over the dark background: each box covers half of the edge pixel, and 50 % over 50 % is 75 %.
+- RIGHT: make the bridge overlap both halves by 1 px (1426.5, w 22); hidden at rest, so the rest frame is unchanged.
+
+## 246. Figma image filters are not per channel: fit a 3D LUT to get one filtered master
+
+LIVE-VERIFIED 2026-10-13. One raw render placed three times (FILL, two CROPs) with exposure .35, contrast .367,
+temperature −.22. A per-channel curve raw → export failed (R 0 → 189: pure green turns mint; blue residual p95 8.5).
+A 33³ trilinear 3D LUT fitted on raw → Figma pairs (the in-context export at one placement, plus every opaque cube
+pixel the cards leave visible in the reference renders at the other two) applied to the raw RGB with the raw alpha:
+mean |d| 1.0–1.4 / 255, p99 6–8 at all three placements. Fit on the export alone, colours outside that window ringed (p99 34).
+- One master means the object can move between its placements (a glide 1.4 s) instead of cutting.
+- Ship only the rows any placement shows (+ margin for the entrance scale): 2294 × 1826 WebP q90 = 0.46 MB.
+
+## 247. A Google Fonts subset with exactly the deck's glyphs: `css2?family=…&text=`
+
+LIVE-VERIFIED 2026-10-13. The Manrope woff2 subsets of an earlier HTML export (Google's latin + cyrillic) had no «→»
+(U+2192), so Chrome would fall back to another font on «раздел «Программа» → выбрать доклад →».
+`https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&text=<every character, URL-encoded>` (browser UA)
+returns one variable woff2 with just those glyphs, kern included: 26.5 KB for ASCII, Russian, «» – — → • № and NBSP.
+With it, Chrome's advances matched every auto-width Figma node within 1 px (Figma ceils widths), so no letter-spacing fit
+was needed (compare quirk 241). `fonts.googleapis.com` and `fonts.gstatic.com` were reachable from the cloud session.
+
+## 248. QR codes in a Figma frame are raster images: rebuild them as one evenodd path
+
+LIVE-VERIFIED 2026-10-13. The codes were 1155–1160 px PNGs (35 / 40 px modules, quiet zone 2 modules). Sampling module
+centres gives the matrix; re-rendering it matches the image except at the finder eyes, whose dark ring is 1.05 modules
+thick (white 1.05 … 5.95). Draw the eyes as three squares each (outer, hole, core) and the data modules as squares,
+all in one path with `fill-rule: evenodd`.
+- WRONG: drawing the 7 × 7 finder zones as module squares too — under evenodd the overlaps punch holes into the eyes.
+- A build: eyes grow first, then the modules in a diagonal wave (one path rebuilt per frame); at progress 1 the path is
+  the exact code, crisp at any scale, and one path has no seams between modules.
