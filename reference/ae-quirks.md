@@ -3551,3 +3551,31 @@ LIVE-VERIFIED 2026-10-02 (Animate 2024 default HTML5 Canvas profile: export as s
 - SberSeller's «played once, replay on click» sits under **video inside an HTML creative**, not animation.
 - VC's «no frame change more often than every 4 s» does apply to an HTML animation's scenes (see
   `banner-platforms.md`); Ведомости forbid relative paths in the HTML, so the only safe package is a single inline file.
+
+## 221. H.264 from rendered RGB frames: convert with BT.709 and tag it, or the brand colour moves
+
+- ffmpeg turns RGB into YUV with the **BT.601** matrix by default and writes no colour tags; players decode untagged
+  HD as **BT.709**. A flat brand green came out visibly different in the client's player while every still was exact.
+  Encode with `-vf scale=out_color_matrix=bt709:out_range=tv` and tag both the container and the stream:
+  `-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv` plus
+  `-x264-params colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv` (the VUI players read). Check: ffprobe
+  lists all four fields, and a flat field decoded back is within 2–3 levels of the brand colour (limited range).
+  `html/figma/film.js` does this.
+- A video cut of an HTML banner starts at t = 0, like the banner. Rotating the loop to open on a fuller frame
+  (`--start`) left the next loop's intro in the last seconds, and the client read it as a different animation.
+
+## 222. A README written on Windows: CRLF once, not twice
+
+- `open(p, 'w').write('\r\n'.join(lines))` in Python on Windows writes `\r\r\n`: text mode turns every `\n` into
+  `\r\n` again. Notepad shows a blank line between all lines of the delivery README, and it went out like that
+  twice. Write `'\n'.join(lines)` with `newline='\r\n'`, then count `\r\r\n` in the bytes (expect 0).
+
+## 223. ffmpeg GIF with uneven frame times: select on a fixed-rate sequence, not the concat demuxer
+
+- Feeding stills with per-file `duration` lines through the concat demuxer quantised every duration to 1/25 s: a
+  10 fps GIF came out with delays alternating 120 / 80 ms. Render the frames at a fixed rate (50 fps), keep the wanted
+  ones with `select='if(lt(n\,CUT)\,not(mod(n\,2N))\,not(mod(n-CUT\,N)))'` and `-fps_mode vfr`: the kept frames keep
+  their 1/50 s timestamps, so the delays are whole centiseconds. The last frame needs `-final_delay` (cs) or the loop
+  comes out short.
+- `palettegen` after `select` in the same graph sees only the kept frames; `paletteuse=dither=none:diff_mode=rectangle`
+  plus the muxer's default transparency diff writes only what changed.

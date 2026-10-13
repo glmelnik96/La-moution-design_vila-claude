@@ -54,8 +54,12 @@ function ffmpegBin() {
       const N = Math.round(meta.d * fps);
       const p = spawn(ff, ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-c:v', 'png', '-framerate', String(fps), '-i', 'pipe:0',
         // yuv420p needs even sizes: a 728x90 frame at 2560 wide is 316.5 tall — crop the odd row/column
-        '-vf', 'crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0',
-        '-c:v', 'libx264', '-preset', 'slow', '-crf', String(o.crf), '-pix_fmt', 'yuv420p', '-movflags', '+faststart', o.video], { stdio: ['pipe', 'inherit', 'inherit'] });
+        // RGB → BT.709 YUV and tagged as such: untagged HD is decoded as BT.709 by players, so the default (BT.601,
+        // untagged) showed #26D07C as (22, 184, 120)
+        '-vf', 'crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0,scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int',
+        '-c:v', 'libx264', '-preset', 'slow', '-crf', String(o.crf), '-pix_fmt', 'yuv420p',
+        '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
+        '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv', '-movflags', '+faststart', o.video], { stdio: ['pipe', 'inherit', 'inherit'] });
       const done = new Promise((res) => p.on('close', res));
       const t0 = Date.now();
       for (let f = 0; f < N; f++) {
