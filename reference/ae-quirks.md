@@ -4041,9 +4041,16 @@ k·12s − s … k·12s from the node's top-left. Colour = #222 + 0.4·#505050 =
 LIVE-VERIFIED 2026-10-13. An auto-width Figma text box excludes the tracking after the last glyph; Chrome's line includes it
 (ТОКЕН at −5 %: 2132 vs 2096 px). The Google Fonts Manrope variable woff2 also differs from Figma's instance by up to ~3 px
 per 1000 px of line.
-- For single-line nodes set letter-spacing in px = (Figma width − measureText(text)) / (n − 1), left-aligned at the node's
-  x. Never centre tracked text with `text-align`.
+- Measure before fitting: glyph-run starts of the render vs the HTML along one row (`np.diff` of the ink columns).
+  - The error grows evenly along the line (a 41-character uppercase label drifted 3.5 px): set letter-spacing in
+    px = (Figma width − measureText(text)) / (n − 1), left-aligned at the node's x. Got every glyph within 1 px.
+  - One pair is off, the rest exact: keep the file's spacing and fix the pair. Figma kerns «/с» in Manrope Bold
+    0.05 em tighter than Chrome does with the webfont: 5 px at 100 px in «бит/с». A width fit spread that error
+    over the line instead (glyphs up to 5 px off); `margin-left: -0.05em` on the «с» put all of them within 1 px.
+- Never centre tracked text with `text-align`.
 - One node had textCase UPPER, and Figma rendered it as typed («GPU-час»). Follow the render, not the dump.
+- A Figma LINE's stroke covers [y − weight, y] (quirk 190) — the dump's y is its bottom edge: a 9 px strike at y 153
+  is drawn on rows 144–152.
 
 ## 242. Line masks: a clip-path on a zero-width wrapper hides the whole line
 

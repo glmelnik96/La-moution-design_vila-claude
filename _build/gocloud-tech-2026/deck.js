@@ -141,6 +141,9 @@
     el.style.strokeDasharray = r3(L) + ' ' + r3(L + 20);
     el.style.strokeDashoffset = r3(L * (1 - st.draw));
   }
+  // Figma kerns «/с» (Manrope Bold) 0.05 em tighter than Chrome does with the webfont: measured 5 px at 100 px,
+  // every other glyph of both bit-rate lines lands within 1 px with the file's own letter-spacing (quirk 241)
+  function kernSlashEs(span) { span.style.marginLeft = '-0.05em'; return span; }
   function hex2rgb(h) { const v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; }
   function mixHex(a, b, u) {
     const A = hex2rgb(a), B = hex2rgb(b);
@@ -337,8 +340,7 @@
     const LH = 100.11715698242188;
     const num = div(el, 116.905, 287.07, null, LH);
     num.classList.add('t');
-    Object.assign(num.style, { fontSize: px(LH), lineHeight: px(LH), fontWeight: '700', color: '#a6efcb', whiteSpace: 'pre',
-      letterSpacing: fitSpacing('1 000 000 000 бит/с', { size: LH, wt: 700, fitW: 970 }) });
+    Object.assign(num.style, { fontSize: px(LH), lineHeight: px(LH), fontWeight: '700', color: '#a6efcb', whiteSpace: 'pre', letterSpacing: '-0.01em' });
     const STR = '1 000 000 000';
     let j = 0;
     const ncol = STR.replace(/ /g, '').length;
@@ -357,13 +359,15 @@
       });
       j++;
     }
-    num.appendChild(document.createTextNode(' бит/с'));
+    num.appendChild(document.createTextNode(' бит/'));
+    kernSlashEs(E('span', num, null, null, 'с'));
     num.style.transformOrigin = '0 50%';
     tl.fromTo(num, { opacity: [0, 1], y: [24, 0] }, { at: 0.3, dur: 0.5, ease: EZ.enter });
 
     const outT = text(el, { x: 1744, y: 220, size: 38, lh: 38, wt: 400, color: '#fff', fitW: 291, lines: ['выходит наружу'] });
     reveal(tl, outT, 2.75, { dur: 0.6 });
-    const ten = text(el, { x: 1730, y: 287, size: 100, lh: 100, ls: -0.01, wt: 700, color: '#fff', mask: false, fitW: 463, lines: ['~10 бит/с'] });
+    const ten = text(el, { x: 1730, y: 287, size: 100, lh: 100, ls: -0.01, wt: 700, color: '#fff', mask: false, lines: ['~10 бит/'] });
+    kernSlashEs(E('span', ten[0], null, null, 'с'));
     ten.root.style.transformOrigin = '0 70%';
     premium(tl, ten.root, 2.85, { blur: 6, dur: 0.8 });
     const src = text(el, { x: 1708, y: 1189, size: 24, lh: 24, wt: 400, color: 'rgba(200,200,200,0.5)', op: 0.8, mask: false, fitW: 459, lines: ['Источник: Zheng & Meister, Neuron, 2024'] });
@@ -441,7 +445,8 @@
     const gpu = text(el, { x: 131, y: 85, size: 110, lh: 110, ls: -0.02, wt: 500, color: '#434343', fitW: 442, lines: ['GPU-час'] });
     reveal(tl, gpu, 0.2, { dur: 0.7 });
     tl.fromTo(gpu[0], { dim: [0, 1] }, { at: 0.95, dur: 0.35, ease: EZ.move, set: function (e, st) { e.style.color = mixHex('#d9d9d9', '#434343', st.dim); } });
-    const strike = div(el, 104, 148.5, 478, 9, { background: '#434343', transformOrigin: '0 50%' });
+    // Line 16 is a Figma LINE at y 153: its 9 px stroke covers [y − 9, y] (quirk 190), measured rows 144–152
+    const strike = div(el, 104, 144, 478, 9, { background: '#434343', transformOrigin: '0 50%' });
     tl.fromTo(strike, { scaleX: [0, 1] }, { at: 0.95, dur: 0.4, ease: EZ.enter });
 
     const strip = grid(el, -21, 1112, 2350, 170, 2.373704195022583);

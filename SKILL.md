@@ -1,6 +1,6 @@
 ---
 name: ae-motion-live
-description: Cloud.ru motion design in two engines — a live, already-open After Effects (ExtendScript over CDP, port 8092, with the cloudru-motion.jsx library) and a dependency-free HTML motion engine rendered with headless Chrome — plus AI asset generation via the Phygital sidecar. Use for any brand animation, title/KPI/divider/scheme/logo scenes, explainer spots, web motion, or AE scripting. Also the After Effects half of graphics over a Premiere edit (lower thirds, key thoughts, callouts, chapter cards, intro/outro linked back through Dynamic Link) together with premiere-autopilot. Triggers on "анимация", "моушен", "After Effects", "AE", "заставка", "ролик Cloud.ru", "HTML-анимация", "motion", "графика на ролик", "плашки", "титры поверх видео".
+description: Cloud.ru motion design in two engines — a live, already-open After Effects (ExtendScript over CDP, port 8092, with the cloudru-motion.jsx library) and a dependency-free HTML motion engine rendered with headless Chrome — plus AI asset generation via the Phygital sidecar. Use for any brand animation, title/KPI/divider/scheme/logo scenes, explainer spots, web motion, or AE scripting. Also the After Effects half of graphics over a Premiere edit (lower thirds, key thoughts, callouts, chapter cards, intro/outro linked back through Dynamic Link) together with premiere-autopilot. Triggers on "анимация", "моушен", "After Effects", "AE", "заставка", "ролик Cloud.ru", "HTML-анимация", "анимированная презентация", "HTML-презентация", "презентация из Figma", "motion", "графика на ролик", "плашки", "титры поверх видео".
 ---
 
 # ae-motion-live — Cloud.ru motion, in After Effects and in HTML
@@ -205,6 +205,21 @@ Animate kerning/baselines/masks/filters/zip/bitmaps).
 
     node tools/film.js v1.html --video out/v1_2K.mp4 --2k        # tools = copies of html/figma/*
     python tools/verify_anim.py v3.html "figma/frames/s3_f%02d.png" --mask 3:92-1053
+
+## 5g. A Figma deck as an animated HTML presentation (click-through, one offline file)
+
+When the user gives Figma slides and wants a presentation a speaker clicks through: every slide builds itself
+on arrival and rests on exactly its Figma frame. Follow `reference/html-deck-from-figma.md`; worked example
+with tools and beat sheet: `_build/gocloud-tech-2026/`.
+1. Cloud session: asset URLs need `www.figma.com` + `figma.com` in the environment's Allowed domains.
+2. Per slide: `get_design_context` + a read-only `use_figma` style dump (PATTERN fills, text segments, image
+   transforms) + `get_screenshot` at frame width as the reference. Photos are cut out of the node exports with
+   the raw alpha (quirk 239).
+3. One seekable Motion timeline per slide, built from an empty frame: text by lines, the file's own spacing
+   checked glyph by glyph (quirk 241), pattern grids as exact rects (quirk 240), canvas for big fields.
+4. Verify: rest frames vs Figma (`compare.py`), beat stills, a real-time run as a speaker (`navtest.js`).
+5. Deliver one file (`build_single.py`, ~0.8 MB for seven slides) + a preview video; reviewer comments
+   answered by name.
 
 ## 6. Generation workflow
 
