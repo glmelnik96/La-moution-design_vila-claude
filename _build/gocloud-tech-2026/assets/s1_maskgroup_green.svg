@@ -1,0 +1,20 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="1012.5" height="971" viewBox="0 0 1012.5 971" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Mask group">
+<mask id="mask0_0_4" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="1013" height="971">
+<path id="Union" d="M1012.08 971H0V460H0.414062V0H1012.5V460H1012.08V971Z" fill="url(#paint0_linear_0_4)"/>
+</mask>
+<g mask="url(#mask0_0_4)">
+<path id="Vector 11" d="M1032 860H-14" stroke="url(#paint1_linear_0_4)" stroke-width="4"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_4" x1="606.5" y1="30" x2="839.489" y2="907.172" gradientUnits="userSpaceOnUse">
+<stop stop-color="#222222"/>
+<stop offset="1" stop-color="#494949"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_4" x1="-14" y1="363.852" x2="1029.72" y2="363.852" gradientUnits="userSpaceOnUse">
+<stop/>
+<stop offset="1" stop-color="white"/>
+</linearGradient>
+</defs>
+</svg>

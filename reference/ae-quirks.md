@@ -4016,3 +4016,39 @@ No error was logged, and the frame count was right.
   to each other.
 - Re-render just that range and splice it in (quirk 237); here frames 105–117 took about 30 s.
 - Prefer three lanes over five when the comps are heavy.
+
+## 239. A Figma image node's export is the node *in context*: cut the layer out with the raw alpha
+
+LIVE-VERIFIED 2026-10-13 (GoCloud Tech deck, `_build/gocloud-tech-2026/tools/prep_assets.py`). `download_assets` on an image
+rectangle (png, scale 1) returns the node clipped to its frame, with the slide background under it baked in and the fill's
+filters (exposure, contrast, saturation…) applied; alpha is 255 everywhere. `rawImages` carry the real alpha but no filters.
+The image URLs in `get_design_context` are ~1024 px previews — never ship them.
+- Layer = export RGB + raw alpha mapped to slide coordinates with the fill transform (FILL: scale = max(nodeW/imgW,
+  nodeH/imgH), centred; CROP: invert `imageTransform`).
+- Un-mix the soft edge: F = (E − (1 − a)·B) / a, B = the export just outside the silhouette propagated inwards.
+- Check the cut-out over magenta: no background fringe outside, no background texture (grid lines) inside.
+
+## 240. Figma PATTERN fills: rebuild the tile, then compute the blend
+
+LIVE-VERIFIED 2026-10-13. Fills [SOLID #222, PATTERN (source "PATTERN core" 1:7, scalingFactor s, opacity 0.4,
+LINEAR_DODGE)] render a grid. The 12×12 source has 1-unit lines on its right and bottom edges, so the lines are s px wide at
+k·12s − s … k·12s from the node's top-left. Colour = #222 + 0.4·#505050 = #424242 (measured 66 on 34).
+`get_design_context` drops pattern fills without a word: read fills with `use_figma`.
+- Draw the lines as exact rectangles in one SVG path.
+
+## 241. Figma text widths vs Chrome: trailing tracking, webfont advances, an ignored textCase
+
+LIVE-VERIFIED 2026-10-13. An auto-width Figma text box excludes the tracking after the last glyph; Chrome's line includes it
+(ТОКЕН at −5 %: 2132 vs 2096 px). The Google Fonts Manrope variable woff2 also differs from Figma's instance by up to ~3 px
+per 1000 px of line.
+- For single-line nodes set letter-spacing in px = (Figma width − measureText(text)) / (n − 1), left-aligned at the node's
+  x. Never centre tracked text with `text-align`.
+- One node had textCase UPPER, and Figma rendered it as typed («GPU-час»). Follow the render, not the dump.
+
+## 242. Line masks: a clip-path on a zero-width wrapper hides the whole line
+
+LIVE-VERIFIED 2026-10-13. A line-reveal wrapper that is absolute, has width auto and holds only an absolute child is 0 px wide.
+`clip-path: inset(-60% -12% …)` then clips everything. Open the sides with px insets (`inset(-60% -4000px -0.32em -0.4em)`):
+the mask only needs its bottom edge.
+- Opaque helper plates of the incoming slide (#222 masks under texts) cover the outgoing slide during a transition. Give
+  them a short fade-in.
