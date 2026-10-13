@@ -3926,3 +3926,93 @@ both from Git Bash and from PowerShell.
   `name.encode('cp1251')` must not raise.
 - When a render does fail on a name, read the log's modification time first. `*>` rewrites the log only once
   aerender starts, so a check made too early reads the previous run's error.
+
+## 231. ffmpeg `apad` before `amix=duration=longest` never ends: 140 GB in four minutes
+
+LIVE-VERIFIED 2026-10-13. A short sound effect was padded with `apad` so it could be mixed with a 204 s track:
+`[0:a]adelay=800,apad[k];[1:a]adelay=5000[m];[k][m]amix=inputs=2:duration=longest`. `apad` makes its input
+infinite, so `duration=longest` never ends. The WAV grew to 141 GB and the disk fell to 27 GB free before it was
+stopped.
+- Do not `apad` an input of `amix … duration=longest`: the longest real input already sets the length.
+- Give every long-running ffmpeg an explicit `-t` (or `-frames:v`) as a hard stop, and `-nostdin` in scripts.
+- `Stop-Process` from PowerShell did not stop that ffmpeg; `taskkill //PID <pid> //F` from Git Bash did.
+
+## 232. A concat list built with `>>` on a busy drive can silently lose a line
+
+LIVE-VERIFIED 2026-10-13 (Git Bash, a project drive under heavy render load). A render script built the ffmpeg
+concat list for four render parts line by line: `: > list; for …; do echo "file '…'" >> list; done`. One append
+failed with «Device or resource busy» (the file had just been created; most likely a scanner held it). The script went
+on, and the cut script started cutting three parts instead of four: 157 s of a 209 s film, with no error.
+- Write the list in one call (one `open(…, 'w').write(…)` from Python, or one `printf … > list`), not by appends.
+- Check it before cutting: the number of `file` lines, and the sum of the parts' frames against the film's length.
+  A cut that passes `-frames:v N` computed from the list will not notice a missing part on its own.
+- Render scripts should stop on a failed write (`set -e`, or `|| exit 1` after the list is written).
+- It happened twice the same night, both times on the third append of four, in two different scripts (two films of one
+  show). Treat appends to a just-created file on that drive as unreliable, not as a one-off.
+
+## 233. Before `proj.save()`, check every render lane, not only the one you started
+
+LIVE-VERIFIED 2026-10-13. With three render lanes running (two from one script, one from another), a save was cleared
+by looking at one lane's progress. Another lane's part had 98 frames left; at about 100 frames a minute its next
+aerender would have started within a minute, in the middle of the 10-second save (quirk 225). It finished after the
+save by luck.
+- Before every save, read the last PROGRESS frame of every running aerender log against that part's end frame.
+- Save only when each one has more than about two minutes left, or has just started rendering (past its launch).
+- A part that renders static stretches can speed up several times near its end, so leave a wider margin there.
+
+## 234. A render lane that asks for a comp by an old name fails in seconds and goes on
+
+LIVE-VERIFIED 2026-10-13. Comps had been renamed the day before («Рассадка A — … (v7) [RASSADKA_A_WALL]», quirk 230),
+but a new render script still asked aerender for `RASSADKA_A_WALL`. aerender printed «No comp was found with the given
+name» and exited after 9 seconds; the lane logged «done RASSADKA_A_1310.mov:  / 1000» and started the next job. The
+failure showed only because the empty frame count stood out in the log an hour later.
+- After renaming comps, look every render name up in the rename map. Do not reuse names from an older script.
+- In a render lane, compare the frame count with the expected one after each job. On a mismatch print `FAILED` and
+  stop, or the cut step later works from a missing or stale master.
+- An aerender job that ends in under a minute has almost certainly failed: read the tail of its log.
+
+## 235. A full disk: aerender stops mid-part, ffmpeg exits with −28, and both look like ordinary failures
+
+LIVE-VERIFIED 2026-10-13. A night of render parts (6–7 GB each as «High Quality» masters at 3968×2688), cuts and copies
+filled a 932 GB project drive to 404 KB free. Three aerenders stopped at the same second, each having written part of
+its range (1051, 2090 and 1818 of ~2600 frames) without an error in the lane log; an ffmpeg cut of a canvas exited with
+status 4294967268 (= −28, ENOSPC).
+- Before a render batch, check free space against the batch: parts × ~2.6 MB per frame at 3968×2688 for the masters,
+  plus ~0.4 GB per minute for the delivery cuts. Stop a lane when the drive has less than that left.
+- An aerender part that ends early with a short file and no error, several at the same moment, is a full disk.
+- Free space by moving superseded masters to another drive (a move, not a delete), then render the failed parts again;
+  aerender overwrites its output file.
+
+## 236. «:» in a Windows file name makes a 0-byte file with a hidden stream, and the rename then fails
+
+LIVE-VERIFIED 2026-10-13 (NTFS). A review copy was named «Заставка — IN, LOOP, OUT (инженерная: сфера из чертёжных
+линий).mp4». ffmpeg did not fail: NTFS read the part after «:» as an alternate data stream, so a 0-byte file named
+«…(инженерная» appeared with two hidden streams of 128 and 27 MB, and the script's `os.replace` stopped with
+WinError 87 («Параметр задан неверно»).
+- Never use «:» in file names on Windows; also not `\ / * ? " < > |`. Use «,» or «—» instead of a colon, «.» in time
+  codes («1.30–2.10»).
+- Assert it in every script that builds names from text.
+- A 0-byte file with an odd truncated name is this case: `Get-Item -Stream *` shows the hidden streams.
+
+## 237. Frame Mix on a time-remapped layer looks one frame ahead: a `%` wrap inside the loop spoils the last frame
+
+LIVE-VERIFIED 2026-10-13. A 10 s loop comp played a generated clip slowed by Time Remap `S0 + (time % 10) * f` with Frame
+Mix on. The loop's last frame was off (wrap step 1.16 against a median of 0.45), and so was the last frame of every comp
+that nested it. Frame blending of the frame at t samples the remap at t and at t + 1 frame. At the last frame,
+remap(10.0) wrapped to the loop start, so AE blended across the whole loop.
+- Inside a comp that is exactly one loop long, write the remap without `%` (`S0 + time * f`).
+- Do the wrap one level up, on the nesting layer (`time % 10` on a precomp layer without frame blending).
+- Expressions that drive frame-blended layers must stay continuous at the frame after the comp's end.
+- Do not re-render a whole long piece to fix only its last frames: render the range that is wrong (`-s/-e`).
+  ProRes is intra-only, so the concat demuxer with `outpoint` / `inpoint` and `-c copy` splices it frame-exact.
+
+## 238. Under heavy parallel load aerender can write one wrong frame
+
+LIVE-VERIFIED 2026-10-13: five aerenders on CUDA at once (5376×2688 comps with glows and nested clips). One frame of a
+500-frame loop came out as if rendered at another time: the rings sat in other positions and the reflection was different.
+The steps on both sides of it were 2.8 against a median of 0.4, and the frames before and after it matched each other.
+No error was logged, and the frame count was right.
+- Scan every master for single odd frames: both steps around frame k are high, while frame k−1 and frame k+1 are close
+  to each other.
+- Re-render just that range and splice it in (quirk 237); here frames 105–117 took about 30 s.
+- Prefer three lanes over five when the comps are heavy.
