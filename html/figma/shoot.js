@@ -3,7 +3,8 @@
 //   node tools/shoot.js --jobs jobs.json [--outw 1080]
 //   jobs.json: [{ "page": "v1.html?frame=F8", "t": 0, "out": "out/verify/A_F8.png" }, …]
 // Size: the page's own design frame (window.Fig.FW x FH, from window.FIG_FRAME) at 1 CSS px = 1 px;
-// --outw N rasterises that frame at DPR N / FW (the delivery size); --w/--h force a viewport.
+// --outw N rasterises that frame at DPR N / FW (the delivery size); --w/--h force a viewport, --dpr N rasterises
+// that viewport at N device px per CSS px (a double-density still of a fixed-size slot).
 // Pages must call Motion.mount(tl) (window.__motion). Chrome: CHROME_PATH, else the system Chrome.
 // EXTRA_FLAGS="--a --b" adds Chrome switches (experiments).
 'use strict';
@@ -11,11 +12,11 @@ const fs = require('fs'), path = require('path'), os = require('os');
 const { spawn } = require('child_process');
 
 function args(argv) {
-  const o = { w: null, h: null, jobs: null, outw: null };
+  const o = { w: null, h: null, jobs: null, outw: null, dpr: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], n = () => argv[++i];
     if (a === '--w') o.w = Number(n()); else if (a === '--h') o.h = Number(n());
-    else if (a === '--jobs') o.jobs = n(); else if (a === '--outw') o.outw = Number(n());
+    else if (a === '--jobs') o.jobs = n(); else if (a === '--outw') o.outw = Number(n()); else if (a === '--dpr') o.dpr = Number(n());
   }
   return o;
 }
@@ -77,7 +78,7 @@ async function open(cdp, page) {
 // device pixels; a CSS scale() would magnify its per-element baseline rounding (quirk #193).
 async function openFrame(B, page, o) {
   await open(B.cdp, page);
-  if (o.w && o.h && !o.outw) { await metrics(B, o.w, o.h, 1); await open(B.cdp, page); return { FW: o.w, FH: o.h, dpr: 1 }; }
+  if (o.w && o.h && !o.outw) { await metrics(B, o.w, o.h, o.dpr || 1); await open(B.cdp, page); return { FW: o.w, FH: o.h, dpr: o.dpr || 1 }; }
   const fr = await B.cdp.eval('window.Fig ? { w: Fig.FW, h: Fig.FH } : { w: innerWidth, h: innerHeight }');
   const dpr = o.outw ? o.outw / fr.w : 1;
   const vh = Math.floor(fr.h + 1e-6) + (Number.isInteger(fr.h) ? 0 : 1);

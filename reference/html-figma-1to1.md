@@ -202,7 +202,9 @@ into roles, and let one runtime rebuild every state exactly and play the story o
    PATTERN fills, stroke with weight and align, corner radius, ellipse flag), texts (characters, font, size,
    lineHeight and letterSpacing with their units, alignment, autoResize, leadingTrim, fill), logo instances, frames of
    repeated bars, booleans (the operand tree → rectangle cell algebra), vectors and lines. Solid red shapes are the
-   designer's safe-zone marks: keep them apart as annotations. Cull what a later opaque rectangle covers. Add the
+   designer's safe-zone marks: keep them apart as annotations. Cull what a later opaque rectangle covers; a logo that
+   is ≥ 70 % under one is a leftover copy, not a covered logo — drop it whole (its exposed 7-px sliver read as a glitch
+   beside the real logo, and the client caught it). Add the
    frame's **own fill** as the bottom layer (quirk 213) and any annotation lying on the section over the frame
    (quirk 214).
 2. **Getting it out.** The MCP reply breaks past ~20 KB (quirk 189): JSON → UTF-8 → LZW → base64 with an FNV-1a sum,
@@ -230,6 +232,10 @@ into roles, and let one runtime rebuild every state exactly and play the story o
    if the button is there, else after a beat at the end of the state that shows it.
 8. **Fluid sizes and delivery**: `reference/banner-platforms.md` (100%×250 with two layouts, a 2:1 contained box,
    click macros, limits, CPU, moderation rules that change timing).
+9. **A brief change the mockups carry only partly.** «We enlarge the age mark» — measure it against its reference
+   (the legal line) in every format before building: the designer had enlarged it in 11 of 23 (1.28–1.61×, median
+   1.44) and left the old 1.0 in the rest, and the client noticed those. Bring the stragglers to the median (keep the
+   edge it is aligned to and its vertical centre) and list them in the README as a change against the mockup.
 
 ### 7b. A motion copied from the client's own banner
 
