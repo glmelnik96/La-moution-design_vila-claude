@@ -2548,6 +2548,9 @@ WRONG `L.outPoint = t1; L.inPoint = t0;`
 RIGHT `L.startTime = s; L.inPoint = t0; L.outPoint = t1;` — and for a duplicate that must start where
 its source ends (a glass "keep" copy), in first (it may slide), then out, which pins it. After any
 batch of trims, dump `[name, inPoint, outPoint, startTime]` of the new layers before capturing.
+When the new in point lies past the current out point (a duplicate of a time-remapped layer moved later,
+LIVE-VERIFIED 2026-10-11), do `out = max(t1, out); in = t0; out = t1`. In that case "out first, then in"
+slid the duplicate by the in-delta: (46.4, 56.44) came out as (46.4, 63.24).
 
 ## 160. Effect point parameters on a TEXT layer are comp coordinates, not `sourceRectAtTime` space
 
@@ -3154,6 +3157,13 @@ LIVE-VERIFIED 2026-09-24 (LED-wall show, a finale: a 5.17 s sky clip slowed to f
   ratio. A mirrored centre extension (3072-wide comp → the 4608-wide pre-render) moved from anchor 3072 to
   4608 and slid off the wing, where only black showed. Read anchor and masks from the ORIGINAL layer, then
   set them after the swap.
+  - **What exactly it scales** (LIVE-VERIFIED 2026-10-09, temp comp, 3168 → 6336 source):
+    - It scales the anchor (1000,500 → 2000,1000) and the mask vertices (100…900 → 200…1800).
+    - It leaves mask feather (40), mask expansion (10) and Scale (100) alone.
+    - To swap footage for an upscale with the same framing, set Scale × old/new and feather and expansion ×
+      new/old by hand. Do NOT rescale the vertices: a script that did ended up with ×4 masks.
+    - WRONG: `L.replaceSource(big); ms.setValue(scaleShape(ms.value, 2))`.
+    - RIGHT: remember vertex 0 before the swap; after it, rescale only if the vertex did not move.
   - The pattern worked: a words-free copy of the wings over a soloed pre-render, only where the words were.
     The side stack (floor, the mirrored centre taken from the pre-render itself, the wings) went into its own
     comp via `copyToComp`, used as 4 short soloed layers masked to the side screens. It matched the pre-render
@@ -3501,6 +3511,154 @@ LIVE-VERIFIED 2026-10-02 (Animate 2024 default HTML5 Canvas profile: export as s
 - **RIGHT:** verify a canvas publish at stage size or 2×; tell the client Publish Settings → Image → Resolution 3
   for 3× phones (heavier atlas).
 
+## 206. A CorelDRAW CDR as AE layers: LibreOffice to SVG, colours un-mixed from the flattened PNG
+
+LIVE-VERIFIED 2026-10-08 (a splash supplied as CDR + PNG; CorelDRAW not installed, Illustrator refuses the format).
+
+- The CDR is a ZIP (`content/data/Bitmaps.dat` holds zlib-packed bitmaps, no PNG/JPEG signatures).
+  `soffice --headless --convert-to svg file.cdr` gives one embedded bitmap (all rasters merged: background, arcs,
+  skyline), text as curves (user units 1/100 mm) and `linearGradient`s. Fountain fills come back wrong: a
+  white-to-grey headline turned flat grey, a chrome numeral smoother than the original. Shadows are gone.
+- **RIGHT:** shape from the vector, colour from the client's PNG. Rasterize each element alone (copy the SVG, drop
+  the `<image>` and the other paths, crop the viewBox, headless Chrome screenshot at 2×), then solve
+  `F = (C − (1−α)·B) / α` at the PNG's own scale, B = the CDR's own bitmap resized to the PNG. Fill α < 0.35 from
+  the nearest solid pixel, upsample F under the 2× alpha. Recomposed against the PNG: mean error 1.2/255 (raw SVG
+  render: 4.6). Rebuild shadows with Drop Shadow.
+- Headless Chrome writes no screenshot and exits 0 while the user's own Chrome is running: always pass
+  `--user-data-dir=<scratch folder>`.
+- The `<image>` x/y/width/height of the export can be wrong for a cropped bitmap: in a second file (4:3) it
+  claimed y −57, height 9259 units, and the background landed off by a few percent. Fit it instead: grid-search
+  scale x/y and take the shift by phase correlation on a text-free region (here 43.60 % × 42.55 % at 0,0, NCC
+  0.998; the bitmap is stretched non-uniformly in the CDR). Then check alignment per region: in that file the
+  arcs matched the client's PNG exactly while the skyline sat 11 px off — the PNG came from another revision, so
+  the CDR stays the source.
+
+## 207. Effect values through a script: Drop Shadow opacity, light sweeps on white type, hidden track mattes
+
+LIVE-VERIFIED 2026-10-08 (AE 26.5, English UI).
+
+- `ADBE Drop Shadow-0002` (Opacity) takes and reads back 115: the scale is 0–255 (115 ≈ 45 %), not percent.
+- CC Light Sweep (Light Reception Add) on near-white silver type barely shows: it adds white to white. For a
+  visible animated gradient on a silver numeral: a Gradient Ramp solid in Multiply (~40 %) over the face,
+  alpha-matted to the face, start/end points circling by expression (period 10 s for a 20 s loop); the bright band
+  on a Screen copy of the face with Light Reception = Cutout (`CC Light Sweep-0009` = 3).
+- `setTrackMatte(m, TrackMatteType.LUMA)` keeps working with the matte's eye off (`m.enabled = false`): a Fractal
+  Noise solid (evolution `time/20*6*360`, Cycle Evolution on, 6 revolutions) as a luma matte over a lights layer
+  gives a seamless 20 s twinkle; a blurred white band moving in x over a second copy lights the plant up behind a
+  passing wave.
+- Subtle motion: judge it by diffing frames of a half-res aerender preview against a rest frame (abs diff × 4).
+  Every animated layer shows up there even when the thumbnails look static.
+
+## 208. Delivering a seamless loop: sweep tails at the seam, keyframe pumping, a check that lied
+
+LIVE-VERIFIED 2026-10-08 (a 20 s / 1000-frame splash loop, ProRes master → H.264 per screen + a common canvas).
+
+- **CC Light Sweep reaches past its Width.** The Smooth falloff runs well beyond the core. A sweep parked just past
+  the layer edge (−0.3w / 1.3w) still lit the type faintly, so the last frame (parked right) differed from frame 0
+  (parked left): a visible jump at every loop. **RIGHT:** park at −1.0w / +2.0w and re-time the keys so the band
+  crosses the layer at the same moment and speed. For an expression sheen, travel −1.2w … +2.2w per period.
+- **Measure the seam on the master, not the encode:** step(999 → 0) must equal the ordinary frame-to-frame step.
+  ffmpeg `select='eq(n,999)+eq(n,0)'` returns frames in stream order, whatever order you list them in. Key the
+  results by frame number, or you compare unrelated frames (my first "seam" numbers were exactly that).
+- **x264 keyframe pumping on smooth LED gradients.** At CRF 14 with GOP 50, each I-frame changed the picture 20× more
+  than the normal step (0.36 against 0.02 mean, gray). `ipratio=1.0:pbratio=1.0:aq-mode=3` halved it. One GOP per
+  loop (`keyint = min-keyint = frames in the loop`, `scenecut=0`) removes it inside the loop. The only I-frame is
+  then the loop start.
+- A 3968×2688 50p H.264 canvas needs Level 6.0 (533 Mpx/s, above 5.2's 530.8). Name it in the README and check the
+  playback machine. An HEVC or HAP version is the fallback.
+
+## 209. Scripting traps of one afternoon: ease resets LINEAR, `%` in generated JSX, stale captures, a silent save
+
+LIVE-VERIFIED 2026-10-08.
+
+- **`setTemporalEaseAtKey` overrides `setInterpolationTypeAtKey(k, BEZIER, LINEAR)`.** The out side becomes Bezier
+  with the speed you passed (0), so a year counter meant to run linearly from key 3 to key 4 lagged eight years
+  mid-way. **RIGHT:** ease first, then set the interpolation types; read values back at a few times to confirm.
+- **Python `%`-formatting of a JSX template:** every `%` in an expression (`yi % P`, `c % 6`) must be `%%`, or the
+  generator dies with "not enough arguments". A regex for `%(?![(%])` over the template finds the strays.
+- **Stale captures:** `fix.jsx && rm old.png && cap.jsx; until [ -s old.png ]` — when the first step errors, the
+  chain stops, the wait loop finds the previous PNG at once and you review yesterday's frame. Delete outputs in
+  their own command before the fallible step, and check the file time.
+  The same trap without AE: `ffmpeg -v error -sseof -0.05 -i clip.mp4 -frames:v 1 last.png` on a 24 fps clip wrote
+  no file and exited 0. Grab a last frame with `-ss <duration − 0.1>` and test that the file exists.
+- **A script can apply every change and return empty, with no save.** `proj.dirty` was still true after a long
+  build that ended in `proj.save()`. Probe the state and save in a separate one-line call before rendering.
+
+## 210. A year odometer, photo cards in 3D, and a generated loop under a sharp still
+
+LIVE-VERIFIED 2026-10-08 (the centre screen of a 3-minute plant film, 1152×2688; a splash on a 5376×2688 wall).
+
+- **Odometer:** one PNG strip of digits 0–9,0 (cells of fixed height, rendered in Chrome with tabular figures and a
+  silver gradient). Four strip layers in a precomp, each with a position expression: year `Y` from a Slider,
+  `yi = floor(Y)`, `f = Y - yi`, roll `r = smoothstep(0.86, 1, f)`; digit `d = floor(yi / P) % 10`; carry
+  `P == 1 ? r : (yi % P == P - 1 ? r : 0)`; `y = top - (d + carry) * cellH`. A rewind (2026 → 1961 in 4 s) needs no
+  extra code. Make the precomp taller than one cell and mask it on the parent with a 40 px vertical feather, tight
+  enough that the neighbour cells' glyph tops stay outside. A 28 % roll window leaves digits half-rolled in a third
+  of all frames; about 14 % reads as a mechanical tick.
+- **Cards that recede:** three position keys per card (enter from below, rise, then +1900 z while fading), Y/X
+  rotation easing through zero, a camera with DOF focused on z = 0. Receding cards blur by themselves. Keep them out
+  of the top third where the year sits. Stills baked with rounded corners and a 3 px light border look cleaner
+  than masks and render faster than video cards.
+- **A low-res generated loop under a sharp still:** a generator clip (1280×720) of a locked-camera background is
+  the still re-rendered. Find the exact mapping by phase correlation (here clip = still × (0.2870, 0.2860) +
+  (0, −4)), scale the clip layer by the inverse and loop it (`loopOut('cycle')` on time remap, Frame Mix for 24 →
+  50 fps). Put the sharp still back only inside a matte of the detailed subject (per-column top edge of edge energy,
+  widened by a 25 px min-filter, with the moving light arcs removed from the edge map first, or a strip of a static
+  arc appears next to the animated one). Sky, arcs, steam and floor stay generated.
+- **"Static shot" is not a guarantee:** a local Minimax H3 clip pushed in 1.5–3.1 % over 5 s (80 px at the edges
+  of a 5376 wall); phase correlation reported zero because it sees translation only. Check every frame against
+  frame 0 with a scale search (0.97–1.04, shift by phase correlation at each scale) before laying a static still
+  over a clip. Seedance 2.0 with first = last frame measured 1.000 and 0 px over 10 s.
+- **The generator redraws soft content.** With first frame = the still, Seedance's frame 0 kept rigid structures
+  (a refinery, ≤1 px), but moved velvet folds by a median 2.4 px at clip size (~10 px at 5376). A still laid over
+  it doubles every fold edge. For deformable subjects, register the clip to the still with a smoothed,
+  consistency-gated flow field before transferring detail. Exclude dust specks that exist in only one of the two
+  images: the still's specks otherwise stick to the moving fabric, and the clip's print as dark dots. The detail
+  transfer itself was done in a separate local-model session, which also showed that Seedance centre-crops the
+  still to the output aspect; restore the cut rows from the still.
+- **Looping a generated clip in a 50 fps comp:** time remap `time % P` with Frame Mix on doubles the picture at the
+  wrap frame, because the blend window spans the jump from the end back to 0 and averages the whole clip. Cross-fade
+  the clip into a seamless loop, retime it outside AE to exactly P seconds at the comp rate (ffmpeg: three loops →
+  `setpts` stretch → `framerate=fps=50` → keep the middle cycle), then use `time % P` with frame blending off.
+  Count the loop's frames first. A loop closed by a morph is shorter than the clip (241 − 12 = 229 frames). Cutting
+  it to 10 s instead of stretching (`setpts=PTS*240/229`) puts a jump at every wrap.
+
+## 211. A long build day: a timeout in ms, a non-animatable Hue/Saturation, stale shape references, AE's RAM
+
+LIVE-VERIFIED 2026-10-08, AE 26.5.
+
+- **Quirk #170 again: `--timeout 300` is 0.3 s.** The "(0s)" timeout came back at once while AE finished the build
+  and saved it. Probe for what the build made instead of re-running; an `if (findItem("X")) return "exists"` guard
+  makes a second run harmless.
+- **Hue/Saturation Master Saturation cannot be keyframed from a script.** `canVaryOverTime` is false
+  (`ADBE HUE SATURATION-0005`), and `setValueAtTime` throws. The script dies in the middle with an empty result.
+  Set a static value and animate the effect's strength instead: `effect("ADBE Effect Built In Params")`
+  `("ADBE Effect Mask Opacity")` (Compositing Options → Effect Opacity) does take keys.
+- **Shape contents: use or re-fetch every reference before the next `addProperty`.** Adding a Stroke after an
+  Ellipse and then setting an expression through the old Ellipse reference left a half-built layer: no
+  expressions, and reading its Position threw "invalid numeric result (divide by zero?)". Set the transform first,
+  then after each `addProperty` fetch the group again (`layer("ADBE Root Vectors Group").property(1)`
+  `("ADBE Vectors Group")`) and set the new item's values right away. Remove the half-built comps before
+  rebuilding: the failed script left its undo group open.
+- **AE's own RAM on a machine shared with a GPU model.** After a day of builds and `saveFrameToPng` captures the
+  interactive AE held 21.8 GB. Windows then trimmed ComfyUI's working set (32 → 10.7 GB), SeedVR2 paged, and a
+  70-minute job took 96. `app.purge(PurgeTarget.ALL_CACHES)` brought AE back to 2.6 GB. Purge after every capture
+  batch. Render with `app.project.gpuAccelType = GpuAccelType.SOFTWARE` (CPU only) next to a GPU job, and run one
+  aerender at a time. A 176 s 1920×1080 half-res preview took 2 min 16 s on the CPU.
+- **Hue/Saturation Master Hue: plus turns blue toward cobalt, minus toward cyan.** On a cyan-blue splash
+  (hue ~200°), −6…−15 made it greener and more "nuclear"; +8…+16 with saturation −35…−60 gave cobalt, steel and
+  night-navy. Check the direction on one frame before grading a whole wall.
+- **Cap aerender's memory up front; do not plan to kill it.** `aerender.exe` starts `AfterFX.com`, the real
+  renderer. That process grew to 29 GB on a 176 s preview with 38 card layers and a film layer, far above an
+  estimated 4–8 GB. A guard that killed `aerender.exe` left `AfterFX.com` rendering on, and in auto mode stopping
+  it was refused. Pass `-mem_usage <image_cache_%> <max_mem_%>` (e.g. `-mem_usage 10 15` on a 100 GB box) so the
+  renderer stays inside its share from the start.
+  - Seen again 2026-10-08 23:40. The GUI AE had grown to 27 GB from frame captures over 3–5 GB ProRes loops, and
+    SeedVR2 held 39 GB. Free RAM fell to 7 GB, and the guard stopped `aerender.exe`, which again orphaned a 9.4 GB
+    `AfterFX.com`.
+  - Purge the GUI's caches with `app.purge(PurgeTarget.ALL_CACHES)` after every capture batch **and before each
+    aerender launch**. That took the GUI from 27 GB to 3.4 GB.
+
 ## 212. MCP replies in slices: take them from the session transcript, do not retype them
 
 - A big read-only `use_figma` result (23 formats × 5 frames = 246 KB of JSON) must come back in slices (quirk 189).
@@ -3552,6 +3710,88 @@ LIVE-VERIFIED 2026-10-02 (Animate 2024 default HTML5 Canvas profile: export as s
 - VC's «no frame change more often than every 4 s» does apply to an HTML animation's scenes (see
   `banner-platforms.md`); Ведомости forbid relative paths in the HTML, so the only safe package is a single inline file.
 
+## 217. `copyToComp` pastes above the selected layer of the target comp, not at index 1
+
+LIVE-VERIFIED 2026-10-08 (AE, an LED-show film rebuilt). Building a comp from layers of another one:
+
+- WRONG: `src.layer(name).copyToComp(dst); var L = dst.layer(1);` — the copy lands directly **above the layer that is
+  selected in `dst`** (a layer just made by `dst.layers.add(...)` is selected and stays selected; the copy is not).
+  The second copy went to index 2, `dst.layer(1)` was the first copy again, it got shifted twice, and the next
+  `inPoint` assignment threw — the payload returned nothing (ae.js: «AE returned empty result»).
+- RIGHT: deselect every layer of `dst` before each copy (then the copy goes to the top), and find the copy by its
+  name, asserting there is exactly one.
+- A copied layer keeps effects, masks, keys and expressions; its track matte does not come along (`hasTrackMatte`
+  false). Shifting `startTime` moves the keys with it; expressions that use absolute comp time (`time - 88`) must be
+  rewritten.
+
+## 218. Time remap on a layer that was just moved: enable it first, set in/out after, read back
+
+LIVE-VERIFIED 2026-10-08 (a 10 s Seedance clip sped up 1.8x by a time-remap expression).
+
+- WRONG, one payload: `L.startTime = 12.6; L.timeRemapEnabled = true; …; L.inPoint = 12.6; L.outPoint = 18.18;` — the
+  first run threw right after `startTime` (empty ae.js result, `timeRemapEnabled` still false); in the next run,
+  with time remap already on, `outPoint = 18.18` came back as 30.78 (= startTime + 18.18). Re-setting `outPoint` in a
+  later call gave 18.4 as asked.
+- RIGHT: enable time remap on its own (or check `L.timeRemapEnabled` before touching it), put the expression on the
+  remap property, then set `inPoint`/`outPoint` and **read them back**; correct in a separate call if they drifted.
+  Wrap such multi-step edits as guarded steps (`try` per step, errors collected) so one throw does not hide where
+  the payload stopped.
+
+## 219. Linear Wipe: which side the angle hides, and In/Out for a seamless loop comp
+
+LIVE-VERIFIED 2026-10-08 (an LED-show splash, In / Loop / Out).
+
+- `ADBE Linear Wipe-0002` (angle) names the side that is hidden while «Transition Completion» (-0001) is above 0:
+  **0° hides the bottom, 90° the left, 180° the top, 270° the right.** So a reveal that grows upward from the
+  bottom is 180° with completion 100 → 0, and a title that writes on in reading order is 270°. An exit in
+  reading order is 90° with completion 0 → 100. The first build had the 65 appearing from the top and the title
+  from the right.
+- **An In for a loop comp that ends exactly on loop frame 0.** Duplicate the loop comp and shorten it to D.
+  - Set every nested comp layer's `startTime` to D − P (P = the loop period), so at D its inner time is P ≡ 0.
+  - Freeze the keyed sweeps on the duplicate's own layers at their value at time 0.
+  - Add the reveals on the copies.
+  The seam in the review sequence measured a mean absolute difference of 0.8/255.
+  An Out needs no shift: its t = 0 is the loop's end.
+  `expression time` is comp time, so moving a layer's start does not move a `time`-based expression on that
+  layer. Only nested comps carry the shift.
+
+## 220. Removing every Time Remap key switches the property off
+
+LIVE-VERIFIED 2026-10-08 (a finished 175 s cut nested into a 195 s comp, retimed to a new music track
+by a piecewise-linear remap with 29 word anchors).
+
+- WRONG: `L.timeRemapEnabled = true; while (tr.numKeys) tr.removeKey(tr.numKeys); tr.setValueAtTime(...)` throws
+  «Can not "set value at time" with this property, because the property or a parent property is hidden». The
+  layer is left with remap off.
+- RIGHT: set all anchor keys first (`setValueAtTime` adds or overwrites keys). Then delete only the default keys
+  whose times are not anchors, set LINEAR interpolation on every key, extend `outPoint`, and read back a few
+  `valueAtTime` checks.
+- The retime method itself worked: nest the old cut, map new word times to old word times, mute the nested
+  music, and add new content only where the new track has sections the old one lacked.
+- **A second new track that is a re-edit of the first** (LIVE-VERIFIED 2026-10-09: 195 s → 205.8 s, music and
+  voice cut and extended together):
+  - Find the edits with two alignments.
+    - Words: faster-whisper on both tracks, then `difflib` on the normalised words gives the voice offsets.
+    - Music: correlate 32 log bands at 20 Hz in 5 s windows against the old track, then check 1 s windows between
+      the two candidate offsets. A section where the window keeps jumping by one bar length (3.75 s) is a
+      repeated bar, an insert.
+  - Remap: speed 1:1 under the voice; each gap absorbs its own difference.
+    - Measured on the slow drifting stills: up to ×1.8 and down to ×0.44 read fine.
+    - At a music cut that would need ×3.5 on motion (a crown sinking, then a plant rising), cut the remap with
+      two keys one frame apart instead. Over the cut lay a second nested layer of the same cut: it keeps the
+      pre-cut time and fades out over 1 s.
+    - That cut outlives the material it was made for (LIVE-VERIFIED 2026-10-11). The section underneath was later
+      rebuilt as one chain of generated transitions (dome → scene → refinery), each starting on the previous
+      clip's last frame. The base comp then played through cleanly, but the delivered comp still jumped from mid-loop
+      into mid-transition under the 1 s dissolve. That is exactly the «fade splice» the client had flagged.
+      - After rebuilding anything under a retime, capture the delivered comp, not the base one.
+      - Compose the remap keys of every level (delivered → intermediate → base) and print the base time at each
+        cut and at every second.
+    - A cut that does not show: jump by exactly one loop period, or from a loop's frame 0 into a transition whose
+      first frame is that loop's frame 0. Two keys one frame apart do the jump (here 56.0 → 66.0). The loop
+      must be fully opaque at the jump frame, so its fade-in has to finish before the jump. The section gets
+      shorter with no dissolve and no speed-up.
+
 ## 221. H.264 from rendered RGB frames: convert with BT.709 and tag it, or the brand colour moves
 
 - ffmpeg turns RGB into YUV with the **BT.601** matrix by default and writes no colour tags; players decode untagged
@@ -3579,3 +3819,110 @@ LIVE-VERIFIED 2026-10-02 (Animate 2024 default HTML5 Canvas profile: export as s
   comes out short.
 - `palettegen` after `select` in the same graph sees only the kept frames; `paletteuse=dither=none:diff_mode=rectangle`
   plus the muxer's default transparency diff writes only what changed.
+
+## 224. Swapping a generated clip in place: keyed Scale refuses `setValue`, and the old fade stays
+
+LIVE-VERIFIED 2026-10-11 (an LED-show film: a 720p transition swapped over its ×2 predecessor, then the ×2 back over it).
+- `replaceSource` keeps the layer's scale. A clip of another width needs the width ratio (old / new) applied. The
+  layer carried Scale keys (a slow push), and `setValue` threw: «Can not call setValue() on a property with
+  keyframes». The script had already swapped the source by then, so the layer stayed half size.
+  - RIGHT: `if (S.numKeys) for each k: S.setValueAtKey(k, [v[0]*r, v[1]*r, v[2]]) else S.setValue(...)`.
+  - Read the keys back. A re-run that finds the new source in place gets ratio 1 and must not scale again.
+- The layer's opacity keys survive the swap. The old clip faded in from 0 over 0.4 s, a dissolve that suited it.
+  The new transition opens on the previous loop's frame 0, and the same keys turned the cut into a dip to near
+  black (frame 66.02 s).
+  - When a generated transition replaces a dissolve, clear Opacity to 100. Capture the frames right before and
+    right after the join.
+
+## 225. `proj.save()` while aerender is starting: «Could not rename the file», and the bridge hangs
+
+LIVE-VERIFIED 2026-10-11 (a wall rebuild saved the project 20 s after an aerender run had started).
+- AE saves to a temp file next to the project (`project.38788.21696.aep`), then renames it over the original.
+  aerender was reading the original at that moment, so the rename failed. AE showed a modal warning, «After
+  Effects warning: Could not rename the file …», over the «Save Project 100 %» progress window. The CDP call timed
+  out (quirk #25) and AE sat at 0 % CPU with `*` in its title.
+- **Seeing the dialog without touching it.** AE draws its dialogs itself («Drover» views inside a `#32770`), so
+  `GetWindowText` on the children returns nothing. Render the window with `PrintWindow(hwnd, hdc, 2)` into a PNG
+  and read that — it works when the window is behind others.
+- **Dismissing it without a coordinate click.** `PostMessage(hwnd, WM_COMMAND, IDOK)` does nothing: the buttons are
+  not Win32 controls. `PostMessage` of `WM_KEYDOWN`/`WM_KEYUP` with `VK_RETURN` to the untitled `#32770` presses
+  its default OK. The progress window closed with it.
+- After OK the project was still dirty. A plain `proj.save()` then succeeded, and AE removed its temp file.
+- **Rules:**
+  - never save the project while an aerender is launching. Build and save first, then start the render;
+  - the next build waits until the render has finished;
+  - a render from a project that has to change meanwhile goes from a copy.
+- **The same hang from archived footage.** The upscaling session moved superseded clip versions to `_архив` after the
+  walls had been re-pointed to the new ones. The old versions were still unused items in the project. The next
+  `proj.save()` stopped on «2 footage files were saved as missing…» (an OK-only warning; the same Enter closes it).
+  - Remove unused items before their files move: `if (it.footageMissing && it.usedIn.length === 0) it.remove()`.
+  - Before any save during a render, test that nothing holds the `.aep`:
+    `[IO.File]::Open(path, 'Open', 'ReadWrite', 'None')`.
+
+## 226. Purge AE's caches before aerender: frame captures had grown the GUI to 48 GB
+
+LIVE-VERIFIED 2026-10-11. Some forty `saveFrameToPng` captures of 5376×2688 walls built from 3840-wide clips left
+the interactive AE at a 47.8 GB working set. The render's RAM guard (stop when free RAM < 20 GB) killed the
+aerender 19 s after it started, with 2.3 GB free.
+- `app.purge(PurgeTarget.ALL_CACHES)` brought the GUI back to 5.4 GB, and free RAM rose to 54 GB.
+- Purge before every aerender run, and again after a batch of captures.
+- **The real culprit: caching while idle.** An hour later the idle GUI was at 70 GB working set (78 GB private) with
+  no script running, and free RAM was down to 5.7 GB. AE caches the comp in the viewer when idle, and the viewer
+  held a 5376×2688 wall. The same growth tripped the guard on the Block 1 render at frame 6977 of 10292, and the
+  killed ProRes master had no moov, so it was unreadable. Fix:
+  - `C.openInViewer()` on a 16×16 «_idle_viewer» comp, then `app.purge(PurgeTarget.ALL_CACHES)`. The GUI dropped to
+    0.6 GB and free RAM rose to 75 GB;
+  - park the viewer there before every long render;
+  - render long blocks in chunks joined by stream copy (a small shell loop over `-s` / `-e` ranges). A guard kill
+    then costs one chunk, not the hour.
+
+## 227. A capture prefix that already exists fools the tiler
+
+LIVE-VERIFIED 2026-10-11 (second time). The capture folder still held `<prefix>*.png` from an
+earlier version. The tiler waits until N files match the prefix, and the old files reached that count at once. The
+sheet mixed the old night frames with half of the new ones.
+- Give every capture set its own prefix.
+- The capture script deletes `<prefix>*` in the folder first: `new Folder(dir).getFiles(prefix + "*")`, then
+  `remove()` on each.
+
+## 228. A probe that throws leaves its scratch comp behind
+
+LIVE-VERIFIED 2026-10-12. A probe added a throwaway comp with a solid and an effect. It listed the effect's
+parameters with `p.value` and removed the comp at the end.
+- `.value` on a group (an «Evolution Options» group in Turbulent Displace) throws.
+- The throw was uncaught, so ae.js printed «AE returned empty result» (quirk 16). The comp and its solid stayed in
+  the project.
+- Walk effect parameters by `p.propertyType === PropertyType.PROPERTY` and read `.value` inside try/catch.
+- Wrap a probe in try/catch, and start it by deleting any leftover scratch items by name. Remove the solid's
+  footage item as well, when its `usedIn` is empty.
+- Turbulent Displace, for reference: `-0001` Displacement (1 = Turbulent), `-0002` Amount, `-0003` Size, `-0004`
+  Offset, `-0005` Complexity, `-0006` Evolution, `-0008` Cycle Evolution, `-0009` Cycle (in Revolutions),
+  `-0010` Random Seed, `-0012` Pinning, `-0013` Resize Layer, `-0014` Antialiasing for Best Quality.
+
+## 229. Pixel Motion across a hard cut inside a generated clip makes one warped frame
+
+LIVE-VERIFIED 2026-10-12 (an LED-show film). A Seedance aerial clip was slowed with Pixel Motion to remove judder.
+Its source cut hard from one view to another at frame 117 → 118 (4.9 s of 10). Pixel Motion interpolated the two
+unrelated frames into one smeared frame. The step at that frame measured 35.6 against a local median of 11; with Frame
+Mix it had been 32. The client had flagged the spot as «скачки в конце».
+- Before choosing Pixel Motion, scan the source for cuts: mean absolute difference of consecutive frames on a small
+  grey copy. Here the cut stood out at 5.6× the median step.
+- Split the layer at the cut into two layers.
+  - The first: `Math.min(frame117 / fps, <remap>)`. The second: `Math.max(frame118 / fps, <remap>)`.
+  - Each holds its own side's last or first frame, so Pixel Motion never sees both sides.
+  - Fade the second in over a 1 s dissolve centred on the cut.
+- After the fix the steps through the dissolve were 10-11, as in the motion around it.
+- Then measure the delivered file: spikes are steps above 2.2× the median of a ±12-frame window.
+
+## 230. `aerender -comp` cannot find a comp whose name has a character outside the ANSI code page
+
+LIVE-VERIFIED 2026-10-12 (Windows, Russian locale, cp1251). Comps had been renamed to plain Russian names such as
+«Блок 3 — холст 3968×2688 (рендер) [HOLST_B3]». aerender answered «No comp was found with the given name»,
+both from Git Bash and from PowerShell.
+- The project path in Cyrillic worked, and so did «—» and «».
+- After replacing «×» with «x» (and «→» with words), the same call rendered.
+- aerender evidently matches `-comp` in the system ANSI code page, so «×» and «→» never reach it intact.
+- Keep comp names that aerender must find within that code page. Check them in Python before you rename:
+  `name.encode('cp1251')` must not raise.
+- When a render does fail on a name, read the log's modification time first. `*>` rewrites the log only once
+  aerender starts, so a check made too early reads the previous run's error.

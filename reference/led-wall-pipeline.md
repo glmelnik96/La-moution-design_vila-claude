@@ -364,6 +364,40 @@ aerender.exe -project "X:\show.aep" -comp "07_Number" -RStemplate "Best Settings
 `-s`/`-e` take comp frames for a fragment. Expect ~25 s to start and ~30 s of finalising after the last
 frame (quirk #182).
 
+**Masters without the GUI (LIVE-VERIFIED 2026-10-09, AE 26.5).** These hold even with AE closed.
+- `-comp` also works on a comp that already has a render-queue item: `-RStemplate`, `-OMtemplate`, `-output`
+  and `-s`/`-e` override the item.
+  - Prove it on 3 frames first.
+  - Rename whatever sits at the queued item's output path, so a wrong guess cannot overwrite it.
+- Built-in output templates:
+  - "High Quality" is ProRes 422 Standard (10-bit 4:2:2, no audio track).
+  - "High Quality with Alpha" is ProRes 4444 with alpha (12-bit). Dark show content runs 2.8–3.3 Gbps at
+    5376×2688, so on a full disk take the 422 for long pieces.
+- For a long piece, render the canvas comp rather than the wall.
+  - The screens already sit at native size in it, and black costs almost nothing in ProRes.
+  - Cut each screen with a plain `crop`.
+- Mux the music from the track's WAV, starting at 0. An offset measured on AE's own H.264 output is the AAC
+  priming (1024 samples = 21.3 ms at 48 kHz), not a comp offset.
+- A RAM guard must kill the whole tree: `taskkill /F /T /IM aerender.exe`. Killing aerender.exe alone left its
+  `AfterFX.com` child rendering the master to the end, still holding 12 GB (2026-10-09).
+- **Render long masters in chunks** (LIVE-VERIFIED 2026-10-10). The guard once fired at frame 7598 of 10635.
+  - A `.mov` killed mid-render has no `moov` atom and cannot be read («moov atom not found»), so the whole hour
+    was lost.
+  - Render 4 ranges with `-s`/`-e` into separate files, skipping any part whose packet count is already complete.
+  - Join them with the concat demuxer and `-c copy`: ProRes parts join frame-exactly. Count the packets of the result.
+  - Or skip the joined copy: cut straight from the parts through the concat demuxer, which halves the master's
+    disk space. The master is only a cache, because the project re-renders it. Once the screens pass their checks,
+    tell the user which master files can go; never delete them yourself.
+
+**Show reviewers the stage layout, not the holst (LIVE-VERIFIED 2026-10-10).** The common canvas (holst) puts every
+screen at its native pixels. Side screens with a coarser pixel pitch therefore look smaller than the centre, and
+the picture breaks at the seams. The user read it as «экраны искажены, не единое полотно».
+- The holst is a pixel map for the media-server operator, not a picture.
+- For anything a person watches (client folders, phone previews), compose the screens at their physical sizes, the
+  wall rects, so the image runs across them as one canvas. In one show the side screens were ×1.5
+  against C.
+- Keep the holst only in the delivery package, with a line in the README explaining why it looks uneven.
+
 **Cut the screens from the wall render.** A screen comp is a crop of the master, so one decode of the wall render
 feeds every screen: `split=N`, then one `crop=w:h:x:y` and one encoder per output. The rectangles on a
 4608×896 wall: SIDE_L 0,64 768×768 · DIAG_L 768,64 512×768 · MAIN 1280,0 2048×896 · DIAG_R 3328,64 512×768 ·
@@ -372,6 +406,15 @@ SIDE_R 3840,64 768×768.
   large (200-470 MB for 3-4 min); 9-12 Mbps is common for per-screen files.
 - Copy the AAC only where the master has music.
 - Use NVENC for screens up to 4096 wide and libx264 for the 4608-wide wall.
+- **Never feed a `split` of a big frame into a chain of overlays** (LIVE-VERIFIED 2026-10-09). This is about
+  recomposing (a stage preview, a canvas from the wall); `split` into separate encoders, as below, is fine.
+  - What happened: `split=3` of a 3968×2688 canvas → crop/scale → three chained overlays on a `color` source held
+    14 GB. Halving the canvas before the split still held 6 GB. Next to a running aerender, that tripped its RAM
+    guard.
+  - Feed every overlay its own input instead: the delivered L/C/R files, or the master opened three times with
+    one crop each. That ran at 0.5 GB.
+  - A `color` source never ends. Bound the output with `-t` (sum of the parts) and put `shortest=1` on every
+    overlay. One preview without them ran for two hours of its last frame.
 
 ```bash
 ffmpeg -i wall.mp4 -filter_complex "[0:v]split=3[a][b][c];[a]crop=512:768:768:64[l];[b]crop=2048:896:1280:0[m];[c]crop=512:768:3328:64[r]" \
@@ -430,3 +473,121 @@ standard library.
 - the folder map, with each screen's rectangle on the wall;
 - which file goes on which screen (shared files named once);
 - what changed in this version.
+
+## 18. Screens of different pitch, a supplied splash, and generated stills that must chain
+
+**Build the wall in the finer pitch.** A tall centre at 2.604 mm (3×7 m, 1152×2688) between two 5.5×5 m wings at
+3.906 mm (1408×1280): the pitch ratio is exactly 1.5, so the wall is 5376×2688 in the centre's grid, the wings are
+2112×1920 rectangles on it, and each wing output is the wall layer at scale 200/3 with position
+`((W/2 − x)·k, (H/2 − y)·k)`, bicubic sampling. Building in the coarse grid would upscale the sharpest screen.
+
+**Judge on a true-scale stage, not on the client's visualisation.** A client mock-up drew the wings 1.7:1 (real
+1.1:1). Keep a PREVIEW comp (and a small Python mock-up for stills) with the screens at physical size, a dark stage,
+a floor reflection and a 1.8 m figure. Content above a lower wing is invisible: say so in every prompt ("the
+centre element rises to the top edge, side content fills the lower two thirds").
+
+**A supplied splash with a merged raster.** When the background, arcs and skyline are one bitmap (quirk #206), map
+the whole bitmap across the wall once (scale to the wall width, bottom on the stage floor) rather than cutting
+crops per screen: crops of one 16:9 picture repeat the same buildings on neighbouring screens. Animate on top:
+- a twinkle layer from the image's own lights (white top-hat in the plant band, matted by cycling noise);
+- a light pulse traced along the existing arcs (ridge tracing on luminance → Catmull-Rom → shape path → trim);
+- a light-up band that follows the pulse along the plant base;
+- glints timed to the pulse.
+Lift text off a busy skyline by blurring and darkening the background under it (adjustment layer, feathered
+masks), never with a plate.
+
+**Generated stills that chain.** Any block that changes state on screen (drawing → model → plant, dark → lit, the
+colours of a character) needs its stills from one master. Generate the master, then each state with the master as
+the image reference and "keep the exact composition". Two of four variants held the layout to a few pixels: good
+enough to dissolve along the drawn lines. Keep the subject literal in the prompt and move the metaphor into
+motion: "pipes like trumpets" rendered an organ with brass bells; light pulsing through real pipes in time with the
+brass carries the same idea.
+
+**State changes as generated morphs instead of crossfades.** (LIVE-VERIFIED 2026-10-09: a glass drop with five core
+colours, 60 s.) A 1.5 s crossfade between two state loops shows both cores at once: two ring sets, a muddy middle.
+Replace it with a Seedance 2.0 keyframe clip:
+- **Settings.** First frame = the outgoing state still, last = the incoming one, 5 s, a locked camera.
+- **Prompt.** "The light inside its core slowly changes colour from A to B: …", then keep the loop prompt's
+  ripples and rings.
+- **How close the ends land.** The first and last frames sat 3.6–5.9 mean-abs from their stills. The loops made
+  from the same stills sat 3.7, so the morphs dissolve cleanly.
+- **Each morph finds its own gesture.** Seen: a point blooming into a sphere; a ring pulse that leaves the glass
+  and runs off the frame; a cooling ring; a sphere swelling.
+- **Simile → object.** "Like a flower opening" grew a literal flower in the core. Re-roll with "abstract light only,
+  no flowers, no petals, no objects".
+- **In AE (one generator, re-runnable as clips arrive):**
+  - The morph layer sits above the state layers. It starts 0.5 s before the old boundary, with a 0.5 s fade in
+    and out.
+  - The states cut under it in 0.1 s while it is opaque.
+  - Time-remap the incoming loop with a safe modulo, so its frame 0 (= its still = the morph's last frame) lands
+    on the morph's end. Time the master loop so its frame 0 lands on the first morph's start.
+  - The outgoing loop meets the morph at whatever phase it has. The 0.5 s fade hides it; floor rings double
+    briefly.
+  - A boundary whose clip has not come yet keeps its crossfade.
+
+## 19. Light that draws, light in time, light that climbs with the years
+
+Three state changes from one wall show, each driven by a still pair and a few control signals rather than keyframes.
+
+**A drawing inked by light running along its own lines.** Get a clean sheet: the same scan with the lines
+inpainted away, pixel-aligned. Check the paper texture: the high-pass NCC was 0.94. Steps:
+1. Ink = clean − drawing in L*, clipped at 16 levels. Lower thresholds pick up the texture differences between the
+   two sheets, and under an additive glow they bloom into a white haze over the whole front.
+2. Build a graph over the half-res image: ink pixels cost ~1/(0.35 + ink), paper pixels 22, the scan background
+   400. Run `scipy.sparse.csgraph.dijkstra` from a seed (the base of the main column). The result is the order in
+   which the light reaches every line.
+3. Pace the reveal by ink quantiles, not by raw distance. Raw distance finished the drawing in half the window and
+   spent the rest crawling along the frame and the stains.
+4. Render two grey control videos in Python at 50 fps: the reveal (soft step behind the front) and the light band
+   (narrow gaussian ahead of a long faint tail). Use them in AE as luma mattes. In AE's 8-bit Gradient Wipe the
+   order map would step every few frames.
+5. The comp: clean sheet; the drawing with the reveal matte; ink × band (Multiply in a precomp), tinted light blue,
+   two glows, Add.
+6. Grade the incoming generated clip like the sheet (desaturate, −0.9 EV) and release the grade as the paper
+   dissolves, or the cut jumps.
+
+**Lights in time with music on a lit/dark pair.** Flash a lights-only image, `clip(lit − dark)` with a soft
+threshold on the difference, in Add under feathered region masks (column, units, racks). Drive opacity by a beat
+list with a fast attack and a ~0.35 s decay. A normal-blend lit layer shows its differently tinted sky as boxes.
+The beat list is the only thing to change when the real track arrives.
+
+**A column whose lights come on with the years.** Reveal the lit still over a lights-off version with a mask
+whose top edge follows the year slider (`createPath` in the Mask Path expression; feather ~260 px). Ride a warm
+blurred ellipse on the front. The rewind 2026 → 1961 turns the lights off top-down for free.
+- In a tall 9:16 frame the generator's "same photo, lights off" did not hold the composition: the side units
+  were redrawn, and the edge NCC after ECC alignment was ≤ 0.69. Make the dark version from the lit one instead:
+  - structure matte = everything but the smooth sky connected to the top edge, with small islands (stars) given
+    back to the sky;
+  - inpaint the lamps and their starburst rays (TELEA, at half scale) before dimming the structures to ~30 %,
+    desaturated;
+  - the sky = an inpainted "unlit sky" with the lamp halos cut out, plus the original stars.
+- The sky is then identical in both stills, so the front moves only over the steel.
+
+## 20. An intro that runs into a loop, and rings that sit where the render says (2026-10-12)
+
+**Measure positions on the render, not on the source.** A voice-assistant drop had rings and voice effects
+centred at y 1240 of the wall. That number came from a source still. On the delivered centre-screen file, the core
+sat at y 1395. The client noticed: «круги ниже, центр — в ядре».
+- Before placing anything on a generated element, grab a frame of the delivered file and mark the planned centre on
+  it.
+- The same offset sat inside the drop comp: the ripple, bulge and glow masks were 158 px above the core.
+- A centre in drop space maps to the wall through the drop layer's transform: `y_wall = 1344 + (y_drop − 1376)·K`.
+
+**Rings around a core, as on a reference.** Concentric ellipses at height/width 0.47 read as rings lying in one
+plane around the core, and on the side screens they stay arcs.
+- Only one line changes: the size expression ends in `[2 * r, 2 * r * 0.47]`.
+- With ADD over glass, the small ellipses show through the drop, as on the reference.
+
+**A tremor while talking.** Add an adjustment layer in the talking comp: Turbulent Displace, size 34, evolution
+`time * 1080` (3 turns a second).
+- Amount: `7 × voice + 3 × slow voice`.
+- The synthetic voice envelope is zero at both ends of its clock. The tremor therefore fades in and out with it, and
+  the loop's seams stay clean.
+- At the loudest syllable the outline ripples by a few pixels. It reads as a vibrating surface, not as a melt.
+
+**An intro that ends on a loop's frame 0.** The intro is a generated chain, emblem → drop.
+1. Put the loop on top of the intro's last 0.8 s, with the remap `u = (time − D) mod period`.
+2. Fade it in over D − 0.8 … D − 0.1.
+3. Run the loop's rings on the same clock, `tau = time − D`, and fade them in as the drop takes the loop's colour.
+4. Check the hand-over by pixels: capture the intro's last frame and the loop's frame N − 1. Here they matched
+   exactly (mean difference 0.0), so switching to the loop file costs only the loop's own wrap step.
