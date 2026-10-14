@@ -1,5 +1,6 @@
-// navtest.js — drive the deck in real time like a speaker would (headless Chrome over CDP):
-// open it, press → through all slides, ← back, R, a digit; screenshot along the way; report console errors.
+// navtest.js — drive a deck file in real time like a speaker would (headless Chrome over CDP): open it, press →
+// through all slides (stills mid-transition and at rest), then ←, a digit, a fast double →, R; check that the
+// filter slide's bits keep moving at rest (idle loop); report console errors.
 //   node _build/gocloud-tech-2026/tools/navtest.js <page.html> <outdir> [w h]
 const fs = require('fs');
 const path = require('path');
@@ -39,31 +40,47 @@ class CDP {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: +W, height: +H, deviceScaleFactor: 1, mobile: false });
   await cdp.send('Page.navigate', { url: fileUrl(page) });
   for (let i = 0; i < 100; i++) { await sleep(100); if (await cdp.eval('!!window.__deck')) break; }
-  let n = 0;
+  const n = await cdp.eval('__deck.slides.length');
+  let k = 0;
   async function shot(tag) {
     const r = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 80 });
-    const f = path.join(out, String(++n).padStart(2, '0') + '_' + tag + '.jpg');
+    const f = path.join(out, String(++k).padStart(2, '0') + '_' + tag + '.jpg');
     fs.writeFileSync(f, Buffer.from(r.data, 'base64'));
-    const cur = await cdp.eval('__deck.cur');
-    console.log(f, 'cur=' + cur);
+    const st = await cdp.eval('JSON.stringify({cur: __deck.cur, mode: __deck.slides[__deck.cur].tl === __deck.slides[__deck.cur].carry ? "carry" : "fresh", key: __deck.slides[__deck.cur].key})');
+    console.log(path.basename(f), st);
   }
-  async function key(k, code, kc) {
-    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code: code, windowsVirtualKeyCode: kc });
-    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: code, windowsVirtualKeyCode: kc });
+  async function key(kk, code, kc) {
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: kk, code: code, windowsVirtualKeyCode: kc });
+    await sleep(16);
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: kk, code: code, windowsVirtualKeyCode: kc });
   }
-  await sleep(4200); await shot('s1_rest');
-  for (let s = 2; s <= 7; s++) {
+  await sleep(4000); await shot('s1_rest');
+  for (let s = 2; s <= n; s++) {
     await key('ArrowRight', 'ArrowRight', 39);
-    await sleep(120); await shot('s' + s + '_t0.12');
-    await sleep(1100); await shot('s' + s + '_t1.2');
-    await sleep(3000); await shot('s' + s + '_rest');
+    await sleep(140); await shot('s' + s + '_t0.14');
+    await sleep(400); await shot('s' + s + '_t0.55');
+    await sleep(700); await shot('s' + s + '_t1.25');
+    await sleep(2600); await shot('s' + s + '_rest');
   }
   await key('ArrowRight', 'ArrowRight', 39); await sleep(300); await shot('past_end');
-  await key('ArrowLeft', 'ArrowLeft', 37); await sleep(300); await shot('back_s6');
-  await key('3', 'Digit3', 51); await sleep(1000); await shot('jump_s3_t1');
-  await key('ArrowRight', 'ArrowRight', 39); await sleep(80); await key('ArrowRight', 'ArrowRight', 39); await sleep(4000); await shot('double_s5_rest');
+  await key('ArrowLeft', 'ArrowLeft', 37); await sleep(300); await shot('back');
+  await key('2', 'Digit2', 50); await sleep(900); await shot('jump2_t0.9');
+  await sleep(3000);
+  await key('ArrowRight', 'ArrowRight', 39); await sleep(90); await key('ArrowRight', 'ArrowRight', 39); await sleep(4200); await shot('double_rest');
+  await key('r', 'KeyR', 82); await sleep(500); await shot('replay_t0.5');
+  await sleep(3500); await shot('replay_rest');
+  // idle loop: jump to the filter slide, let it rest, sample its bits twice 1 s apart (they must have moved)
+  const fi = await cdp.eval('__deck.slides.findIndex(function (s) { return s.key === "filter"; })');
+  if (fi >= 0) {
+    const d = String(fi + 1);
+    await key(d, 'Digit' + d, 48 + fi + 1); await sleep(6000); await shot('filter_idle_a');
+    const bits = 'JSON.stringify([].slice.call(document.querySelectorAll(".slide")[' + fi + '].querySelectorAll("div")).filter(function (e) { return e.style.width === "28px" && getComputedStyle(e).visibility !== "hidden"; }).map(function (e) { return Math.round(e.getBoundingClientRect().left); }))';
+    const a = JSON.parse(await cdp.eval(bits)); await sleep(1000);
+    const b = JSON.parse(await cdp.eval(bits)); await shot('filter_idle_b');
+    console.log('filter idle: bits at', JSON.stringify(a), '→ 1 s later', JSON.stringify(b), a.join() !== b.join() ? 'MOVING' : 'STILL');
+  }
   const errs = cdp.events.filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && /error|warn/.test(e.params.type)) || (e.method === 'Log.entryAdded' && /error|warning/.test(e.params.entry.level)));
-  console.log('console problems:', errs.length);
+  console.log('slides', n, '· console problems:', errs.length);
   errs.slice(0, 10).forEach((e) => console.log(JSON.stringify(e.params).slice(0, 400)));
   cdp.ws.close(); chrome.kill();
   try { fs.rmSync(prof, { recursive: true, force: true }); } catch (e) { /* ignore */ }

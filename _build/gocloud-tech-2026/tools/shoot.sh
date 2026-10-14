@@ -7,7 +7,7 @@ PAGE=_build/gocloud-tech-2026/index.html
 mode=$1; shift
 case "$mode" in
   rest)
-    list=${*:-"1 2 3 4 5 6 7"}
+    list=${*:-"1 2 3 4 5 6 7 8"}
     mkdir -p out/gct/rest
     for i in $list; do
       node html/render/render.js "$PAGE?render&slide=$i" --out out/gct/rest --w 2304 --h 1280 --beats 99 --to 99 --quiet >/dev/null &&

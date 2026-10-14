@@ -6,7 +6,9 @@ the output must work offline as one file. Not a film (that is the AE deck pipeli
 (the storyboard pipeline, §5f). First built 2026-10-13 in a cloud session: GoCloud Tech 2026, seven 2304×1280
 slides of a supplied design (Figma `wPZx91jtPPRJ7tCdOSEqI2`). Worked example, tools and beat sheet:
 `_build/gocloud-tech-2026/` (`BEATS.md` there). Second deck, same day: eight event-info slides that share a grid, a logo
-and a 3D object, delivered as three files (slides 1–3, 4–8, 1–8) — `_build/gocloud-tech-2026-b/` (§3b, §5).
+and a 3D object, delivered as three files (slides 1–3, 4–8, 1–8) — `_build/gocloud-tech-2026-b/` (§3b, §5). The first
+deck was rebuilt on 2026-10-14 after the client reworked the layout (v2: a new opening slide, new background objects, a
+list on the section slide, three review comments) — §1, §3c.
 
 ## 0. Before anything: can the session reach Figma?
 
@@ -34,6 +36,9 @@ and a 3D object, delivered as three files (slides 1–3, 4–8, 1–8) — `_bui
   - `get_screenshot(maxDimension = frame width)` → `ref/sNN.png`, the truth for every rest frame.
 - A slide built from a raster screenshot of an older slide (here the funnel of 24 lines) — fit its geometry from
   the pixels and rebuild it as vectors (§3). Report what was wrong in the raster.
+- **A reworked layout** (v2 of a delivered deck): dump every new frame again and diff it against the old dumps (boxes,
+  texts, fills, new nodes); keep the builders of unchanged slides, rebuild the rest. Move the old refs to `ref_v1/`.
+  The new frame ids differ, and slides can be added anywhere: take the order from the canvas again.
 
 ## 2. Assets
 
@@ -49,6 +54,8 @@ and a 3D object, delivered as three files (slides 1–3, 4–8, 1–8) — `_bui
   an earlier HTML export's subsets may lack glyphs (→). Check coverage with fontTools before building.
 - QR codes are raster images in the file: rebuild them as vector from the module matrix (quirk 248).
 - One image placed several times with Figma filters: a 3D LUT bakes the filters into one master (quirk 246).
+- An image with blend mode SCREEN (a texture over a coloured card): ship the premultiplied filtered value as an opaque
+  grey image with `mix-blend-mode: screen` and the paint opacity, solved from the in-context export (quirk 249).
 - If a session is compacted, the `use_figma` dumps are still in the session transcript (`~/.claude/projects/…jsonl`):
   extract them into `assets/dump/*.json` instead of calling Figma again.
 
@@ -62,7 +69,8 @@ and a 3D object, delivered as three files (slides 1–3, 4–8, 1–8) — `_bui
 - **Text**: one element per Figma line, inside a mask that cuts only below the line box; rises from under it.
   Gradient text across several lines: each line carries the gradient sized to the whole node and shifted by
   the line's offset. Single-line auto-width nodes: compare glyph positions with the render first — an even drift
-  gets letter-spacing fitted to Figma's width, a single bad pair («/с») gets its own correction (quirk 241). Follow
+  gets letter-spacing fitted to Figma's width, a single bad pair («/с») gets its own correction (quirk 241) — fits
+  belong to one font file: after a font swap drop them all and re-measure (quirk 250). Follow
   the render where it disagrees with the dump (textCase UPPER rendered as typed). Figma LINE strokes sit above
   their y (quirk 190).
 - **Pattern grids** as exact rectangles in one SVG path (quirk 240); revealed with a soft-edged CSS mask sweep.
@@ -101,16 +109,26 @@ When every frame repeats the same background, logo or object, rebuilding them on
   place, lines rise from their own masks. Audit it (`tools/audit.js`).
 - The render hook replays the change exactly as in the room (`?render&slide=N`): the previous slide leaves, the chrome
   moves, the build starts 0.2 s later — so per-slide MP4s concatenate into a seamless preview.
+- A carry also works without chrome: a title slide and the next one share a full-frame grid (ВМЕСТЕ → ×5). The second
+  slide re-creates the first one's words as ghosts that fade where they stood (0.45 s); its build starts 0.3 s in.
+
+## 3c. Motion that continues after the build
+
+A reviewer may ask for an element to keep moving once the slide is built («может продолжать движение?»). The rest frame
+stays the Figma frame; the motion is an idle function of the seconds since the slide came to rest, called from rAF only
+while it rests, kept running through the leave, seekable for the renderer (`&idle=S`, `&outidle=S`) — quirk 251. Keep
+it calm and sparse (one or two bits on the line, 240 px/s) so it does not compete with the speaker.
 
 ## 4. Choreography that worked (beats in `_build/gocloud-tech-2026/BEATS.md`)
 
 | Slide type | Build | Build length |
 |---|---|---|
-| two KPI cards (growth vs constant) | grid sweep; dark card rises, green card wipes; curve draws while ×1→×5 clicks in step; the flat line draws in the green card while «35» lands still | 3.2 s |
-| funnel «1e9 in → 10 out» | odometer 0→1 000 000 000; 24 lines draw into one point, pale pulses accelerate into it; the output line draws and one white bit travels out; «~10 бит/с» lands | 3.7 s |
+| two KPI cards (growth vs constant) | grid sweep; dark card rises, green card wipes; curve draws while ×1→×5 clicks in step; the flat line draws in the green card while «35» lands still. v2: server racks appear dim and light up behind the pen; a cave-painting bull surfaces on the green card (screen, blur 4→0) | 3.2 s / 3.1 s |
+| title, two words, «as calm as possible, a fade» (v2) | grid, then each word fades in place on a sine ease; nothing moves or scales | 3.2 s |
+| funnel «1e9 in → 10 out» | odometer 0→1 000 000 000; 24 lines draw into one point, pale pulses accelerate into it; the output line draws and one white bit travels out; «~10 бит/с» lands. v2: at rest the bit sets off again and a new one leaves the funnel every 2.2 s (§3c) | 3.7 s |
 | photo, no text (taxi) | camera push 1.06→1, backdrop and car brighten out of dark, a light runs along the roofline, the checker lights square by square | 2.9 s |
 | unit swap (GPU-час → ТОКЕН) | chart and step line grow; old unit enters bright, gets struck through and dims; the new word rises out of a mask | 3.0 s |
-| section title over a 3D object | object scales 1.1→1 out of blur; grid block, then white plates wipe in stepwise; lines reveal | 1.85 s |
+| section title over a 3D object | object scales 1.1→1 out of blur; grid block, then white plates wipe in stepwise; lines reveal. v2 adds a list of five techniques: plates wipe in top to bottom, accelerating, each word rising inside its plate | 1.85 s / 2.57 s |
 | headline + photo | label and two lines reveal; grid sweeps up; the photo rises and brightens | 2.2 s |
 | field of bits + the chosen ones | cells fill in a diagonal wave with jitter (squares first, digits after); two centre cells fill green from below, 0 rolls to 1; title plate wipes in last | 3.6 s |
 
@@ -154,7 +172,8 @@ node _build/<deck>/tools/navtest.js page.html out/dir 1920 1080                 
 - `tools/build_single.py` → one HTML with CSS, fonts, images (base64 WebP), `motion.js` and the deck inlined:
   0.8 MB for seven slides. Re-check two rest frames and the real-time run on the packed file.
 - A preview video for phones: `render.js --video` per slide (`--to` past the build = a short hold, `--scale 0.5`,
-  30 fps, system ffmpeg has libx264), then `ffmpeg -f concat -c copy` — 32 s, 2.7 MB.
+  30 fps, system ffmpeg has libx264), then `ffmpeg -f concat -c copy` — 32 s, 2.7 MB. A slide with an idle loop gets
+  `&idle=5` instead of a hold and the next one `&outidle=5`, so the cut does not jump (v2: 38.5 s, 4.0 MB).
 - Client branding: send the file; offer a private link instead of publishing one unasked.
 - Git: `*.png` are ignored in this repo — commit the page, WebP layers, fonts, tools and the beat sheet; the
   reference renders and raw exports are re-downloadable inputs (say so in the beat sheet).

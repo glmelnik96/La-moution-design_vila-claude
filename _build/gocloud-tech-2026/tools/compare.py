@@ -9,7 +9,7 @@ from PIL import Image
 hdir, rdir, odir = sys.argv[1:4]
 only = sys.argv[4:]
 os.makedirs(odir, exist_ok=True)
-for i in range(1, 8):
+for i in range(1, 9):
     n = 's%02d' % i
     if only and str(i) not in only:
         continue

@@ -223,6 +223,9 @@ with tools and beat sheets: `_build/gocloud-tech-2026/`, `_build/gocloud-tech-20
 6. Slides that repeat a background, logo or object (`_build/gocloud-tech-2026-b/`): keep them as chrome that builds
    once and moves between slides; carry identical cards over to the next slide; nest all content in its card so a
    wipe clips it (quirk 244, `tools/audit.js`); several files from one script (`DECK_ORDER`).
+7. A reworked layout of a delivered deck: re-dump, diff, rebuild only what changed, re-measure the type after a
+   font swap (quirk 250). Motion that should keep going after the build is an idle function of rest time, never
+   a looping timeline (quirk 251).
 
 ## 6. Generation workflow
 

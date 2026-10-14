@@ -4120,3 +4120,51 @@ all in one path with `fill-rule: evenodd`.
 - WRONG: drawing the 7 × 7 finder zones as module squares too — under evenodd the overlaps punch holes into the eyes.
 - A build: eyes grow first, then the modules in a diagonal wave (one path rebuilt per frame); at progress 1 the path is
   the exact code, crisp at any scale, and one path has no seams between modules.
+
+## 249. A SCREEN-blended Figma image ships as one opaque grey image, solved from the in-context export
+
+LIVE-VERIFIED 2026-10-14 (GoCloud Tech v2, the bull on the green card, `_build/gocloud-tech-2026/tools/prep_v2.py`). The
+node: a cut-out PNG, FILL, filters saturation −1 and exposure .39, paint opacity .9, blend SCREEN. Its in-context export
+sits on the frame's #222 (A), not on the green sibling it screens in the design. Black is neutral under screen, so the
+layer is fully described by its premultiplied filtered value P: E = A + o · P · (1 − A), so P = (E − A) / (o (1 − A)).
+- Fit the filter raw → P as a 17³ trilinear 3D LUT on the straight colour P / a (alpha > 0.25, weighted by alpha),
+  then apply it to the raw at 1.5× and multiply by the raw alpha. WRONG: one curve on luma (p99 36 levels). RIGHT:
+  the 3D LUT, p99 7.7 on the fit and mean 1.1 re-composited over #222.
+- HTML: an opaque grey `<img>` with `mix-blend-mode: screen; opacity: .9` inside the card element. The card's wipe
+  (a clip-path) makes a stacking context, so the image screens only on the card and is clipped with it. The rest
+  frame of the slide came out at mean 1.03 / 255 against the Figma render.
+
+## 250. Width fits belong to one font file: re-measure when the font changes
+
+LIVE-VERIFIED 2026-10-14. Deck 1 (quirk 241) had letter-spacing width fits and a «/с» kern fix, measured with Google's
+latin + cyrillic Manrope subsets. When it was rebuilt on the `text=` subset (quirk 247), those fits put glyphs up to
+4 px off (a 41-character label). With the file's own tracking, every run was within 0/−1 px, and «бит/с» kerned
+like Figma.
+- RIGHT: after any font swap, drop every fit and kern fix, re-shoot, and re-measure the glyph runs. Add fits back
+  only where a line is measurably off.
+- Faint text (rgba(200,200,200,.5) × .8 on #222, about 25 % contrast) splits and merges glyph runs at the ink threshold:
+  37 runs in the render vs 42 in the HTML, with "drifts" up to 66 px. The zoom crop showed the same line (centroid
+  dx 0.4 px, ink ratio 1.02). Confirm faint lines with the zoom crop, not the run count.
+- Gradient text (background-clip: text) with a fractional line height (54 px / 59.4) stays ±0.5 px off after the
+  baseline fix of quirk 243. The fix is exact for integer line heights; accept the residual.
+
+## 251. A motion that "keeps going" after the build: an idle function of time, not a looping timeline
+
+LIVE-VERIFIED 2026-10-14 (filter slide, review: «может продолжать движение?»). The bit that lands at the end of the
+build should keep moving, and new ones should keep leaving the funnel.
+- RIGHT: the build timeline is unchanged and its last frame is still the Figma frame. `slide.idle(t)` is a pure
+  function of the seconds since the slide came to rest. The landed bit waits 0.6 s, then accelerates (0.8 s to
+  240 px/s) and leaves the frame; pool bits spawn every 2.2 s. The runtime calls it from rAF while the slide is at rest;
+  R or re-entry restarts it from 0.
+- `idle(−1)` hides the pool only. WRONG: also resetting the landed bit's transform there. `activate()` calls `idle(−1)`
+  right after seeking the build to 0, so the reset would show the bit at its landed place before the build starts.
+  The timeline's `seek()` re-applies every element it drives (checked in `lib/motion.js`), so the build restores the
+  bit itself.
+- Leaving: keep calling `idle()` during the 0.32 s fade-out. The rAF tick drives only the current slide, so without
+  this the bits freeze mid-air while the old slide fades. Measured after the fix: 1755 → 1775 → 1808 px at 0, 90 and
+  240 ms into the leave.
+- Seekable for the renderer: `?render&slide=N&idle=S` appends S seconds of the loop to the clip, and
+  `&outidle=S` runs the outgoing slide's loop from S during the transition. Clips rendered back to back then join
+  pixel-identically (max diff 0). Without it the outgoing slide is parked at its build end, so the bits vanish at
+  the cut and the landed bit jumps back.
+- navtest samples the bits twice 1 s apart at rest: [1688, 1210] → [1888, 1410] at 1920 px wide (240 px/s × 1920/2304).
