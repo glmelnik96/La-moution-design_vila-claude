@@ -251,3 +251,32 @@ When the client points at a finished banner («возьми анимацию к�
 - Here: a wide banner's line of the intro word, cropped at both edges in Figma, did not read when it faded in place; the
   reference's fly-through (65 px/frame in, 7.4 at the slowest just past halfway, 54 out, 1.73 s at 60 fps) read and was
   applied to all seven wide formats; stacked word columns kept their in-place entrance.
+
+## 8. A single slide as a short clip that lands on the slide (keynote videos)
+
+One Figma frame (a presentation slide), a one-line brief per clip («objects appear one after another», «the lines
+merge into one, then a white square appears», «from grey, through light, the silhouette appears»), MP4 out. The
+clip goes into the deck in front of the static slide, so its LAST FRAME must be the slide. First used 2026-10-13: three
+2304×1280 slides, 4–4.6 s each at 50 fps, built and rendered in about an hour.
+- **Layers from Figma, not rebuilt:** `use_figma` dump for ids and render bounds, then one
+  `get_screenshot(child, contentsOnly)` per animated object (quirk 239); solid-colour texts unmixed from the slide render
+  (quirk 240). A project-side script crops each to its ink, writes `layers.json` (+ a `layers.js` table for file://
+  pages) and recomposes the stack against the render: 0.02–0.39/255 here. Rasters (an image fill, a photo) come with
+  `download_assets` rawImages when their pixels must be split (rim light, a sign's squares).
+- **Page:** a 2304×1280 stage, `<img>` layers at their x/y, `motion.js` tweens (`opacity`, `y`, `blur`, custom setters
+  for CSS masks, SVG paths, SVG filter parameters); `window.Fig = {FW, FH}` so `film.js` sizes the viewport.
+- **The landing:** after everything has settled, the full slide render fades in on top (0.3 s, nothing moving), so
+  the last frame equals Figma exactly (diff 0) whatever the layers did. Check the frame BEFORE that dissolve against the
+  render too: anything that differs there shows as a dissolve (a vector fan beside its raster did, quirk 243).
+- What read well: cards with a fast 0.28 s fade and a long 0.9 s rise. A slow fade showed the background grid through
+  a large green card. Chart areas need a feathered mask reveal (16 % edge): a hard clip showed the area under the curve
+  as a sliding box. A signal square leaves the merge point small and lands at its spot with a short halo. A silhouette
+  comes out of flat grey through a colour fog (quirk 242), with a backlight that swells and settles into the slide's
+  own gradient, a rim-light sweep with a glint at its head, and a sign that flickers on at the end.
+- Verify: `film.js --beats` sheets, the first frame is the flat background (no 1–2 level ghost), the last frame and the
+  pre-dissolve frame diffed against the render, then the decoded MP4's last frame (H.264 yuv420p: 0.9–1.5/255 mean).
+- Eases, after the review «чуть плавнее и более нелинейными»: start every move from zero speed. v1's expo-out entrance
+  (0.16, 1, 0.3, 1) began at 6.25× the average speed and read as a pop. Use (0.6, 0, 0.12, 1) for rises: peak 4× at 38 %,
+  90 % reached at 62 % of the time. Use (0.75, 0, 0.2, 1) for wipes, light sweeps and travels, (0.45, 0, 0.25, 1) for
+  opacity, and make durations about 1.3× longer. Exception: big solid cards still fade in 0.3 s with an early ramp
+  (0.2, 0, 0.3, 1); a slow fade shows the background grid through them.

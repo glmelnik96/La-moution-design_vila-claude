@@ -202,6 +202,9 @@ Sources for Adobe Animate (FLA, HTML5 Canvas): convert the finished HTML with `h
 Animate (§6) — exact custom-ease tweens, live text, masks; verified against the HTML frame by frame.
 Traps: quirks 189–205 (LINE strokes, Chrome baselines, light-text weight, DPR renders, motion.js nulls, hidden strokes,
 Animate kerning/baselines/masks/filters/zip/bitmaps).
+One slide → a short clip that lands exactly on it (keynote videos): §8 of the reference. Layers come from
+`get_screenshot(child, contentsOnly)`, with texts unmixed from the render. The ending dissolves into the render.
+Traps: quirks 239–243.
 
     node tools/film.js v1.html --video out/v1_2K.mp4 --2k        # tools = copies of html/figma/*
     python tools/verify_anim.py v3.html "figma/frames/s3_f%02d.png" --mask 3:92-1053

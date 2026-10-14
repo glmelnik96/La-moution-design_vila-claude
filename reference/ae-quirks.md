@@ -4016,3 +4016,53 @@ No error was logged, and the frame count was right.
   to each other.
 - Re-render just that range and splice it in (quirk 237); here frames 105–117 took about 30 s.
 - Prefer three lanes over five when the comps are heavy.
+
+## 239. Figma layers one by one: `get_screenshot(child, contentsOnly)` is transparent, `download_assets` is not
+
+LIVE-VERIFIED 2026-10-13 (Figma MCP, a 2304x1280 slide turned into a clip whose objects appear one by one).
+- `get_screenshot(nodeId = a CHILD of the frame, contentsOnly = true, maxDimension = max(w, h) of the node)` returns an
+  RGBA PNG of that node alone, 1:1, cropped to its render bounds. Place it at the integer render-bounds origin
+  (`absoluteRenderBounds` minus the frame origin, from a `use_figma` dump): ten layers recomposed the slide at
+  0.27/255. A mask group comes out with the mask applied; an image node with its Figma filters applied.
+- `download_assets(node).export` renders the node with the frame's background baked in: opaque, useless as a layer.
+- The screenshot size is ceil(render width/height) and the call never upscales — pass maxDimension ≥ the long side.
+  A layer partly outside the frame (a 3680-wide image) comes back clipped to the frame.
+
+## 240. An isolated text screenshot does not recompose: unmix solid-colour text from the slide render
+
+LIVE-VERIFIED 2026-10-13. Text nodes with a fractional render origin, cut out by quirk 239, recomposed with errors up to
+124/255 at glyph edges, at any sub-pixel shift (best 2.5/255 mean in the box): Figma rasterises the isolated node on
+its own grid. Solid-colour text over known layers can be pulled out of the whole-slide render instead:
+`a = Σc (R − B)(T − B) / Σc (T − B)²`, clamped to [0, node opacity], where R is the slide render, B the composite of
+the layers below and T the text colour. The unmixed layers recomposed a slide at 0.18/255, max 18, and on a flat
+background at 0.02/255. Gradient-filled text was fine as a screenshot (0.5/255): keep those.
+
+## 241. motion.js: a lone `tl.set(el, {opacity: 0}, t)` hides the layer from frame 0
+
+LIVE-VERIFIED 2026-10-13. Before its first tween a property holds that tween's FROM value. A layer that should be visible
+until 2.42 s and vanish then, written as `tl.set(dark, { opacity: 0 }, 2.42)`, was invisible from the first frame; the
+page still looked plausible because other layers covered most of it.
+WRONG `tl.set(dark, { opacity: 0 }, 2.42)`
+RIGHT `tl.fromTo(dark, { opacity: [1, 0] }, { at: 2.42, dur: 0, ease: 'linear' })`
+
+## 242. Bring a subject out of a flat background with a colour fog, not with opacity; Chrome floors the intercept
+
+LIVE-VERIFIED 2026-10-13 (a dark car silhouette that had to appear out of flat #222). Fading the car's opacity showed the
+sky through the body: a ghost car. Keep the subject opaque and lift its colours to the background instead: an SVG
+`feComponentTransfer` filter on its container, every channel `slope = k`, `intercept = (1 − k)·bg`,
+`color-interpolation-filters="sRGB"`, `k` from 0 to 1, `filter: none` at 1. The first frame is then the flat background
+and the silhouette darkens out of it as the light behind it rises.
+Chrome renders intercept 0.13333 (34/255) as 33 and 0.1373 as 35: it floors. Bias by +0.5/255.
+
+## 243. A fan of lines closing into one point: one shared convergence, per-line draw delays only
+
+LIVE-VERIFIED 2026-10-13. Each line grows from its left anchor while its end swings from a spread position into the
+focus: a similarity transform about the anchor maps the final polyline onto the current end, and `stroke-dasharray`
+draws the first `d` of its length. With a convergence phase per line, lines at different phases crossed mid-flight
+and the fan read as tangled. Drive the convergence `c(t)` once for the whole fan and stagger only `d`: the fan then
+closes as one movement and never crosses. The fan was a raster in Figma. Fitting each line by alpha centroids
+(sampled only where no other line is within 8 px) gave straight lines with residuals under 1 px. Two of them merged
+into a neighbour before the focus, so they became polylines with a knee where they meet it. Alpha difference from the
+raster was 0.006. Swap the SVG for the raster once it stands still, and HIDE the SVG then: it peeked out beside the
+raster lines, up to 163/255.
+
