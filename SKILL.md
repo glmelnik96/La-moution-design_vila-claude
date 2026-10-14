@@ -204,7 +204,8 @@ Traps: quirks 189–205 (LINE strokes, Chrome baselines, light-text weight, DPR 
 Animate kerning/baselines/masks/filters/zip/bitmaps).
 One slide → a short clip that lands exactly on it (keynote videos): §8 of the reference. Layers come from
 `get_screenshot(child, contentsOnly)`, with texts unmixed from the render. The ending dissolves into the render.
-Traps: quirks 239–243.
+A run of slides as one film (accordion of columns, a curtain into the last slide, 4K from 2x exports): §8b. Traps:
+quirks 239–243, 245–248, 250–256. At DPR 2, put every 4K layer box on whole CSS px (quirk 255), or Chrome resamples it.
 
     node tools/film.js v1.html --video out/v1_2K.mp4 --2k        # tools = copies of html/figma/*
     python tools/verify_anim.py v3.html "figma/frames/s3_f%02d.png" --mask 3:92-1053

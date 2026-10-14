@@ -4081,6 +4081,58 @@ part 3, part 4]. The spliced file held [video, data]; the parts held [video, aud
 - Cutting in place over a file that has NTFS hard links rewrites every link: the delivery folder built from links
   held the short version until the re-cut. Verify the frame count before telling anyone a file is done.
 
+## 245. A per-line clip box shows the line above: clip each line's bitmap to its own rows
+
+LIVE-VERIFIED 2026-10-13 (a two-line title rising line by line, HTML). Each line was the whole two-line bitmap inside
+its own `overflow: hidden` box, as tall as that line's rows, and the bitmap was shifted down to hide and raised into place.
+Shifted down, the line ABOVE slid into the box. «Evolution» showed twice, and line 2's box showed line 1 from frame 0.
+Clip the inner bitmap to its own rows; the clip travels with the image:
+`img { top: -r0px; clip-path: inset(r0px 0 (h − r1)px 0) }`, where r0..r1 are the line's rows in the bitmap.
+
+## 246. `el.style.opacity = undefined` is a no-op: the previous value stays
+
+LIVE-VERIFIED 2026-10-13. A custom motion.js setter wrote `f.style.opacity = s.co` for a prop that no tween had written
+yet, so `s.co` was undefined. Chrome ignored the assignment, the `opacity: 0` set by an earlier hide stayed, and a box
+stayed invisible through its whole build. The page threw no error.
+- A setter that reads a prop no tween has touched gets undefined. Coordinates computed from it become NaN, and the
+  style is dropped the same way.
+- Give every optional prop a default inside the setter: `s.co === undefined ? 1 : s.co`, and for a curtain's edges
+  `l ?? 1920`, `t ?? 0`.
+
+## 247. A chained tween writer: a value written only as the next FROM never reaches the element
+
+LIVE-VERIFIED 2026-10-13. The page's tween helper chained every prop from the last value written for it:
+`go(el, {x}, at, dur)` → `fromTo(el, {x: [cur.x, x]})`. To re-place a hidden title in its new column, the code wrote
+`cur.y = dy` and `cur.scale = 1` directly and tweened only x. No tween ever applied y. The title sat 1 px low in three
+slides. The per-layer check (quirk 248) found it; the frame diff had not.
+WRONG `W.cur(el).y = dy; go(el, { x: dx }, t, 0.85)`
+RIGHT `W.cur(el).y = dy; go(el, { x: dx, y: dy, scale: 1 }, t, 0.85)`. A tween that does not change the value still applies it.
+
+## 248. Verify a Figma rebuild layer by layer; a frame screenshot leaves out icons dropped on the page
+
+LIVE-VERIFIED 2026-10-13 (8 slides, 85 bitmap layers from quirk 239, 1920×1080). Whole-frame means of 0.3–1.0/255 hid
+single layers that were a pixel off.
+- **The probe.** At each rest mark, the page lists every visible bitmap layer: `getBoundingClientRect`, effective
+  opacity (the product over its ancestors) and any non-identity transform.
+- **The comparison.** For each layer, compare the render with the Figma frame render over the layer's own dilated
+  alpha, at every whole-pixel shift in ±2. Flag the layer when a shift beats (0,0) by more than 1/255.
+- **Tools:** two short project-side scripts. A probe run through `shoot.js` lists the layers at the given times, and
+  `layer_shift.py` does the per-layer search.
+
+What the check found:
+- **1 px arrows.** Thin 1 px stroke arrows placed at the rounded render-bounds origin landed 1 px off in 4 cases out of
+  8. The error showed at fractions .5 and .58 but not at .65 or .93, so there is no rounding rule to apply. Use the
+  measured pixel.
+- **Double opacity.** A footnote's PNG already carried the node's 50 % opacity (alpha max 128), and the page applied
+  0.5 again.
+- **A y never applied** (quirk 247).
+
+What it leaves alone:
+- **Text edges.** What remains is glyph-edge outlines (quirk 240's isolated rasterisation), invisible in a video.
+- **Icons dropped onto the slide.** If the designer drops an icon onto a slide and it ends up parented to the
+  page or section, it is missing from that frame's screenshot and render. It shows only on the canvas. Find such nodes
+  by intersecting page-level bounds with each frame. Here they were three bullet icons, and the film kept them.
+
 ## 249. A share link for a client: upload with curl to a host that has an upload API, not through a browser form
 
 LIVE-VERIFIED 2026-10-13. A delivery archive had to reach a client as a download link. Upload sites that work only
@@ -4097,3 +4149,121 @@ Hosts with a documented upload API took the file in seconds:
 - Give two links from different hosts, in case one is blocked where the client is.
 - Upload under an ASCII file name: the multipart filename is the base name. UTF-8 names inside a zip survive.
 
+## 250. Figma at 2x for a 4K film: `download_assets(node, defaultScale 2)` is the node over a flat fill — unmix it
+
+LIVE-VERIFIED 2026-10-13 (8 slides and 85 layers, re-cut for a 4K render). `get_screenshot` never upscales
+(quirk 239), so 2× layers come from `download_assets(nodeId, defaultScale: 2, defaultFormat: 'png')`.
+
+**What the export is.**
+- The node alone, with no siblings and no card fill under it, over the frame's fill (#222 here). It is opaque.
+- A node parented to the page comes over the canvas grey (#444).
+- It applies the node's blend mode against that fill. A 3D picture set to Lighten came out lifted to the fill
+  (min 34). The `contentsOnly` screenshot of the same node was raw, with corners at 1/255.
+- The 1080p film had drawn that raw screenshot with normal blending. It showed a dark vignette, which the closing
+  dissolve then lifted. That was the client's «баг с градиентом».
+
+**Recovering alpha.**
+- Per pixel, project R − B on the layer colour T − B and clamp. T comes from the 1× layer's opaque pixels.
+- Where the residual exceeds 6/255, take the smallest alpha that reproduces R exactly: C = B + (R − B)/α. These are
+  dark details inside an icon and neutral AA.
+- Composited over the same fill, the result is exact. The 2× alpha, box-downscaled, matched the 1× alpha to 0.4–3 %;
+  thin lines were at 6–7 %.
+- Dark text on a coloured bar would be exported over #222 and vanish. Unmix it from the 2× frame render over the
+  bar's flat green instead.
+
+**Placing it.** The export box is the node's render bounds at 2×. Place each layer by a ±6 px search against the
+2× frame render (a project-side `build2x.py` does the unmixing and the search).
+
+## 251. Figma gradient stops interpolate unpremultiplied: green@10 % → #222@0 % falls off as (1 − t)²
+
+LIVE-VERIFIED 2026-10-13. A card fill ran from rgba(green, 0.10) to rgba(#222, 0). Measured in the Figma render, the
+excess G−34 was 16.6, 13.9, 9.2, 4.0 and 1.0 at 2, 10, 25, 50 and 75 % of the width. That is (1 − t)^2.1.
+- Figma blends colour and alpha separately. The colour itself drifts to the background, so the excess falls off
+  quadratically.
+- SVG and CSS gradients interpolate premultiplied: the same two stops draw a straight ramp, +4 levels at a quarter of
+  the width.
+- RIGHT: one colour and nine stops with opacity 0.10·(1 − t)².
+
+## 252. A curtain that becomes a bar: keep it as the bar's ground and scan the content in over it
+
+LIVE-VERIFIED 2026-10-13.
+- **What broke.** The green blind shrank into the promo's brand bar. The bar's three blocks then wiped in, each over
+  its own width with a 16 % feather, while the blind unwiped beneath them.
+- **Why.** The blocks are 293, 1277 and 228 px wide and all wiped in the same second, so their fronts moved at
+  different speeds. The dark background showed through as a dark gradient running along the bar: the client's «баг с
+  градиентом на финальном кадре».
+- **The fix.** Keep the blind as the ground and never unwipe it. Reveal the blocks with ONE front in page coordinates;
+  each block converts it to its own mask percentages.
+- **Draw what the ground covers.** Figma's blocks had hairline #222 seams between them. The green ground hid them
+  until the closing dissolve brought them back.
+
+## 253. A column accordion without collisions: a clean grid, a clipped layer per column, titles that never coexist
+
+LIVE-VERIFIED 2026-10-13 (5 columns, one open at a time, 1080p → 4K). The client wrote «прямоугольники где-то
+пересекаются, где-то промежутки, формы неправильно собраны» and «проверь, чтобы не было пересечений».
+- **Rebuild the columns as a grid.** In Figma they overlapped their neighbours by −1…+3 px and their tops drifted by
+  2 px, so the 2 px dividers came out 2, 3 or 4 px wide with steps at the corners.
+  - One frame 60…1860; open card 944, collapsed 216, so every state sums to the frame.
+  - Neighbours overlap by exactly the stroke width, giving one shared 2 px divider.
+  - Interpolate two such states with one ease and every divider stays 2 px through the morph.
+- **Lay out the content by role.** One rule per role, from the medians of the slides rather than each slide's own
+  drift: pads +34/+36, collapsed icons centred, titles on one baseline (one generated layout table).
+- **Clip each column.** Its content lives in its own full-stage layer with `clip-path: inset(...)`, set from the
+  column's current rect by the column's setter. A card that opens or folds can then never draw over a neighbour. The
+  title slide's text is clipped to its box the same way while the box opens.
+- **Never show two titles at once.** Two titles with different line breaks (a 36 px one-liner and a 28 px two-liner)
+  crossfaded mid-move and both showed. Fade the old one out in 0.32 s and start the new one at +0.46 s. Icons are one
+  drawing in two sizes and coincide all the way, so they may crossfade.
+- **Check it.** A probe run through `shoot.js` samples the film every 0.04 s and intersects element rects with their layer
+  clips. It lists overlapping pairs, and elements cut by their layer edge while visible. Pairs that overlap by design
+  are allowed by name.
+
+## 254. Overlap probes and page variants: three traps
+
+LIVE-VERIFIED 2026-10-13.
+- **Chrome writes `inset()` short.** `el.style.clipPath = 'inset(278px 781px 117px 781px)'` reads back as
+  `inset(278px 781px 117px)`. Parse 1–4 values like CSS (t, r, b, l).
+- **A regex in a template literal loses its backslashes.** A page probe written as a JS template string
+  (`const PROBE = \`...\``) turns `/\s+/` into `/s+/` and `\d` into `d`, with no error. The probe then misread every
+  clip and reported overlaps that were not there. Double the backslashes, and make the edit with the editor tool:
+  bash heredocs collapse `\\`.
+- **A layer with no tween stays drawn.** motion.js applies only tweened elements, so a layer with no tween is never
+  touched by the timeline. In a page with variants (`?end=title`), whatever a variant does not animate stays at its
+  CSS default and is visible from frame 0. Hide it with `display: none` per variant.
+
+## 255. 4K from DSF emulation: an `<img>` whose box is not on whole CSS px is resampled — pad it to whole px
+
+LIVE-VERIFIED 2026-10-15 (film.js `--outw 3840`: Emulation.setDeviceMetricsOverride, deviceScaleFactor 2).
+- **Symptom.** A 2x layer placed on the 0.5 px grid with its natural size (1727×150 device px → 863.5×75 CSS at
+  left 61.5) did not render 1:1. Against the same pixels composited by hand:
+  - the mean error was 2.8–7.6/255;
+  - glyph edges showed cubic-filter ringing (34 → 41 beside an edge, 255 → 248 inside).
+- **Cause.** The fitted shift was 1.0 px at the left end and 0.25 px at the right. Chrome snaps the img box to whole
+  CSS px: 61.5 → 62, while the right edge stays at 925. The bitmap is squeezed by one device px. The same happened at
+  an integer origin with an odd width (863.5 CSS). `image-rendering: pixelated` and removing the transform or the
+  opacity changed nothing.
+- **Fix.** Give every box a whole-px origin and a whole-px size:
+  - pad the PNG with one transparent device px on the left and/or top when the layout puts it at x.5 / y.5;
+  - pad on the right/bottom to an even device size;
+  - place it 0.5 px up/left, so the ink stays put.
+  The subtitle then matched Figma at 0.016/255 mean, max 1.
+- A project-side script writes the four variants of every layer (none, @L, @T, @LT), and the page's image helpers pick
+  one. A line mask's clip box sits on whole px too; the bitmap's rows go into `clip-path`.
+- Plain divs (bullets, rules, diagram boxes) get whole-px geometry in the layout itself: Chrome snaps them the same
+  way and moves them 0.5 px.
+- A whole-device-px translate on a composited layer (0.5 CSS px) stays sharp, so moves between states keep working.
+- The 4K films rendered before this fix (2026-10-13 and 14) carry the slight softening on every 0.5-grid layer.
+
+## 256. A multi-line title whose lines overlap in rows: split it into line bitmaps by glyph components
+
+LIVE-VERIFIED 2026-10-15. A 96 px three-line title had line-height < 1: the descenders of line 1 («р», «ф») reach
+below the cap tops of line 2. There is no empty row between them, so a per-line clip box (quirk 245) cuts glyphs.
+- Label the alpha's connected components (8-connected, alpha > 0.02).
+- Assign each component to a line by its alpha-weighted vertical centre, using two cuts between the lines.
+- Give every pixel of the bitmap to the line of its nearest labelled pixel (`distance_transform_edt` indices), so the
+  anti-aliased fringe goes with its glyph.
+- Save one full-size bitmap per line. The three alphas sum back to the original exactly (max difference 0).
+- Each line then rises in its own clip box covering its full ink; neighbouring boxes may share rows.
+- Trap: an i-dot of line 2 sat higher than some line-1 components' centres would suggest (its centre was 182 against
+  line 1's 76–108 and line 2's 235–272). Set the cut between the clusters by looking at the centres, not at the row
+  gaps.
