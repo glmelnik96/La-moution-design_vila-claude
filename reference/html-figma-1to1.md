@@ -280,3 +280,88 @@ clip goes into the deck in front of the static slide, so its LAST FRAME must be 
   90 % reached at 62 % of the time. Use (0.75, 0, 0.2, 1) for wipes, light sweeps and travels, (0.45, 0, 0.25, 1) for
   opacity, and make durations about 1.3× longer. Exception: big solid cards still fade in 0.3 s with an early ramp
   (0.2, 0, 0.3, 1); a slow fade shows the background grid through them.
+
+## 8b. A run of slides as one continuous film (accordion, curtain into the last slide)
+
+First used 2026-10-13:
+- **Input.** Eight 1920×1080 slides from one Figma section.
+- **Brief.** Effective, non-linear and sequential motion. Enough time to read every slide, but not so much that the
+  film gets boring. A curtain transition into the final promo slide, which holds noticeably longer.
+- **Output.** One 54 s film at 50 fps.
+
+Layers and eases are as in §8. Verify layer by layer, not only by the frame mean (quirk 248).
+- **Story first: what carries over between slides.** The title slide's box grew into slide 2's five-column frame. Slides
+  3–7 play that frame as an accordion: one column opens into a card, the others close to narrow strips with a grey
+  title and icon. Nothing that persists exits and re-enters.
+- **Accordion.** One SVG rect per column for all states: tweened x, y, w, h, stroke colour and fill opacity, read
+  from each state's Figma rects. When a column changes width, its title and icon crossfade between two bitmaps (the
+  36 px white and the 28 px grey title; the green and the grey icon):
+  - the old bitmap scales toward the new size about its centre and fades;
+  - the new one arrives from the old scale.
+
+  Translations at rest are whole pixels.
+- **A card in.** All on the moves ease:
+  - the green title bar grows from its left edge (scaleX, 0.8 s);
+  - the dark title in it is revealed from the left by a clip;
+  - the corner arrow slides in from (−28, +28);
+  - the bullet rows follow 0.16 s apart (icon scale 0.45→1, text x −26→0);
+  - a sheen crosses the bar after the rows settle.
+- **A card out.** Rows fade out in reverse order, 0.025 s apart, and the bar folds. The columns start resizing 0.15 s
+  later (1.1 s, (0.7, 0, 0.15, 1)). The next card starts building 0.9 s after the out.
+- **Timing that read well.**
+  - title slide 4.4 s;
+  - the frame and slide 2 5 s;
+  - each four-bullet card 6.2–7.0 s, holding 3.8–4.6 s after its last row lands, the longer holds for longer text;
+  - the final slide 11.4 s, its build and a 7 s hold included.
+- **Curtain into the last slide.**
+  - Two green panels sweep in from the right, the dark one first and the brand-green one 0.1 s later, 0.62 s each, and
+    cover the accordion, which is hidden underneath.
+  - The dark panel lifts off. The green one rises and shrinks into the final slide's brand bar (1.0 s) while the slide
+    builds under it.
+  - The panel stays as the bar's ground, and the bar's content scans in over it with one front (quirk 252).
+  - The film ends with the dissolve into the slide render from §8.
+- **The second round of the same film** (the client's notes on v1):
+  - a gradient bug on the final slide (quirks 250, 252);
+  - columns that overlapped or gapped (quirk 253);
+  - «no collisions» (quirk 253);
+  - 4K;
+  - a variant that ends on the title slide.
+- **4K.**
+  - Layers come from `download_assets` at scale 2, with alpha unmixed (quirk 250). The slides come
+    from the same tool at scale 2.
+  - The layout goes into one generated JS table that the page reads.
+  - The page places the layers at half size on the 0.5 px grid (`GC.img2`) and renders with
+    `film.js --outw 3840`, which sets DPR 2.
+  - The decoded rest frames matched the 2× renders at 0.5–0.9/255 on the untouched slides.
+- **Ending variants from one page:** `?end=title`.
+  - The panel shrinks into the title slide's box. Its fill fades and leaves the box line, the title rebuilds inside,
+    and the film ends on the title slide's render.
+  - Whatever a variant does not use gets `display: none` (quirk 254).
+- **The third round: the designer corrected the deck** (9 slides; icons became square bullets; a new slide 8; a new promo).
+  - **Diff first.** Render every frame again and diff it against the previous renders. That narrowed the work to the
+    bullet column of slides 3–7, the new slide and the new promo.
+  - **Measure what the client calls sloppy.** «Bullets may be placed carelessly, with wrong indents»: the measurements
+    found
+    - indents of 60–81 px;
+    - bullet-to-text gaps of 38–57 px;
+    - bullets 6–12 px off the line;
+    - paragraph gaps of 35–55 px.
+
+    One rule replaced them:
+    - the bullet at card + 72;
+    - the text 40 px after it;
+    - the bullet centre 9.5 px above the first baseline (the designer's median);
+    - the first and last baselines fixed;
+    - equal gaps within a card.
+  - **The new slide was rebuilt the same way.**
+    - The diagram is centred in its frame.
+    - Connectors start at the box centres; the designer's were 5–6 px off.
+    - The arrows sit on one axis; the designer's differed by 2.75 px.
+    - The list rows are on one pitch, with the numbers on the text baseline.
+    - The boxes, lines and arrowheads are vectors, drawn on in the order the work flows.
+  - **Carry over what the slides share.** The closed columns fold up into the list's first rule. The open card's frame
+    becomes the diagram's frame, and its green title bar becomes the green «Agents» node of the diagram. The header's
+    dot field stays; its mask widens for the two-line title.
+  - **The film's last frames come from the render.** The promo text was unmixed from the slide render, and the brand
+    bar was cut from it as one layer. The pre-dissolve frame then matched at 0.01/255. Every box is on whole px
+    (quirk 255).
