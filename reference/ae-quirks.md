@@ -4066,3 +4066,34 @@ into a neighbour before the focus, so they became polylines with a knee where th
 raster was 0.006. Swap the SVG for the raster once it stands still, and HIDE the SVG then: it peeked out beside the
 raster lines, up to 163/255.
 
+## 244. The concat demuxer stops after the first file when the stream layouts differ
+
+LIVE-VERIFIED 2026-10-13. A 31 s section of a film was rendered again and spliced into the first two ProRes parts
+with `-map 0:v:0 -c copy` (`inpoint` / `outpoint`, frame-exact, 5512 frames). The cut list was then [spliced file,
+part 3, part 4]. The spliced file held [video, data]; the parts held [video, audio, data].
+- ffmpeg mapped part 3's audio onto stream 1 (data in the first file) and logged «DTS … out of order», then
+  «New stream with index 2». The cut ended after the first file: 5512 frames instead of 11024, with exit code 0.
+- `ffprobe` counted all 11024 packets through the same list, so a probe of the list does not catch it.
+- Only the delivered file's frame count did, and its size: 40 % of the previous version.
+- Keep every file in one concat list in the same stream layout. Or splice the whole film into one video-only file
+  (`-map 0:v:0 -c copy` over the full list with its `inpoint` / `outpoint` lines) and cut from that.
+- `-map 0` cannot carry the QuickTime timecode (data) stream through concat: «Cannot map stream … unsupported type».
+- Cutting in place over a file that has NTFS hard links rewrites every link: the delivery folder built from links
+  held the short version until the re-cut. Verify the frame count before telling anyone a file is done.
+
+## 249. A share link for a client: upload with curl to a host that has an upload API, not through a browser form
+
+LIVE-VERIFIED 2026-10-13. A delivery archive had to reach a client as a download link. Upload sites that work only
+through the browser form failed for the agent:
+- in the app's browser pane, while the pane was hidden, clicking the file input opened no file dialog;
+- the Chrome extension blocks native file choosers, and its own upload tool carries at most 10 MB per call;
+- a local HTTP server, so that the page could fetch the file into its own form, was refused as a security weakening.
+
+Hosts with a documented upload API took the file in seconds:
+- `curl -F "file=@x.zip" https://upload.gofile.io/uploadfile` gives JSON with `downloadPage` and the `md5`;
+- `curl -F "file=@x.zip" https://temp.sh/upload` gives a link kept 3 days. A browser shows a page with a
+  download button; `curl -X POST <link>` downloads the file.
+- Compare the returned or re-downloaded md5 with the local file.
+- Give two links from different hosts, in case one is blocked where the client is.
+- Upload under an ASCII file name: the multipart filename is the base name. UTF-8 names inside a zip survive.
+
