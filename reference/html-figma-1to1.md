@@ -415,5 +415,18 @@ dashboard) as one 163 s film, 4K 50 fps, in the motion language of §8b.
 - **A designer editing the file live.** Keep the slide node ids in the project notes. A re-sync is: re-export, rebuild the
   units, probe (`no unit …` names every vanished key), redesign the carry-overs that used removed elements, diff the rest
   frames against fresh PNGs. Slides whose keys survive keep their choreography.
+- **A slide progress bar** (a film that runs unattended or behind a speaker: a long hold must not read as a frozen
+  video, and the next slide's moment should be visible):
+  - one fill per slide, linear from the start of the transition into it to the start of the next; the last one is
+    full on the last frame. Take that frame after the scene windows are set, since a window can lengthen the film;
+  - two fills take turns: at the cut the full one runs off to the right (0.6 s sweep) while the next starts at the left;
+  - full-bleed on the bottom edge, 4 px at 1080 from an even row (with 4:2:0 an odd top row shares chroma with the
+    ground above it at 1080p), brand green over an 8 % white track that fades in so the first frame stays clean. A
+    player's bilinear chroma upsampling still gives the row above a quarter of the bar's chroma at the ground's luma
+    ((4, 47, 22) on #222222): a 1-px isoluminant fringe that reads as a soft edge, inherent to 4:2:0;
+  - over the slides and the chrome, under the curtains: on the bright panel a green fill vanishes and the track draws
+    a line across the wipe;
+  - a `?bar=0` switch keeps a clean master. The Figma diff leaves the bar's rows out, and every still checks the fill
+    against the timing (pixel-exact here).
 - **Render.** Parallel segments, one headless Chrome and one libx264 each (4 jobs, `--outw 3840` = DPR 2, preset slow,
   CRF 16, BT.709), joined with the concat demuxer: about 0.2 s a 4K frame per job.
