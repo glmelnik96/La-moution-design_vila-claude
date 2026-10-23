@@ -115,6 +115,8 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 - Logo: the placeholder lockup is for prototyping; deliverables use the real SVG
   (`Brand.logo({ svg })`), undistorted, green/black/white only.
 - Fonts: SB Sans Display ships in `html/engine/fonts/`; check `document.fonts` before judging type.
+- Hours of generative video for an LED wall (VJ loops, a «loading» warm-up): one canvas, a pure `render(t)` with
+  hashed variation, cycles × chapters, parallel NVENC segments — `reference/vj-wall-loops.md`, quirks 257–263.
 
 ## 5b. Animating a supplied frame (PNG / Figma) — free mode
 

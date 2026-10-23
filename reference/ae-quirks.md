@@ -4267,3 +4267,81 @@ below the cap tops of line 2. There is no empty row between them, so a per-line 
 - Trap: an i-dot of line 2 sat higher than some line-1 components' centres would suggest (its centre was 182 against
   line 1's 76–108 and line 2's 235–272). Set the cut between the clusters by looking at the centres, not at the row
   gaps.
+
+## 257. Render hours of a deterministic page in parallel: segments per Chrome, NVENC, concat
+
+LIVE-VERIFIED 2026-10-15 (two LED-wall films, 30 + 45 min, 2304×1280 at 30 fps: 135 000 frames in ~35 min).
+- One `film.js` job captures 9–11 frames/s at this size (canvas draw 12–20 ms, PNG capture ~80 ms, JPEG q95 ~50 ms),
+  so a 45-minute film alone would take 2.5 hours. Eight jobs, each its own headless Chrome seeking `f / fps`, ran at
+  ~70 fps together on 16 cores.
+- Encode each segment with `h264_nvenc` (p6, vbr, cq 21, high, L5.1); eight sessions ran on a GeForce. Eight
+  x264 `slow` instances at 3 MP would have been the bottleneck.
+- Join with the concat demuxer, stream copy: all segments share one layout (video only), so quirk 244 cannot bite.
+- The page must be a pure function of time (hashes, `frac(t / period)`, births by hash); any per-frame state would
+  differ between a segment's first frame and the continuous run.
+
+## 258. A drifting lattice of sprites: reduce the drift modulo the lattice and hash the absolute index
+
+LIVE-VERIFIED 2026-10-15. A lattice of cube PNGs drifting across the frame was first written as `dx = (t · v) mod P`
+with P unrelated to the lattice: at the wrap every cube jumped, and the cubes' hashed properties (which face is lit,
+when it blinks) swapped. Solve the basis for the integer part of the drift (`m, n = round(inv(B) · d)`), draw the
+window of indices around the centre with the remainder as offset, and hash `(i − m, j − n)`: cubes keep their
+identity and the drift is continuous for any t, including negative t.
+The designer's tiling came from the autocorrelation of their pattern image: the two strongest off-centre peaks are
+the basis vectors; expressed in cube widths they transfer to any cube size.
+
+## 259. Tinting a PNG through a mask: the mask must sit in the alpha channel
+
+LIVE-VERIFIED 2026-10-15. A greyscale (L-mode) PNG of «how green each pixel is», drawn to a canvas and tinted with
+`globalCompositeOperation = 'source-in'`, filled the mask's WHOLE rectangle with the colour: an L PNG is opaque, so
+`source-in` keeps everything. Every cube got a square halo. Save the mask as RGBA with the mask in alpha (RGB white),
+then `source-in` tints exactly the masked pixels.
+And light the face with `source-over` at ≤ 0.5, not `lighter`: `lighter` of green on an already light-green face
+went cyan-white.
+
+## 260. A warm-up film that cuts into a loop file: render its tail at negative loop time
+
+LIVE-VERIFIED 2026-10-15. The loading film's last 30 s draw the loop's first chapter at `t − 1800` (−30…0), so a cut
+from the end of file 1 to the start of file 2 continues every drift and wave. Two traps:
+- births written as `-10` («already born») were in the future at t = −30: the whole chapter rendered empty; default
+  births to −1e9;
+- a cycle index from `floor(t / CYCLE)` goes negative: compute the chapter for the tail directly, not through the
+  loop's cycle logic (which would land in the last chapter).
+
+## 261. A wipe written as cover-then-uncover blinks at its middle frame unless u = 0 of the uncover is a full cover
+
+LIVE-VERIFIED 2026-10-15. Chapter transitions were a bar covering the frame during [B − 0.5, B] and uncovering
+during [B, B + 0.5]; both halves started with `if (u <= 0) return`. At exactly B the uncovering half has u = 0 and
+drew nothing: one frame of the incoming chapter showed between two fully green frames — a 33 ms blink at every
+wipe, 27 times in the film. The luminance-jump check (quirk 257's `check_video.py`: frame-to-frame mean > 40/255)
+listed them as pairs «144 → 38 → 144» at the chapter times; the designed two-frame flashes stood out as
+«60 → 233 → 131». The uncovering half must return only at u ≥ 1 and cover everything at u = 0. Re-render, not
+splice: the fix is in the page, and the segments must all come from one page.
+
+## 262. A kaleidoscope source must stay centred on the apex: drift inside the lattice, not by translating the context
+
+LIVE-VERIFIED 2026-10-15. The mirrored source was a lattice of cubes drawn into an offscreen canvas after
+`translate(apex) · rotate · translate(−frame/2 + drift)`; the lattice culled to its frame box, so the drift carried
+the filled box away from the apex and the mandala thinned and emptied towards the end of every 60-s chapter (two of
+nine cycles showed a blank frame on the contact sheet). Draw the source as a box centred on the apex (half-size ≥
+corner radius / min zoom: 1500 px for a 2304×1280 frame at zoom 0.96) and pass the drift to the lattice's own
+modulo reduction (quirk 258). The 2N wedges then always sample filled source. A contact sheet sampled once per
+chapter per cycle is what caught it: a single test frame early in the chapter looked fine.
+
+## 263. Parallel Chrome jobs: a job whose first frames are the heaviest flickers for minutes; warm it up, then splice by DTS
+
+LIVE-VERIFIED 2026-10-15. Eight headless Chromes rendered a 45-min film in segments. Two segments came back with
+frames alternating between the full scene and the scene without its kaleidoscope (mean luminance 58 ↔ 130, dozens of
+jumps over the first minutes of each): exactly the two jobs whose FIRST frames fell inside the kaleidoscope chapter,
+with its 3000 px offscreen source canvas, while eight Chromes were starting at once. Jobs that reached the same
+chapter later rendered it perfectly.
+- Warm up every job: seek frame 0, then the job's first frame, with short sleeps, before the capture loop; wait a
+  `requestAnimationFrame` between seek and `captureScreenshot`; keep offscreen sources ≤ 2400 px.
+- Replace only the bad segments: render the ranges again (4 jobs each) and splice with the concat demuxer, stream copy.
+  `outpoint` is compared with DTS: with B-frames (bf 2) the next IDR has dts = pts − 2 frames, so `outpoint B` keeps two
+  packets of the next segment. `outpoint B − 0.09` (3 frames at 30 fps, more than the 2-frame reorder) gave exactly the
+  packet count. The demuxer then takes the piece's length from outpoint − inpoint, so the next piece's timestamps start
+  0.09 s early and overlap: write `duration` for every piece explicitly. Check the result by listing all packet pts:
+  count = frames, every difference = 1 / fps.
+- The luminance-jump check (quirk 261) found the flicker; its decoded frame COUNT, however, follows the timestamps
+  (ffmpeg drops or repeats frames at overlaps), so count packets with ffprobe when judging a splice.
