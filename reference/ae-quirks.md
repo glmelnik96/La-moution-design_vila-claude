@@ -4923,3 +4923,31 @@ LIVE-VERIFIED 2026-10-23. VM chips migrating between hosts in a canvas diagram.
   - when a move must change rows, run it in the gutter below the hosts (a lane under both slots), never through another
     host's slot column.
 - Check with stills in the middle of every move, not only at the landings.
+
+## 303. Focus frames on fast words: start every move from the frame as drawn; grow the frame over a list said in one breath
+
+LIVE-VERIFIED 2026-10-23. A focus frame glides between targets in 0.6 s. The voice said «кластер — хост — виртуальная
+машина» with the words 0.3 s apart. The client: «выделения… есть места, где ломаются».
+- **WRONG:** lerping from the previous *target* to the new one. A new word arrived before the glide ended, so the frame
+  jumped back to the previous target's rect and started over. It never settled and was caught between two rows.
+- **RIGHT:**
+  - the start rect of a move is the frame as drawn at the switch time, computed recursively along the chain;
+  - for an enumeration said in one breath, keep one edge fixed and grow the frame over the items (cluster → +host →
+    +VM). The frame moves smoothly even when the words come faster than the glide.
+- Drop a focus that would live less than ~0.5 s before a page change: a 0.13 s frame on a new table row read as a glitch.
+- Check with stills between the words, not only at the words.
+
+## 304. A dragged object rides under the cursor; a restart is not a move
+
+LIVE-VERIFIED 2026-10-23. Two diagram moves the client called sloppy («неаккуратные»).
+- **Drag:**
+  - **WRONG:** the chip and the cursor on separate eases, so they drifted apart. The chip was also wider than the
+    focus frame, and its outer part was darkened by the veil.
+  - **RIGHT:** one function gives the object's position, and the cursor is that position plus the grab offset. Show
+    the cursor pressed (0.88) while dragging and released on the drop. The focus frame must hold the whole path.
+- **High availability:**
+  - a VM on a failed host *restarts* elsewhere: it dims on the dead host and boots on the neighbour (outline, a flash,
+    the normal chip);
+  - only live migration (maintenance) moves the chip. It travels along a lane under the hosts with rounded corners,
+    and the lower chip of a column leaves first.
+- On a green band, a moving or booting chip flashes white: green vanishes on green.

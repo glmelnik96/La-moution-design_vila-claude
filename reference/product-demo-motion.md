@@ -252,3 +252,30 @@ card with plate and lists, window, focus frames, cursor, curtain, final.
 - **A raster visual** in a vector film: keep it at ≤ 1.3× its pixels in the 4K master. A 760 px render was drawn at
   370 px in the title column and 480 px in the platform scene.
 - Traps: quirk 301 (a hyphenated word in a plate), quirk 302 (moving chips crossing occupied rows).
+- **Round 2 of the same film.** The client's notes:
+  - the visual should look like the event slides;
+  - the capability tiles needed «what activates and what stays the same» in different places;
+  - motion that was too fast, too linear or sloppy;
+  - focus frames that broke.
+
+  What was done:
+  - **Hero visual,** after the reference slides:
+    - the title frame narrows to the left half and becomes an opaque panel;
+    - the 3D visual is drawn about 1400 px, bleeding off the right and bottom edges, with its left corner passing
+      behind the panel;
+    - the same composition repeats inside the frame for the platform scene (clipped by the frame) and in the final.
+    - A first pass at 1000 px added thin #CFF500 arcs and crosses, as on one reference slide. The client asked for a
+      larger visual and no lines.
+    - The 760 px source went through Topaz ×4, with the transparency kept (generation-recipes, «A 3D render with
+      transparency»).
+  - **Capabilities in two zones:**
+    - on top, the five the voice names: each rises on its word, fills green from the bottom, cools to a green outline
+      when the next is named, and all five get a check on «available after installation»;
+    - below, under «also in the product», four that never change.
+  - **Motion:**
+    - VM chips travel on cubic S-curves through the gap, lower chips first, into lower slots first;
+    - a restart dims and boots instead of moving;
+    - cascades are at least 0.14 s apart;
+    - typing is at most about 25 characters per second;
+    - progress advances by eased steps, and packets ease per trip.
+  - **Focus:** quirks 303–304.
