@@ -153,6 +153,10 @@ rules still apply (all the motion ones; none of the visual stop-list).
    twins yet (pointer, typing, checklist, card3d, whip, device); build them from
    `reference/extendscript-patterns.md`, or deliver the HTML render.
 
+Product films made of real UI: `reference/product-demo-motion.md` §6.
+- Screenshots with a voiceover: the screen is a sheet, not a window; every beat sits on a word; pages change by
+  a push, states by a click (§6–6b, quirks 273–285).
+
 ## 5c. A Figma deck as a 1:1 film — the deck pipeline
 
 When the input is a whole presentation and the bar is layout fidelity (native SB Sans text,

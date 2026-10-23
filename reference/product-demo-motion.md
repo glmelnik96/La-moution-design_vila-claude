@@ -97,3 +97,88 @@ in full: decisive ease-out entrances, faster ease-in exits, holds, one moving su
 designed rather than cut. `Demo.*` is free-mode; on Cloud.ru work use only the mechanics the
 brand doc allows (pointer, expand, checklist, skeleton, toggle, kinetic, device — yes;
 sparkles, glow — no).
+
+## 6. A voiceover product promo built from UI screenshots (2026-10-23)
+
+The input: a 2:02 film with a synthesized voiceover, 11 scenes timed by the voice, 16 real UI screenshots. The first
+version was one `<canvas>` with a macOS window, glows and lower-thirds; the client called it «слоповый». The rebuild that
+replaced it keeps one pure `render(T)` and these parts:
+- **Grid.** A text column on the left (x 87–647: title row, a white plate with the headline in caps, a green 8 px
+  bar, dark blocks for the sub-line and a checklist). Screens on the right, clipped at x 687.
+- **The screen is a sheet, not a window.** It has no browser chrome. A camera key `{t, cx, cy, z, d}` puts a screenshot
+  point on the anchor; key edges follow quirk 275.
+  - A focus frame (4 px green, 8 px outset) moves from field to field over 0.6 s.
+  - The rest of the sheet is veiled: dark theme `#222` at 62 %, light theme white at 58 %.
+- **Every beat sits on a word.** Phrase times come from pauses in the voice track (quirk 273). The checklist ticks and
+  the focus frame steps on the same words: «образ, несколько дисков, флейвор, сеть…» move the frame down the form while
+  the list fills.
+- **Screen changes.**
+  - Same page in a new state (a dropdown opens, a menu appears): a hard cut, like a real UI responding.
+  - Another page: a top-to-bottom wipe inside the sheet, with an 8 px green edge.
+  - Between scenes: a cover (a curtain or a wave of grid cells, quirk 274), or a shared element that grows into the next
+    box (a white card → the screenshot sheet).
+- **Shots.** Upscale the screenshots ×2 first (generation-recipes, «Phygital+ MCP server»), so a 1.3–2× zoom stays sharp.
+  Remove stray pointers and capture leftovers.
+  - The upscale shows only where the sheet is drawn larger than the original screenshot. In a 1080p film whose sheet sits
+    at 0.75–1× of the original, the client saw no difference at all (quirk 276).
+  - So render the master in 4K (a DPR 2 canvas: the ×2 source then lands 1:1 at z = 1), and frame reading holds at z ≥ 1.
+  - Review copies: 1080p at CRF ≤ 20, plus 100 % crops of the screens. A 720p proxy hides exactly what is being judged.
+- **Texts stay in a data file.** Choreography lives in the page, and the transcript tool rebuilds the
+  voice timings from the audio.
+
+### 6b. Round 2 of the same film: the client's corrections, and what they turned into
+
+The client's notes:
+- «drop the 3D visual, take the title from the event slide»;
+- «the numbered list is off-brand»;
+- «dots, not a grid, as in our previous event film»;
+- «SB Sans Display, not Manrope»;
+- a new voiceover;
+- «the screenshots are still blurry»;
+- a 4K master.
+
+The rebuild (v3):
+- **Language.** The event deck's slides, measured off their 2× Figma renders:
+  - caps Semibold 40 headers with a grey dot field 94×8 (pitch 19.3, 4 px, #919191), knocked out under the header text;
+  - frames: 2 px #757575, or #1D9C5D for the active one;
+  - a green #26D07C plate with Regular ink text;
+  - lists with 12 px square bullets, or green numbers 01–04 over 2 px #595959 rules;
+  - thin #9A9A9A connectors, a dashed group outline, #2D2D2D blocks with the newest one turning green.
+- **Title.** The event deck's title verbatim:
+  - logo, a 1 px #D3D3D3 frame that opens from the left, the title rising by words with the voice;
+  - the stars (that film's 4K layers), three line arrows, and the green dot field 62×7.
+  - The final reuses it, with a green CTA plate where the dot field was.
+  - The intro frame grows into three value columns with line icons; that replaced the off-brand numbered list.
+- **One window for everything on the right.** The left card holds the plate, sub-line and list. The right window holds,
+  one after another: a typed sign-in card, the screenshots, the KeyVRM and LCM diagrams.
+  - Each item enters with a wipe that has a 6 px green edge.
+  - During a wipe, the outgoing screenshot is drawn with its camera frozen at its last key, so a camera jump at the
+    switch never shows.
+- **Carry-over transitions.** The scheme block «Портал администратора» grows into the window, the scheme frame shrinks
+  into the card, and the window and card become the two certification cards. A two-tone green curtain before the
+  final shrinks into the CTA plate.
+- **Sharpness.**
+  - The canvas has a DPR (`?dpr=2` → 3840×2160).
+  - Reading holds sit at z ≥ 1. (Round 4 changed the full-sheet view to fit the window's width: fitting the height
+    cropped the logo, quirk 282.)
+  - The focus veil is 0.36.
+  - See quirk 276: the ×2 upscales were in v2 too, but never drawn larger than the original.
+- **Voice.** A word table (`WD`) built from Whisper phrase by phrase (quirk 278); every beat is `V(WD.word) ± lead`.
+- **Music.** Shifted by exactly one bar, so the groove stops under the final title.
+- **Round 3 (v3.2).** The client found the screen changes «non-obvious and fast», the failover block «chaotic», and the
+  focus frames «broken».
+  - Page changes became pushes, and state changes became cursor clicks with short crossfades (quirk 281).
+  - Word onsets right after inserted pauses were taken from energy (quirk 280); these were what had broken the frames.
+  - The failover diagram became four hosts under one core. Its stages run as a numbered list in the card, one moving VM
+    at a time, and it ends on a notification the cursor acts on.
+  - 19 pauses (+10.9 s) were cut into the voice in its real gaps.
+- **Round 4 (v3.3).** The client found a «strange splice» at 1:09 and screenshots «badly cropped»: the logo and the
+  interface were cut, and a frame missed its block. The failover block was «jerky», and the security part did not read
+  against the card text and the voice.
+  - The overview now fits the window's width, and the bands above and below continue the page edges (quirk 282).
+  - Only one zoom is left, where every crop line falls in a gutter. Focus frames follow the panel and row boxes (quirk 283).
+  - Diagrams arrive complete. Every hold is checked by a timing dump, and a 1-second screen got a longer pause in front of
+    the next section (quirk 284).
+  - The security claims became a small diagram that lights word by word with the card's list (quirk 285).
+  - Failover: 1.5 s moves on an ease-in-out, one at a time, with host states crossfading and the stages not overlapping.
+  - The voice has 20 pauses (+14.6 s). The music repeats 8 bars and ends its groove on the last word of the final title.

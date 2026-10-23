@@ -4482,6 +4482,211 @@ audio track and a timecode (tmcd) track.
   centre changes the compression noise everywhere. For «these regions must be identical» checks, allow ~2.5 levels,
   compare two renders of the same comp, or use a lossless master.
 
+## 272. `python -I` ignores PYTHONIOENCODING; Cyrillic output needs `sys.stdout.reconfigure`
+
+LIVE-VERIFIED 2026-10-23 (Windows, Python 3.10, cp1251 console). `PYTHONIOENCODING=utf-8 python -I script.py` still
+crashed on `print('…≤…')` with `UnicodeEncodeError: 'charmap'`: isolated mode (`-I`) drops every `PYTHON*` variable. Earlier
+scripts printed Cyrillic paths as «������» for the same reason.
+- `python -I -X utf8` broke even earlier on this machine: `site` died on a non-UTF-8 `.pth` file in site-packages.
+- **RIGHT:** `import sys; sys.stdout.reconfigure(encoding='utf-8')` at the top of any script that prints Russian; keep `-I`
+  (it is there for safety on downloaded data).
+
+## 273. A TTS voiceover transcribes best from its own script: Whisper skips and invents
+
+LIVE-VERIFIED 2026-10-23. faster-whisper large-v3 on a 2:02 SpeechKit voiceover (CPU int8, 246 s; CUDA failed with
+`cublas64_12.dll is not found`, the CTranslate2 build has no CUDA 12 runtime here):
+- it dropped a whole 10.5 s span (two phrases in the middle);
+- it repeated the last sentence over the 4.6 s silent tail;
+- it heard «ФСТЭК» as «в СТЭК», and the «Stack» of a product name as «STEC».
+- **RIGHT for a synthesized track:** the text sent to the synthesizer is the transcript. Take phrase times from pauses in
+  the audio itself: RMS at 10 ms, speech above −42 dBFS, gaps ≥ 140 ms split phrases. Map script chunks to those
+  segments, and use Whisper only to confirm the boundaries; they agreed to ±0.05 s. Deliver a `.txt` per scene (speech
+  window and duration, plus pronunciation notes for the synthesizer) and a phrase-level `.srt`.
+
+## 274. Canvas transitions built from grid cells: draw the cells solid and add the seams on top
+
+LIVE-VERIFIED 2026-10-23 (a «bits» wave of 48 px cells sweeping a 1920×1080 film). Cells drawn as `cell−2` squares
+left 2 px gaps. The frame underneath showed through them as a white mesh over every white plate and the 3D image,
+which read as a rendering bug.
+- **RIGHT:** fill each active cell at full size, then paint 2 px seams in the ground colour along its right and bottom
+  edges. The cover stays opaque and still reads as a grid.
+- Hold full cover for ≥ 0.06 s around the scene switch: cover delay up to 0.62 s, a 0.1 s green lead, the reveal starting
+  at 0.78 s.
+
+## 275. Framing a screenshot «sheet» on a grid: its edges either sit on the grid or leave the frame decisively
+
+LIVE-VERIFIED 2026-10-23 (UI screenshots moved by camera keys beside a text column). Sheet edges that landed 15–60 px from a
+margin or the frame edge looked like mistakes. Examples: a top edge at 25 px, a left edge cut 22 px from the clip line
+next to the column, a right edge at 1858 against a 1833 margin.
+- **RIGHT:** solve every camera key for its edges:
+  - left = AX − cx·z;
+  - top = AY − cy·z;
+  - right = left + W·z;
+  - bottom = top + H·z.
+
+  Each edge must sit on the grid (the column top, the margin) or be ≥ 40 px beyond the clip or frame edge. Overview keys
+  fit the sheet exactly into the content area. Zoomed keys keep the top on the column's top line, or let the sheet bleed.
+
+## 276. An upscaled screenshot is invisible unless the film draws it larger than the original; never judge it on a 720p proxy
+
+LIVE-VERIFIED 2026-10-23 (a product promo; 16 UI screenshots, 1525×784, upscaled ×2 with Topaz text refine).
+The client said: «the upscales are good, but in the film it looks as if they were not used». The page did load them.
+- The 1080p film drew the sheet 1146–1988 px wide (z 0.75–1.3 of the original). The same frames were rendered again with
+  the original JPEGs swapped in through Playwright routing. Over the sheet they differed by 0.7–1.75/255 on average:
+  invisible at z ≤ 1. Only the 1.3× zooms showed the upscale.
+- The review copy sent to the client was 1280×720 at 0.33 Mbit/s. It showed the sheet at 50–87 % of the original, then
+  crushed it. That copy is what the client judged.
+- Ruled out by measurement:
+  - the H.264 master: PSNR 38.5–39.8 dB against the canvas frames;
+  - canvas resampling: in headless Chrome, `imageSmoothingQuality` low, medium and high give identical pixels, at
+    ~0.9× the edge energy of a Lanczos resize for scales 0.38–1.3×.
+- `createImageBitmap(img, {resizeWidth, resizeHeight, resizeQuality: 'high'})` is softer: 0.64–0.84× the Lanczos edge
+  energy. Do not build mip pyramids with it.
+- The ×4 test (6100 px) is in generation-recipes: slightly crisper text, but a dashed border became solid.
+- **RIGHT:**
+  - Before spending on an upscale, compute output pixels per original pixel for every camera key. The upscale pays only
+    above 1.
+  - Render the master in 4K. A DPR 2 canvas puts a ×2 source at 1:1 when z = 1.
+  - Frame reading holds at z ≥ 1, and keep the focus veil light (≤ 0.4) so the rest of the screen stays legible.
+  - Proof for the client: render the same frame with and without the upscale, at 100 % crops.
+  - Review copies go out at 1080p, CRF ≤ 20, never as a 720p proxy.
+
+## 277. Canvas text laid out before the web fonts load: words overlap, spaces and commas vanish
+
+LIVE-VERIFIED 2026-10-23 (an HTML canvas film; plates and lists measured once at script load and cached).
+`measureText` ran before `document.fonts.load()` resolved, so it measured the fallback font. The cached word positions
+were then drawn in SB Sans Display, which is wider: «Вход по доменной» came out as «Входподоменной», and commas hid
+under the next word. Layouts computed lazily inside `render()` were fine, because by then the font had loaded.
+- **RIGHT:** compute every cached layout (word x positions, plate sizes, list heights) in the `ready` chain after
+  `document.fonts.load(...)`, and clear the layout cache there. Never at the top level of the script.
+
+## 278. Whisper on a whole voiceover drops phrases and drifts phrase starts; transcribe phrase by phrase
+
+LIVE-VERIFIED 2026-10-23 (a 113.7 s TTS voiceover with no script for the new take; faster-whisper large-v3, CPU int8).
+- On the whole file, Whisper dropped «под конкретную задачу» (57.0–58.3 s) and stretched the next word «Вся» over the
+  gap (56.82–58.74).
+- Its phrase starts were 0.3–0.9 s early against the RMS onsets («Войдите» 26.82 vs 27.45), and one was late
+  («Двухфакторная» 100.72 vs 100.42).
+- **RIGHT:**
+  - Split the track by RMS pauses (10 ms frames, speech above −42 dBFS, gaps ≥ 140 ms).
+  - Run Whisper on each phrase clip padded by 0.12 s, with `condition_on_previous_text=False` and no prompt. A prompt
+    with the expected text made it hallucinate a different sentence.
+  - Take each phrase's first word from the RMS onset, and the other words from Whisper inside the clip. The phrase
+    text came back complete. Beats synced to these times landed within ±0.1 s.
+  - Keep the word table in the page (`WD`, seconds of the audio file) and derive every beat from it, so a re-voice means
+    replacing one table.
+
+## 279. Pacing a TTS voiceover: an energy minimum can be a stop closure inside a word; check each cut by transcribing both halves
+
+LIVE-VERIFIED 2026-10-23. The client asked to «cut the speech» where the picture ran too fast. Pauses went in at 13 gaps
+(+6.6 s in total).
+- Gaps between sentences are easy: 100–400 ms at −85…−90 dBFS.
+- Comma gaps inside enumerations («Образ, | несколько дисков», «Флейвор, | сеть») are 60–90 ms at −56…−88 dB on a
+  5 ms RMS grid. They are real gaps and cut cleanly.
+- **WRONG:** the deepest dip near Whisper's boundary of «Снимки, | горячее» (49.57 s, −42 dB, 60 ms). It was the «к»
+  closure inside «Снимки»: the left half transcribed as «Снимка». The real comma gap was 0.3 s later (49.81–49.91 s,
+  −70 dB). Whisper's word starts in a clip are ±0.2 s, too loose to choose between the two.
+- No gap at all between «России» and «и внесена» (continuous at −14 dB): that pause went to the next sentence break.
+- **RIGHT:**
+  - Look for the gap on a 5 ms RMS profile, ±0.3 s around the ASR boundary.
+  - Prefer the longest run below −50 dB over the single deepest frame.
+  - Cut there with 8 ms fades and insert digital silence.
+  - Transcribe the two halves separately (a 1–2 s clip each side). Both must be whole words.
+  - Keep the list of cuts in the page (`EDL`, seconds of the source), so every word time shifts by itself:
+    `V = t → t + VOFF + Σ(pause, cut ≤ t)`.
+- **Music for the longer voice:**
+  - Repeat a whole phrase (4 bars), chosen where the join is most similar: per-bar log spectra, bar i+4 against bar i
+    and bar i+3 against bar i−1, compared at the same positions in the bar (0.991 here). Join with a 30 ms equal-power
+    crossfade.
+  - Then move the music's start so the groove ends under the final title. The beat entry moves with it; here it landed
+    on a value word.
+
+## 280. Pauses inserted before a word: Whisper's onset of that word can precede the cut, so the beat misses the pause
+
+LIVE-VERIFIED 2026-10-23. In-phrase cuts sat in real gaps («Образ, | несколько», 41.663 s; the next word starts at
+41.715). Whisper had «несколько» at 41.54, before the cut. With `V(t) = t + Σ(pause, cut ≤ t)` that word got no shift.
+- Its beats fired 0.48 s early: the list tick, the focus frame, and the cut to the next screen state. The client saw
+  this as «the highlight rectangles broke».
+- Same for «сеть», «группа», «горячее»: every word right after an in-phrase cut.
+- **RIGHT:** for each word after a cut, take its onset from the energy profile: the end of the quiet zone the cut sits
+  in. Never take it from Whisper. Then check `V(word) − V(previous word)` against what you hear.
+
+## 281. Wipes in a canvas film: the outgoing shot must keep its own camera; give it the camera from before the switch key
+
+LIVE-VERIFIED 2026-10-23. A global camera list had a jump key (`d: 0`) at each new screenshot, 0.01 s before the
+transition. The outgoing shot was drawn with `camAt(transitionStart − 0.001)`, which falls after the jump. So the outgoing
+screen re-framed itself, often from a zoom to the overview, the moment the wipe began. That hid where we came from.
+- **RIGHT:** put the camera jump exactly at the transition start, and draw the outgoing item with
+  `camAt(start − 0.02)`.
+- Page change: a horizontal push, 0.9 s. The old page leaves left, the new one enters right in the overview, with a
+  6 px green seam.
+- New state of the same page: a 0.3 s crossfade under one camera. Longer than 0.3 s, two different layouts read as a
+  ghost image.
+- Draw the focus overlay once, above both layers: a veil drawn per layer doubles.
+- A drawn cursor clicks the control that causes each state change (field, list item, tab, «⋮», button). It moves
+  0.65 s on glide, presses for 0.16 s at 0.86 scale, and is hidden during pushes. That is what makes a change
+  «obvious» rather than «a cut».
+
+## 282. A UI screenshot in a window of another aspect: fit the width and continue the page edges; fitting the height crops the logo
+
+LIVE-VERIFIED 2026-10-23. Screenshots 1525×784 (1.945:1) sat in a 1256×685 window (1.834:1). The overview was fitted to the
+window's height (z = 685/784), so 38 px were cut from each side: half the cloud.ru logo and the right end of the header.
+The client: «скриншоты плохо обрезаны, есть обрезка логотипа и интерфейса».
+- **RIGHT:** fit the width (z = window width / screenshot width). The window is then ~20 px taller than the screenshot above
+  and below. Fill those bands with a one-row strip stretched vertically. For each column, take the brightest pixel of the
+  first 2 rows (top band) or the last 12 rows (bottom band) of the screenshot.
+- Panels, page margins and borders then continue into the band. Text that the screenshot's edge cuts does not streak,
+  because a column through a glyph still has a light pixel above or below it.
+- **WRONG:** stretching the last row itself. In an audit log the last rows held the tops of «Hostname:», «unknown»,
+  «Name:», so the band filled with 20 px vertical streaks.
+- Precompute the strips with a small script, as images. `getImageData` on a page opened from `file://` throws on a
+  tainted canvas; drawing a prepared image does not.
+
+## 283. Zoom into a UI screenshot only where every crop line falls in a gutter; otherwise stay on the overview and move the focus frame
+
+LIVE-VERIFIED 2026-10-23. v3.2 zoomed to z 1.1–1.3 on almost every screen. The cuts went through the VM wizard's summary
+panel, through the page tables behind modal windows, and through the header with the logo.
+- Crop-line test: list the panel boxes of the screenshot (white components on the page grey, found by a script). A framing is
+  clean only if all four edges of the view fall in a gutter between panels, or on the screenshot's own edge.
+- A full-width header (logo left, account right) makes any zoom that includes it unclean: the view is narrower than the
+  header. So a clean zoom has to start below the header.
+- A modal over a page (QoS, network wizard) has the page's tables visible on both sides. No zoom between «whole modal» and
+  «inside the modal» lands in gutters. A menu that opens over the header fails the same way.
+- Here exactly one screen passed: the VM wizard, form and summary side by side, z 0.982, view x 104–1383, y 87–784. Every
+  other screen stays on the overview, and the focus frame alone directs the eye.
+- **Focus frame on adjacent panels:** panels 10 px apart need an outset of 2 px. With 6 px plus a 3 px stroke the frame
+  lands on the neighbour.
+- Take the rectangles from the panel boxes and the rows of the tables. Never guess them on a contact sheet: the «1:35 frame
+  misses the block» came from such a guess.
+
+## 284. A diagram that a push brings in must already be complete; check every hold with a timing dump
+
+LIVE-VERIFIED 2026-10-23. Two complaints in one place: «1:09 странная склейка».
+- A screenshot pushed in, held 0.96 s, and its focus frame lit for 0.2 s.
+- Then a push brought an empty dark panel. The KeyVRM diagram built itself in it 1 s later.
+- That reads as a broken edit, not as a transition.
+- **RIGHT:** build the diagram before its push, off-screen (here 2.6 s before), and let it arrive whole. Light its states
+  by the voice afterwards.
+- Dump every screen's static time (next item − (start + push/fade)) and every focus frame's visible time from the page's
+  own arrays. Flag anything under 1.2 s / 0.8 s. A frame visible 0.2–0.5 s reads as a flash. Fix it by lengthening the
+  pause before the next section, not by shortening the frame.
+- When a label changes on a crossfading element («в работе» → «нет связи»), fade the old one out over the first half and
+  the new one in over the second (`alpha = clamp(2w − 1)`). Overlapped words read as garbage.
+- Dark text on a chip fading from grey to green sits grey-on-green mid-way. Switch the text colour in the middle third of
+  the fill change.
+
+## 285. When the voice names abstract properties (mTLS, 2FA, SIEM), draw them; a screenshot that does not show them leaves the viewer guessing
+
+LIVE-VERIFIED 2026-10-23. In v3.2 the security section put «взаимная проверка сертификатов, двухфакторная аутентификация,
+интеграция с SIEM и LDAP» over a screenshot of the operations history, with a frame on its rows. The client: «непонятно что
+выделяется и как это считывается с текстом слева и озвучкой».
+- **RIGHT:** one small diagram in the same window, which arrives grey and complete. Each element lights on its word,
+  together with the same item of the list in the left card:
+  - mTLS: the links between the components sweep green, then the locks;
+  - 2FA: a code types in, then «пройдена» and the arrow to the portal;
+  - integration: arrows and blocks for SIEM (events out) and LDAP / Keycloak (accounts in).
+- Keep the screenshots for what they actually show: the audit log (one event framed) and the operations history.
+
 ## 286. `use_figma` replies are capped at 48 KB; take a slide's geometry from its SVG export
 
 LIVE-VERIFIED 2026-10-23. A plugin-API dump of one dense slide (every node's type, box, fills, strokes, text) failed on the
