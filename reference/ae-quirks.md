@@ -4345,3 +4345,65 @@ chapter later rendered it perfectly.
   count = frames, every difference = 1 / fps.
 - The luminance-jump check (quirk 261) found the flicker; its decoded frame COUNT, however, follows the timestamps
   (ffmpeg drops or repeats frames at overlaps), so count packets with ffprobe when judging a splice.
+
+## 286. `use_figma` replies are capped at 48 KB; take a slide's geometry from its SVG export
+
+LIVE-VERIFIED 2026-10-23. A plugin-API dump of one dense slide (every node's type, box, fills, strokes, text) failed on the
+48 KB reply limit, and splitting it per group still clipped the diagram slides.
+- **RIGHT:** `download_assets(fileKey, nodeId, defaultFormat: "svg")` per slide, then `curl` the returned URL. The SVG
+  carries layer names as `id`s, text already outlined, absolute coordinates, image fills as `<pattern>` defs.
+- List its elements in headless Chrome: document order is the z order, `getBoundingClientRect` gives every box.
+- The export is not the reference. Compare against `download_assets(…, defaultFormat: "png", defaultScale: 2)` of the
+  same node (quirks 287, 288).
+
+## 287. Figma's SVG export drops image adjustments; bake them with a 3-D colour table fitted on the two renders
+
+LIVE-VERIFIED 2026-10-23. An image fill with exposure +0.11 in Figma (a product render on a cover slide) came out of the
+SVG export without the adjustment: 17.1/255 mean off on its opaque pixels.
+- WRONG: a curve per channel (a red cast in the greys); one shared tone curve (6.88/255 left).
+- **RIGHT:** rasterise the image unit alone at DPR 2 on a transparent background (`Emulation.setDefaultBackgroundColorOverride`
+  with alpha 0). Map every pixel through a 3-D table fitted on the image's opaque pixels, Chrome's render against Figma's
+  2x PNG: 8-level cells (32³), each the mean Figma − Chrome offset of its pixels, used where it holds ≥ 4 samples, the
+  shared curve elsewhere. 0.61/255 on the opaque pixels, 0.34/255 over the slide. Switch the unit to the baked PNG.
+
+## 288. Dashed strokes: Figma lays the dashes out per side and fills under the whole stroke; the SVG export does neither
+
+LIVE-VERIFIED 2026-10-23. Six dotted boxes of a diagram slide landed with their dots shifted (up to 155/255 at the corners).
+- Figma spaces each side's dashes evenly and symmetrically between its corners, with an L-shaped piece on every corner in
+  the outer half of the stroke. The plate's fill runs under the whole stroke, so the gaps show the fill.
+- The export gives one `stroke-dasharray` along the whole perimeter (Chrome starts it at the top-left corner), and the fill
+  reaches only the stroke's centre line, so the outer half of every gap shows the background.
+- **RIGHT:** bake each outline from Figma's 2x render. Render the film's own slide without the outline units (the exact
+  background: the plate div covers the stroke), unmix the stroke colour over it inside the stroke band,
+  alpha = Σ(F − B)(S − B) / Σ(S − B)², and switch the unit to that PNG. Unmixing over the export's render left 11–17
+  levels in the gaps.
+
+## 289. Chrome drawn once: hide the other slides' copies, and keep it out of every slide exit
+
+LIVE-VERIFIED 2026-10-23. The logo and the footnote are on every slide of the export.
+- An element with no tween keeps its CSS. The slides' own copies were never tweened, so they stayed visible: the footnote
+  doubled on two slides. **RIGHT:** move slide 1's copies into a chrome layer; `display: none` on all the other copies.
+- The moved copies still belonged to slide 1's unit list, so slide 1's exit sent them away. Slides 2–13 had no logo and no
+  footnote, found only by the rest-frame diff (15 894 px off in the corner and the footer). **RIGHT:** the slide exit
+  skips chrome units. The chrome changes only on purpose (the footnote fades out under a cover slide that has none).
+
+## 290. A curtain in the top layer hides the slide it opens; a growing carry-over plate goes under the outgoing content
+
+LIVE-VERIFIED 2026-10-23.
+- The curtain panels are the top layer, so everything under the panel they shrink into stays hidden until the hand-over.
+  Content that entered earlier popped into view at the hand-over. **RIGHT:** start the content under the target panel at
+  the hand-over; images 0.1 s before it, so they are already fading in.
+- A rule unfolding into the next slide's zone grew over the services that were still leaving, and the column split stayed
+  on top of it. **RIGHT:** move the growing element to the bottom of its slide's stack (`insertBefore(firstChild)`), and
+  send the lines that cross its path out first, before the slide's general exit.
+
+## 291. An image unit from Figma's SVG export is a pattern-filled rect; scaled by CSS, the next tile bleeds in along its edges
+
+LIVE-VERIFIED 2026-10-23. Every image entrance that scales (1.12 → 1 on the covers, 0.6 → 1 on icon bitmaps) showed a
+faint 1-px line along the image box's top and left edges for its first second, there only while the scale was not 1.
+- The export draws an image as `<rect fill="url(#pattern)">`, the bitmap placed in the unit tile by a transform that runs
+  past the tile. Under a CSS transform Chrome re-rasterises the SVG at the new scale, and the wrapped neighbour tile (the
+  bitmap's far edge) bleeds one pixel into the near edges.
+- **RIGHT:** bake every image unit to a 2x PNG with true alpha (rasterise the unit SVG alone at DPR 2, transparent
+  background) and switch the unit to it. It is Chrome's own raster of the same SVG, so the rest frames do not move (here
+  ≤ 0.26/255 against Figma before and after); a scaled bitmap has no tiles to bleed.

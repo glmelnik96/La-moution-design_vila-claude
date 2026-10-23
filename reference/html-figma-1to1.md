@@ -365,3 +365,55 @@ Layers and eases are as in §8. Verify layer by layer, not only by the frame mea
   - **The film's last frames come from the render.** The promo text was unmixed from the slide render, and the brand
     bar was cut from it as one layer. The pre-dissolve frame then matched at 0.01/255. Every box is on whole px
     (quirk 255).
+
+## 8c. A whole deck rebuilt from Figma's SVG export, every element its own unit
+
+First used 2026-10-23: a security deck of 13 dense slides (an architecture diagram, an 18-service grid, flows, a
+dashboard) as one 163 s film, 4K 50 fps, in the motion language of §8b.
+- **When.** Every element must move on its own, every rest frame must equal Figma, and screenshotting children one by one
+  (§8) would take hundreds of calls.
+- **Exports.** `download_assets` with `defaultFormat: "svg"` per slide: layer names as ids, outlined text, absolute
+  coordinates, image fills as pattern defs. Scale-2 PNGs of the same nodes are the reference. `use_figma` cannot dump a
+  slide (quirk 286).
+- **Inventory.** Open the SVG in headless Chrome: document order is the z order, `getBoundingClientRect` gives each box.
+  The slide is the `g` whose first child is the 1920×1080 rect.
+- **Units.** Classify and cut one SVG per unit (integer viewBox, only the defs it references, ancestor opacity, clip and
+  mask wrapped in):
+  - plate, line, bullet: rects become divs, so they grow and morph; a plate's rect includes its stroke, drawn as an
+    inset box-shadow;
+  - text: a group of unnamed fill-only paths, or a named path with two or more subpaths; split into lines by clustering
+    the subpaths' y, one SVG per line, each in its own window (masked rises);
+  - icon: a group with a clip-path, or of `Vector` paths only up to 150 px, or small with strokes;
+  - shape (masked groups), pattern and image (pattern-filled rects), dash (a dashed rect's outline), conn (a compound
+    connector path split into its connected components, so each draws on in the order the flow runs).
+  - images are baked to 2x PNGs before any motion: a pattern-filled rect bleeds its next tile under a CSS scale
+    (quirk 291).
+
+  Keys are the layer names transliterated; repeats get `_2`, `_3`.
+- **Prove the units before any motion.** A page shows one slide at rest from its units. Its 2x still must match Chrome's
+  render of the whole export (≤ 0.02/255 here).
+- **The kit.**
+  - A writer that chains each property from its last written value.
+  - Setters for plate edges (l t r b), plate paint (fill alpha, stroke alpha, colour mix), the feathered wipe and the
+    conic sweep (donuts).
+  - Entrances by kind with a default, exits by style, a slide exit (images and dot fields first, then latest entrance
+    first, chrome never: quirk 289).
+  - Carry-over: morph to the next slide's unit rect, then hand over to that unit; the two-tone curtain (quirk 290).
+  - Holds: clamp(0.28 s × text lines, 4.5, 8.5); the last slide 10 s.
+- **Carry-overs that read.** What persists becomes the next slide's structure:
+  - panels fold into rules, colour-mixed to the rule's grey;
+  - a rule rises into a panel's top edge, and the panel unfolds;
+  - a rule unfolds into a zone, its grey kept as the outline while the fill darkens;
+  - three panels fold into three dividers; a stage becomes a band.
+
+  The growing plate goes under the outgoing content, and lines crossing its path leave first (quirk 290).
+- **Checks.**
+  - A probe lists the units that never entered (a choreography gap; must be 0).
+  - Rest frames are diffed against Figma's current PNG, not the export. The export misses image adjustments (quirk 287)
+    and Figma's dash layout (quirk 288). Here 12 slides landed at ≤ 0.28/255 mean, anti-aliasing only.
+  - Sheets of every carry-over and of the builds.
+- **A designer editing the file live.** Keep the slide node ids in the project notes. A re-sync is: re-export, rebuild the
+  units, probe (`no unit …` names every vanished key), redesign the carry-overs that used removed elements, diff the rest
+  frames against fresh PNGs. Slides whose keys survive keep their choreography.
+- **Render.** Parallel segments, one headless Chrome and one libx264 each (4 jobs, `--outw 3840` = DPR 2, preset slow,
+  CRF 16, BT.709), joined with the concat demuxer: about 0.2 s a 4K frame per job.
