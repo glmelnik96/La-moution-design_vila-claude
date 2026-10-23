@@ -4346,6 +4346,142 @@ chapter later rendered it perfectly.
 - The luminance-jump check (quirk 261) found the flicker; its decoded frame COUNT, however, follows the timestamps
   (ffmpeg drops or repeats frames at overlaps), so count packets with ffprobe when judging a splice.
 
+## 264. A font installed per user stays invisible to AE until the Windows session loads it
+
+LIVE-VERIFIED 2026-10-19.
+
+**What happened.**
+- I copied a TTF into `%LOCALAPPDATA%\Microsoft\Windows\Fonts` and added the HKCU `...\Windows NT\CurrentVersion\Fonts`
+  value. Windows does exactly this at logon.
+- After two AE restarts, `app.fonts.getFontsByPostScriptName(ps)` still returned 0, while older per-user fonts were
+  listed.
+- The variable file (Unbounded[wght]) was not listed either.
+
+**RIGHT**
+1. Make static instances with fontTools: `varLib.instancer.instantiateVariableFont(vf, {'wght': 900}, updateFontNames=True)`
+   gives the PostScript names `Unbounded-Black` and `Unbounded-ExtraBold`.
+2. Install them per user.
+3. Call gdi32 `AddFontResource` on each file from PowerShell (`Add-Type` P/Invoke). Then broadcast `WM_FONTCHANGE`.
+4. Restart AE: `app.fonts` now lists family `Unbounded`, style `Black`.
+
+Before building any text, check `getFontsByPostScriptName(ps).length`. A missing font is substituted without a word.
+
+## 265. A layer placed at a negative startTime: set its outPoint after its inPoint
+
+LIVE-VERIFIED 2026-10-19 (AE 26.5). A 40 s precomp placed in a 20 s comp with `startTime = -20` gets
+`inPoint = 0`. A later `inPoint = 15.4` left `outPoint` at 15.4 too. The layer had zero length and never rendered, and
+the captures showed empty wings.
+- Solids and stills behave differently: `inPoint = 10.4` on a 20 s solid slid it to 10.4–30.4.
+- **RIGHT:** set `L.outPoint = Math.min(comp.duration, L.startTime + L.source.duration)` (or the wanted out) right after
+  every `inPoint`. Read back in / out when a layer is missing from a capture.
+
+## 266. In a bridge payload, `"text" + array` throws «invalid numeric result (divide by zero?)»
+
+LIVE-VERIFIED 2026-10-19. `" pos=" + prop.value` threw that error for every layer of a comp. It looked like a broken
+project. The same read with `prop.value.toString()` or `String(prop.value)` worked. Arrays in this ExtendScript context
+have operator overloads, so `+` tries a numeric operation.
+- **RIGHT:** convert explicitly. If a probe dies with that message, suspect the probe before the project.
+
+## 267. Effects for an event wall: crisp lightning, Particle World units, a particle system in a seamless loop, fades on a null
+
+LIVE-VERIFIED 2026-10-19 (LED wall 3456x1152, 25 fps).
+
+**Advanced Lightning** (`ADBE Lightning 2`).
+- Parameter indices: 1 type (2 = Strike, origin to point), 2 Origin, 3 the point, 4 Conductivity (drive it with
+  `time*25` for flicker), 6 Core Radius, 7 Core Opacity, 8 Core Color, 11 Glow Radius, 12 Glow Opacity, 13 Glow Color,
+  16 Turbulence, 17 Forking.
+- Forking 0.4–0.55 with Glow Radius 30–80 rendered a fuzzy glowing rope.
+- A crisp bolt: forking 0.15, turbulence 1.1, core opacity 100, glow opacity 45, glow radius ≈ 0.7 % of the frame width.
+
+**CC Particle World.**
+- Producer position and radii are in layer-width units: on a 384x1152 layer, Y 0.45 sat at 65 % of the height and
+  Y 1.45 at the floor.
+- Grid, Horizon and Axis Box are `-0055`, `-0060` and `-0061`; set them to 0.
+- A burst = Birth Rate hold-keyed at 2 for 3 frames. At 18 it rendered a fuzzy ball.
+
+**A particle system inside a seamless loop of length T.**
+- Make its precomp 2T long. Inside a loop precomp of length T, layer M shows it at t + T (startTime −T, fully developed).
+- Layer C shows it at t, visible from T − 2 s to T. Crossfade M out and C in over that window: frame T − 1 then lands
+  on the state of frame 0.
+- Without this, every wrap starts from an empty system.
+
+**Parenting does not pass opacity.**
+- A title line hung on a null with its fade on the null showed at 380 % scale from the comp's first frame.
+- Put the opacity keys on the parented text layers themselves. Scale and position can stay on the null.
+
+**Judging a loop seam against local motion.**
+- A generated sky bed with lightning bursts had a whole-loop median step of 0.99. The seam measured 2.21.
+- The steps in the ±12 frames around the seam ran 1.4–5.7, because the clip's first second flickers.
+- Compare the seam with the local steps, not the global median, before reworking it.
+- A real leftover does show up: a wrap copy still at 93 % in frame 999 gave 2.57 against the same neighbours. End the
+  crossfade one frame early: fully on by frame N − 2.
+
+
+## 268. A comic page flip with CC Page Turn: corner mode, and only on a layer the size of its box
+
+LIVE-VERIFIED 2026-10-19 (AE 26.5, comic-panel flips on an LED wall: 1920x1152 centre, 384x1152 wings).
+- **The mode.** Controls (property 6) = 6, «Bottom Right Corner»: Fold Position is where that corner is dragged to. A
+  page that leaves by its lower right corner: Fold Position from (W, H) to (−1.15 W, −0.1 H) over 6–8 frames at 25 fps,
+  Fold Radius max(30, 0.12 W), Back Opacity 100, a warm paper colour (0.93, 0.9, 0.82). The page curls away and uncovers
+  the next panel under the curl.
+- **WRONG:** the effect on a picture layer bigger than the screen box (a Ken Burns window cropped by the comp). The
+  corner and the curl are computed on the whole picture, so the visible part turned late and left a black band along
+  the bottom of the box.
+- **RIGHT:** one precomp per panel, exactly W x H, holding the picture with its Ken Burns keys (anchor = subject point in
+  source px, scale = box H / window H, clamped to the picture and to any frame the generator drew around it). Put the
+  page turn on that precomp layer.
+- **The stack:** the first page on top. Page k shows from its start minus the turn of page k−1 and leaves by its own
+  turn. A row of screens turns as a wave: outer screens 4 frames ahead of the centre, inner ones 2.
+- A wrapped loop (frame N == frame 0): a panel crossing the end gets a copy shifted by the loop length. Copies that
+  continue from the previous lap go on top, copies waiting for the next lap at the bottom.
+- Verify on captures in the middle of a turn (frames at 30–50 % of it): a black band or a page turning on the wrong
+  corner is obvious there and invisible at the ends.
+
+## 269. A greyscale PNG as a track matte: ALPHA uses its whole box
+
+LIVE-VERIFIED 2026-10-19 (AE 26.5). The face of a digit was saved by PIL as mode «L» (white glyph on black, no alpha)
+and set as `TrackMatteType.ALPHA` for a lightning layer. An L PNG imports fully opaque, so the bolt showed in a
+rectangle around the digit, not inside it.
+- **RIGHT:** `lt.setTrackMatte(face, TrackMatteType.LUMA)` for an L PNG, or save the mask as RGBA (white, alpha = mask)
+  and keep ALPHA. Read back `trackMatteType`: LUMA = 5015.
+- `setTrackMatte()` turns the matte layer's video off by itself (it read back `enabled: false`). A parented matte keeps
+  following its parent: give it anchor (0, 0), position (0, 0), scale 100 % AFTER `parent =`, since parenting rewrites
+  the child's transform.
+- Check a matte on a capture where the matted layer is brightest: a box-shaped matte hides inside a dark frame.
+
+## 270. A glow inside a screen-sized precomp draws a seam on a flush wall
+
+LIVE-VERIFIED 2026-10-19 (flush 9x3 m wall: wings 384 px wide next to a 1920 px centre). An energy column on an inner
+wing lived in a 384x1152 precomp (the wing's box) placed in ADD mode. Its «glow» layer was a full-width linear Ramp, gold
+at the floor to black at y 420. The glow stopped dead at the box edge. Next to the centre screen that read as a hard
+vertical seam: 75 vs 33 grey levels across the boundary at floor height. Two delivered versions had it before a full-res
+look at the boundary caught it.
+- **RIGHT:** give every glow, haze or gradient in a box-sized precomp a falloff to zero at the box edges, unless the
+  picture really ends there. Here: a mask x 96–288 with feather (192, 0) on the glow layer only, so the glow became a
+  soft column around the bolt. Alternatively, make the precomp wider than the screen so the light spills over.
+- **The check, before every render of a multi-screen wall:** at each screen boundary x, compare the mean of columns
+  x−12..x−2 with x+2..x+12 at three heights on a busy frame. A step where the picture should continue means a layer
+  clipped by its box. A step at an ink frame or a panel edge is expected.
+
+## 271. Joining AE's ProRes masters: the concat demuxer can park the second file at 10240 s; ProRes couples screens
+
+LIVE-VERIFIED 2026-10-19 (ffmpeg 8.0.1). AE's "High Quality" output module writes a .mov with video (apcn), a silent
+audio track and a timecode (tmcd) track.
+- **WRONG:** `ffmpeg -f concat -i list.txt` of `INTRO.mov` + `LOOP.mov` (LOOP itself a stream-copy join of two halves),
+  re-encoded to H.264. The loop's frames came out at pts 10240 s and later. The file had 1500 packets and decoded with 0
+  errors, but it lasted 30 679 s. A player shows 20 s and then freezes. A checker that decodes it at constant frame rate
+  writes out ~767 000 duplicated frames; one check run took 80 minutes. The stream-copy join of the two loop halves was
+  fine: its pts run straight through 19.96 → 20.00.
+- **RIGHT:** join with the concat FILTER, video only:
+  `-i a.mov -i b.mov -filter_complex "[0:v:0][1:v:0]concat=n=2:v=1:a=0[v]" -map "[v]" -an -r 25`.
+- **Always check the container duration** against frames / fps (±0.05 s), not only the packet count. Decode for
+  checks with `-fps_mode passthrough`, so a timestamp gap cannot turn into millions of frames.
+- **ProRes couples regions within a frame.** The metal and comic masters had identical wings, but their wings differed
+  by a mean of ~1 grey level (max 10–13). The difference map was 8×8-block noise, zero on flat black; it was not a
+  shift. The same comp rendered twice was bit-exact. ProRes sets its quantisation per frame, so a different title in the
+  centre changes the compression noise everywhere. For «these regions must be identical» checks, allow ~2.5 levels,
+  compare two renders of the same comp, or use a lossless master.
+
 ## 286. `use_figma` replies are capped at 48 KB; take a slide's geometry from its SVG export
 
 LIVE-VERIFIED 2026-10-23. A plugin-API dump of one dense slide (every node's type, box, fills, strokes, text) failed on the

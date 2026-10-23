@@ -439,6 +439,8 @@ color=black:s=4608x896:r=25:d=96.48[bg];[bg][dl]overlay=768:64:shortest=1[t1];
 - Make an 8-frame contact sheet of every file and look at it.
 - Compare a screen file with the same crop of the wall render: a mean difference around 2 levels is the
   decoder's own noise (quirk #183); more means a wrong crop or a stale file.
+- On a flush wall, check every screen boundary for a brightness step before the render, at three heights (quirk 270).
+  A glow clipped by its screen-sized precomp shows up as a seam that the audience sees for the whole loop.
 - Keep a status file (JSON) so a second session knows what already passed.
 
 **Upload from the desktop app's browser pane.** An upload that publishes a link needs a yes for each
@@ -480,6 +482,22 @@ standard library.
 3.906 mm (1408×1280): the pitch ratio is exactly 1.5, so the wall is 5376×2688 in the centre's grid, the wings are
 2112×1920 rectangles on it, and each wing output is the wall layer at scale 200/3 with position
 `((W/2 − x)·k, (H/2 − y)·k)`, bicubic sampling. Building in the coarse grid would upscale the sharpest screen.
+
+**Check that a screen's metres and pixels give one pitch.** A 5×3 m centre was specified as 1920×1080 (2026-10-18),
+but 5:3 is not 16:9. 5 m / 1920 = 2.604 mm, so the screen is most likely 2.6 mm cabinets (192 px per 0.5 m), natively
+1920×1152. A 1080 signal is then either stretched to the full height, which makes every circle 6.7 % taller (the round
+«О» of a logo turns oval), or played 1:1 with bars. Build the master at the native 1920×1152 and ask the venue which file
+it plays. Deliver 1920×1080 squeezed in advance only when they stretch it. Wings of 1×3 m at 256×768 give 3.906 mm on
+both axes: square pixels, a 1.5 pitch ratio to the centre, so the stage canvas in the centre's grid has 384×1152 wings.
+- No answer from the venue: cut the centre three ways from the same wall master, one folder each, and say in the
+  README when each one applies (2026-10-19):
+  1. 1920×1080 per the spec, squeezed in advance (`crop=1920:1152:768:0,scale=1920:1080`), for a processor that
+     stretches the signal over the whole screen;
+  2. 1920×1080 pixel to pixel, the middle rows (`crop=1920:1080:768:36`), for 1:1 output with 36 px bars;
+  3. 1920×1152 native, unscaled.
+
+  All three keep the lines continuous onto the wings in their own setup. Put the variant into the file name too:
+  files get separated from their folders on a media server.
 
 **Judge on a true-scale stage, not on the client's visualisation.** A client mock-up drew the wings 1.7:1 (real
 1.1:1). Keep a PREVIEW comp (and a small Python mock-up for stills) with the screens at physical size, a dark stage,
@@ -591,3 +609,20 @@ plane around the core, and on the side screens they stay arcs.
 3. Run the loop's rings on the same clock, `tau = time − D`, and fade them in as the drop takes the loop's colour.
 4. Check the hand-over by pixels: capture the intro's last frame and the loop's frame N − 1. Here they matched
    exactly (mean difference 0.0), so switching to the loop file costs only the loop's own wrap step.
+
+## 21. A storyboard page before any generation (2026-10-18)
+
+For an intro + loop on a centre and four wings, the storyboard went out as one HTML page (an Artifact) before a single
+credit was spent: every beat a strip of the whole stage at true scale, notes for the centre and the wings, the generated
+assets each beat needs, and the credit table from `higgsfield generate cost`.
+- **One stage coordinate system** (1 m = 100 units). Every layer is drawn in stage space inside one clipPath made of all
+  the screen rectangles, so skylines, clouds, burst rays and a fly-by streak continue across the gaps by themselves.
+- **Clouds from `feTurbulence`** with `filterUnits` and `primitiveUnits` set to `userSpaceOnUse`: the noise is continuous
+  across screens, and a second pass with the same seed in a warm colour under a radial mask lights the clouds from inside.
+- **The exact logo geometry from the client's PNG:** `cv2.findContours` on each flat brand colour, then `approxPolyDP`
+  (epsilon 3 px), gives the emblem polygons. A metal version laid over the raster lockup at the same scale lines up exactly.
+- **Comic panels as nested `<svg>`** with their own `w×h` viewBox and halftone patterns in user units. The same drawing
+  functions fill a 5:3 centre, a 1:3 wing and a 10-thumb flip strip.
+- One look at a full-page headless-Chrome screenshot, cut into ~1640 px parts: the giant burst wedges that covered the
+  wings and the title were visible only there.
+
