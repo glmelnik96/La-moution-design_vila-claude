@@ -168,6 +168,9 @@ One wall comp in physical pixels, per-screen delivery comps, SYS precomps for ev
 numbers laid out from a single timeline module that also writes the timing-aware generation brief:
 `reference/led-wall-pipeline.md`; lessons in quirks #120-#184. Rendering unattended, cutting per-screen
 files, checking and uploading them: §17 there (aerender traps: quirks #182, #184).
+A storyboard page for the whole stage before any credit is spent: §21. Traps from an event wall with a comic
+intro: quirks 264–271 (a per-user font, effects in a seamless loop, a page flip, a matte's box, a glow seam on a
+flush wall, joining ProRes masters).
 
 ## 5e. Graphics over a Premiere edit (with premiere-autopilot)
 
