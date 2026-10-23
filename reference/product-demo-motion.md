@@ -219,3 +219,36 @@ The brief: same story, our brand, both logos, for our booth.
   - The deck is drawn from Figma's SVG export as Path2D units on the same canvas, with transitions computed from the
     layer diff of consecutive frames (quirk 298; html-figma-1to1 §8d).
   - One page renders all three versions, each looping without a seam (quirk 299).
+
+### 6d. The same product line without screenshots: schematic screens in the film's language
+
+The input: an animatic (17 scenes, 2:00) whose screens were drawn in code «after» the product's portal, and no real
+screenshots. The user: «перерисовываем в нашем стиле, что было нарисовано. Рисуем схематично». The voice was regenerated
+with the sibling film's settings (generation-recipes, «Voiceover»). The film reused the sibling film's page: header,
+card with plate and lists, window, focus frames, cursor, curtain, final.
+- **One evolving scheme for the opening claims.** Three claims (a zoo of platforms, migration off foreign ones, fault
+  tolerance with backup) became one diagram in the big frame. The header changes with each claim; the diagram goes on:
+  - six platform blocks, each with its own console label and VM chips. They wait at the frame's centre and rise when the
+    platform band arrives;
+  - the proprietary blocks get a white tag, the others dim. Their chips ride into a green platform band with four hosts,
+    green while moving, with a green «running» square on landing;
+  - a host fails (white fill, «СБОЙ»), and its chips restart on neighbours;
+  - a backup block fills its copy slots one by one.
+  Then the band shrinks into the plate under the product name. That plate becomes the claim «professional
+  virtualisation platform»; the product's 3D visual rises beside it.
+- **Capabilities** as nine tiles. The ones the voice names light green in turn and cool to a green outline; on
+  «available right after installation» every tile gets a check.
+- **Schematic console pages** for the window:
+  - a top bar with the product name and the user;
+  - a left nav whose active item marks the page;
+  - tables with mono identifiers, green squares for state and thin bars for load.
+  Pages arrive complete on the push; the voice drives only states. Examples: a tree «datacentre → cluster → host → VM»
+  with the focus on each word; a template dialog where two clicks create a machine that then appears in the table; the
+  same machine dragged into a folder that passes its rights down; networks drawn on with the words, then a security group
+  and locks.
+- **Diagrams for what a table cannot show:** import and live migration (with a LIVE tag and local disks syncing),
+  host failure and maintenance, a week of full and incremental copies with a two-click restore, a chat with an action
+  card and a «within the user's rights» tag, dashboards exporting to the customer's monitoring.
+- **A raster visual** in a vector film: keep it at ≤ 1.3× its pixels in the 4K master. A 760 px render was drawn at
+  370 px in the title column and 480 px in the platform scene.
+- Traps: quirk 301 (a hyphenated word in a plate), quirk 302 (moving chips crossing occupied rows).

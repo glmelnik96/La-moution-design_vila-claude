@@ -4900,3 +4900,26 @@ The §8c bar (green fill over an 8 % white track) drawn there:
   (diff 0).
 - Check: a row of pixels at y = 1078 across the title. Here behind the front it was brand green (37, 209, 125), and ahead
   of it (51, 51, 51), the lane under the track, over the photo as well.
+
+## 301. A hyphenated compound wider than a plate does not wrap: break it after the hyphen by hand
+
+LIVE-VERIFIED 2026-10-23. A green card plate (40 px, max line width 432 px) got «Программно-определяемые сети».
+- **WRONG:** relying on the word layout. It splits on spaces only, so «Программно-определяемые» (≈ 470 px) stayed one
+  word. It ran past the plate's right edge and was cut by the plate's clip: «Программно-определяемь».
+- **RIGHT:** `'Программно-\nопределяемые сети'`: the layout treats `\n` as a paragraph break, and the plate takes the
+  width of its widest line.
+- Dump every plate before rendering: lines and widest line against the max width. Also dump where each card list ends
+  against the card's bottom. Here one install list of five steps under a three-line plate ended at y 1012 with the card
+  ending at 965; four steps fit (882).
+
+## 302. Tokens moving in a schematic collide with the ones at rest when their path crosses occupied rows
+
+LIVE-VERIFIED 2026-10-23. VM chips migrating between hosts in a canvas diagram.
+- **WRONG:** a generic path «up to a lane, across, down into the slot». An import from a side block crossed the target
+  host's first row, where a chip stood. A live migration between two hosts went to a slot below two occupied ones.
+- **RIGHT:** give every move a free row:
+  - put the source chips on the same rows as their target slots, so an import is a straight horizontal slide;
+  - send a live migration along its own row into a free slot of the neighbour;
+  - when a move must change rows, run it in the gutter below the hosts (a lane under both slots), never through another
+    host's slot column.
+- Check with stills in the middle of every move, not only at the landings.
