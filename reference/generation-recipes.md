@@ -637,6 +637,18 @@ file.
   - After the upscale, clean the shots in Python. Find stray mouse pointers as black connected blobs of 6–24 px. Repaint each
     by copying the same rows from a few pixels aside (lines stay continuous), or by filling with the median of a ring
     around it on flat areas. A ring fill on a two-tone area leaves a visible patch.
+- **A 3D render with transparency, upscaled for a 4K hero** (LIVE-VERIFIED 2026-10-23).
+  - The source was a 760×760 PNG with alpha; in the film it had to be drawn about 1400 px wide. A Lanczos ×2 copy was
+    soft in 4K and kept the source's compression blocks.
+  - Settings: `topazlabs-image` with `model: enhance_cgi`, `multiplier: multiple_4`, `fix_compression 0.6`,
+    `sharpen 0.3`, `denoise 0.2`. The job ran about 30 s and returned a 3040 px PNG.
+  - In the result, the speaker grille, pins and edges are crisp, and the compression blocks are gone.
+  - The upscaler returns RGB only. To keep the transparency:
+    1. composite the source onto the film's own background colour (#222222 here) and upload that;
+    2. upscale the source's alpha separately (Lanczos ×4);
+    3. put it back on the upscaled RGB.
+    Edge pixels then carry the background colour, so no fringe shows on that background.
+  - Upload: `get_upload_url`, then `curl -F file=@… -F ticket=…`, then `init_image: <storage_object_id>`.
 - **Voiceover: «Sound Creation» = `elevenlabs-tts`** (LIVE-VERIFIED 2026-10-23, a 2-minute promo).
   - Inputs:
     - `text`, `model_id` (`eleven_v3` by default);
