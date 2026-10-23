@@ -429,4 +429,5 @@ dashboard) as one 163 s film, 4K 50 fps, in the motion language of §8b.
   - a `?bar=0` switch keeps a clean master. The Figma diff leaves the bar's rows out, and every still checks the fill
     against the timing (pixel-exact here).
 - **Render.** Parallel segments, one headless Chrome and one libx264 each (4 jobs, `--outw 3840` = DPR 2, preset slow,
-  CRF 16, BT.709), joined with the concat demuxer: about 0.2 s a 4K frame per job.
+  CRF 16, BT.709), joined with the concat demuxer: about 0.2 s a 4K frame per job. If the machine goes down mid-run,
+  keep the segments that closed and re-render only the open one (quirk 292).

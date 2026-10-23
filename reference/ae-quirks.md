@@ -4407,3 +4407,23 @@ faint 1-px line along the image box's top and left edges for its first second, t
 - **RIGHT:** bake every image unit to a 2x PNG with true alpha (rasterise the unit SVG alone at DPR 2, transparent
   background) and switch the unit to it. It is Chrome's own raster of the same SVG, so the rest frames do not move (here
   ≤ 0.26/255 against Figma before and after); a scaled bitmap has no tiles to bleed.
+
+## 292. A parallel render cut off by a power loss: keep the segments that closed, re-render only the open one
+
+LIVE-VERIFIED 2026-10-23. A 4K film rendered as 4 segments of 2042 frames (a headless Chrome and a libx264 `slow` each,
+all 16 threads busy) lost the machine 7.5 minutes in. Three segments had closed; the fourth was 240 frames short.
+- Judge by the files, not the log. The log on the external exFAT drive lost its last lines: no «segment … done» line
+  reached the disk for the three segments that had closed.
+- MP4 writes its index (moov) only when ffmpeg finishes, and `+faststart` then moves it to the front. A segment cut
+  off has none: `ffprobe` says «moov atom not found». It is lost; re-render it.
+- A segment with an index can still hold unwritten data when the power goes right after it closed (one closed 11 s
+  before). Decode each one in full (`ffmpeg -v error -i seg.mp4 -f null -` must print nothing) before keeping it.
+- The kept segments must come from the page as it is now. Its file and libraries must be older than the run's start
+  (the creation time of the open segment).
+- **RIGHT:** re-render the open segment alone, with the frame range and encoder settings the parent gave it (job j
+  covers frames j × ceil(N / jobs) up to the next job's first frame). Then join the same list with the concat demuxer,
+  stream copy. One job is a quarter of the load; here it took 476 s.
+- Prove the joins: compare the frames on both sides of every join against page stills, then the rest frames against
+  the reference. Here every join matched to the pixel.
+- Windows says why it went down. System event 6008 gives the time. Kernel-Power 41 with BugcheckCode 0 and no
+  power-button press is a power loss or a hardware reset, not a software crash.
