@@ -117,6 +117,8 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 - Fonts: SB Sans Display ships in `html/engine/fonts/`; check `document.fonts` before judging type.
 - Hours of generative video for an LED wall (VJ loops, a «loading» warm-up): one canvas, a pure `render(t)` with
   hashed variation, cycles × chapters, parallel NVENC segments — `reference/vj-wall-loops.md`, quirks 257–263.
+- **Motion for Figma** (native Figma Motion: keyframes, first-party styles, custom animation styles, TextStagger):
+  what our curves and presets map to, the TextStagger arithmetic, what cannot transfer — `reference/figma-motion.md`.
 
 ## 5b. Animating a supplied frame (PNG / Figma) — free mode
 
