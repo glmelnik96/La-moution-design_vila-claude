@@ -1,5 +1,9 @@
 # Generation recipes (sidecar)
 
+> **Since 2026-10-19, Phygital+ goes through its official MCP server only** (section «Phygital+ MCP server» below),
+> and Higgsfield goes through its CLI. The sidecar sections are kept as a record. Do not use them for new work: the
+> sidecar drives the web backend with a browser session, which is the kind of automated access the Terms forbid.
+
 End-to-end flow for generating media through the Phygital-Adobe-Studio sidecar
 and importing the result into After Effects. The sidecar is a local FastAPI
 service (`127.0.0.1:8765`) that bridges the backend generation API; the skill
@@ -575,6 +579,65 @@ made this way for an LED show (stills: Nano Banana in Phygital).
   - last frame against its key: 3.3 levels.
   - A 0.2 s dissolve at the join and 0.7 s into the loop hid both.
 
+## Phygital+ MCP server — the official way to generate in Phygital (set up 2026-10-19)
+
+Phygital+ publishes an MCP server for agents (docs: https://dev.phygital.plus/mcp). It replaces every scripted route
+into Phygital: the browser-pane clicks that got the account banned on 13.10, and the local sidecar at the top of this
+file.
+- **Server.** `https://dev.phygital.plus/api/mcp`, Streamable HTTP. Added at user scope with
+  `claude mcp add --transport http --scope user phygital https://dev.phygital.plus/api/mcp`. LIVE-VERIFIED: it lists as
+  «Needs authentication» until the user signs in, then `claude mcp get phygital` shows «✔ Connected».
+  - The session that added the server does not get its tools.
+  - A headless `claude -p` probe from the npm CLI failed with «OAuth session expired»: the CLI's own Claude login is
+    separate from the desktop app's.
+  - Test the tools in a new session.
+- **Auth.** The user signs in once with OAuth in the browser: `claude mcp login phygital`, or `/mcp` → phygital →
+  Authenticate.
+  - Scopes: `tasks:read`, `tasks:write` (spends credits), `files:write`, `projects:read`, `frames:run`.
+  - `offline_access` is a refresh token. Without it the sign-in expires after about 30 min.
+  - Alternative: a personal API key as `Authorization: Bearer <key>`. The user puts it into the config; never type it.
+  - A session loads its MCP servers when it starts, so a server added mid-session appears in the next session.
+- **Tools.**
+  - `list_models(category?)`: the models available to the account.
+  - `get_model_schema(model)`: the JSON Schema of the inputs and parameters.
+  - `generate(model, input)` → `jobId`. Credits are charged here.
+  - `get_job(jobId)`: queued / running / completed, plus links to the results.
+  - `cancel_job(jobId)`: refunds; free on a queued job.
+  - Uploads:
+    - `upload_file(filename, mime_type, data_base64)` → `storage_object_id`;
+    - `start_upload` / `upload_chunk` / `finish_upload` for bigger files (2 MB chunks);
+    - `get_upload_url` for a plain POST;
+    - `request_upload` / `claim_upload` when the person attaches the file in the chat.
+- **Flow.** `list_models` → `get_model_schema` → show model, settings and credits, get a yes → `generate` → `get_job`
+  → download the result links into the project folder → import into AE.
+  - A file input takes a public URL or a `storage_object_id`, e.g. `"init_img": [501]`.
+  - No cost-preview tool is listed. On first use, check whether `get_model_schema` carries the price. If it does not,
+    quote the Phygital+ price list as an estimate before `generate`.
+- **Errors.**
+  - 401: no sign-in, or it expired or was revoked; sign in again.
+  - 402: not enough credits.
+  - 422: the input does not match the schema; re-read `get_model_schema`.
+  - 429: back off.
+  - «Missing scope»: re-authorise and approve that right.
+- **Still forbidden:** clicks or page JS in app.phygital.plus, and scripted calls to the web app's own API. Downloading
+  the result links that `get_job` returns is part of the official flow.
+- **LIVE-VERIFIED 2026-10-23** (16 UI screenshots for a product promo):
+  - The `get_upload_url` ticket is valid for 180 s and takes several files: `curl -F file=@x.jpg -F ticket=… <url>`.
+    15 JPEGs went up with one ticket in a shell loop, and none of their bytes passed through the agent's context.
+  - Image models: `upscale` (no parameters), `magnific`, `topazlabs-image`, plus generators (gemini-image = Nano
+    Banana, flux, gptimage, seedream, recraft, ideogram…). Neither `get_model_schema` nor `get_job` shows a price.
+  - For **UI screenshots** use `topazlabs-image` with `model: enhance_text_refine`, `multiplier: multiple_2`,
+    `fix_compression 0.6`, `sharpen 0.3`, `denoise 0.3`. 1525×784 JPEG became 3050×1568 PNG. Cyrillic and Latin text came back
+    letter-for-letter, JPEG blocks were gone, and strokes came out a little lighter than the source.
+  - Jobs finish in 20–60 s; the schema's `averageTimeInSeconds: 600` is a ceiling.
+  - Compare crops of the result with a Lanczos ×2 of the source before using it: an upscaler can redraw small text.
+  - Stay at ×2 for UI. A `multiple_4` test (6100 px) gave slightly crisper text, but it turned a 1 px dashed border into a
+    solid line; ×2 kept the dashes. Above 2× magnification, render the film larger rather than upscaling further.
+    An upscale is visible only where the film draws the shot larger than its original pixels (ae-quirks 276).
+  - After the upscale, clean the shots in Python. Find stray mouse pointers as black connected blobs of 6–24 px. Repaint each
+    by copying the same rows from a few pixels aside (lines stay continuous), or by filling with the median of a ring
+    around it on flat areas. A ring fill on a two-tone area leaves a visible patch.
+
 ## Higgsfield CLI — the official way to generate from Claude Code (LIVE-VERIFIED 2026-10-13)
 
 Phygital banned the account after a night of browser-scripted generations (its Terms 6.2(h) forbid automated access),
@@ -589,6 +652,12 @@ with no browser automation at all.
   - `kling3_0` pro, 10 s, sound off: 15 credits (5 s: 7.5; std 10 s: 12.5; 4k 10 s: 60);
   - `kling3_0_turbo` 1080p 10 s: 20; `seedance_2_5` 1080p 10 s: 120;
   - `nano_banana_pro` 2k: 2 credits, 4k: 4.
+  - 2026-10-18, same plan: `kling3_0` pro 15 s: 22.5; `minimax_h3` (2K) 5 s: 10, 10 s: 20; `seedance_2_0` 10 s: 45;
+    `seedance_2_0_mini` 720p 10 s: 10; `wan3_0` 1080p 10 s: 35; `veo3_1_lite` 8 s: 12;
+  - images: `nano_banana_pro` 1k costs the same as 2k (2); `nano_banana_2_1` 2k: 2, 4k: 3; `gpt_image_2_5` 2k high: 2.75;
+    `seedream_v5_pro` 2k: 2.5;
+  - `higgsfield account transactions` lists spends and refunds only, no subscription grants: the CLI does not show
+    when the plan refills.
 - Create: `higgsfield generate create kling3_0 --prompt "…" --start-image ./a.png --end-image ./b.png --duration 10
   --mode pro --sound off --aspect_ratio 16:9 --json` prints the job id. Local paths are uploaded automatically.
   `--image-references` (repeatable) gives Nano Banana Pro up to 14 references.
@@ -599,6 +668,32 @@ with no browser automation at all.
   WinError 2; resolve it with `shutil.which('higgsfield')`.
 - A small batch runner over a JSON spec list pays off at once: parallel jobs, job ids kept in `<spec>.log.json` (a rerun
   waits on a submitted job instead of paying again) and downloads into the spec's `out`.
+
+**Nano Banana Pro and superhero archetypes** (2026-10-18).
+- «A lone caped hero seen from behind on a rooftop at night», even with «no pointed mask ears, does not resemble any
+  existing superhero», drew Batman: a cowl with ears and a utility belt. It also drew the Empire State Building.
+- Negations do not override an archetype that the scene itself calls for. Describe a different costume in positive
+  terms: its colours, armour plates, a bare head with hair, a narrow eye mask. The next roll gave an original hero.
+- Real landmarks (Empire State, Chrysler, rooftop water tanks) came back despite «no real landmarks». Give a generated
+  city as an image reference for every later panel.
+- The city reference is not enough by itself. In a batch of 12 panels with the generated city as reference 2:
+  - the Empire State, the Chrysler and water tanks still appeared behind a close-up hero;
+  - «a tall skyscraper with a needle spire» became One World Trade Center.
+  For a close-up, name the background («only storm clouds and lightning behind»). Do not ask for an archetypal tower.
+- «One full-bleed panel, no border, no gutters» still produced a two-panel strip once in 12. A paper margin with a frame
+  line appeared three times. Plan a crop in the edit and do not reroll for a frame.
+- A «redraw reference 2 in the style of reference 1, keep the exact composition» state held the layout of a 21:9 master
+  closely enough to dissolve into it. Its look sat between a comic and a posterised photo.
+
+**Video for a 3:1 wall** (five screens flush, 9×3 m).
+- Kling 3.0 only takes 16:9, 9:16 or 1:1.
+- 21:9 options:
+  - MiniMax H3 at 2K: 20 credits for 10 s;
+  - FLUX 3 Video: 80–130;
+  - Seedance 2.0: 45 (720p by default).
+- Nano Banana Pro output sizes:
+  - 21:9 at 4K returns 6336×2688; a 3:1 crop keeps rows 288–2400;
+  - 16:9 at 2K returns 2752×1536.
 
 ## Generated motion that the client reads as «boomerang» / «telescope» / «slop» (LED show, 2026-10-13)
 
