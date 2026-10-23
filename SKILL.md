@@ -210,6 +210,9 @@ One slide → a short clip that lands exactly on it (keynote videos): §8 of the
 `get_screenshot(child, contentsOnly)`, with texts unmixed from the render. The ending dissolves into the render.
 A run of slides as one film (accordion of columns, a curtain into the last slide, 4K from 2x exports): §8b. Traps:
 quirks 239–243, 245–248, 250–256. At DPR 2, put every 4K layer box on whole CSS px (quirk 255), or Chrome resamples it.
+A whole deck rebuilt element by element from Figma's SVG export (13 slides, carry-overs and curtains, 4K): §8c.
+Traps: quirks 286–291 (the 48 KB `use_figma` cap, image adjustments and dashed strokes the export drops, chrome
+units, a top-layer curtain, pattern-filled images under a CSS scale).
 
     node tools/film.js v1.html --video out/v1_2K.mp4 --2k        # tools = copies of html/figma/*
     python tools/verify_anim.py v3.html "figma/frames/s3_f%02d.png" --mask 3:92-1053
