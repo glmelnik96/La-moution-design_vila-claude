@@ -1,6 +1,6 @@
 ---
 name: ae-motion-live
-description: Cloud.ru motion design in two engines — a live, already-open After Effects (ExtendScript over CDP, port 8092, with the cloudru-motion.jsx library) and a dependency-free HTML motion engine rendered with headless Chrome — plus AI asset generation via the Phygital sidecar. Use for any brand animation, title/KPI/divider/scheme/logo scenes, explainer spots, web motion, or AE scripting. Also the After Effects half of graphics over a Premiere edit (lower thirds, key thoughts, callouts, chapter cards, intro/outro linked back through Dynamic Link) together with premiere-autopilot. Triggers on "анимация", "моушен", "After Effects", "AE", "заставка", "ролик Cloud.ru", "HTML-анимация", "motion", "графика на ролик", "плашки", "титры поверх видео".
+description: Cloud.ru motion design in two engines — a live, already-open After Effects (ExtendScript over CDP, port 8092, with the cloudru-motion.jsx library) and a dependency-free HTML motion engine rendered with headless Chrome — plus AI asset generation through the official Phygital+ MCP server and the Higgsfield CLI. Use for any brand animation, title/KPI/divider/scheme/logo scenes, explainer spots, web motion, or AE scripting. Also the After Effects half of graphics over a Premiere edit (lower thirds, key thoughts, callouts, chapter cards, intro/outro linked back through Dynamic Link) together with premiere-autopilot. Triggers on "анимация", "моушен", "After Effects", "AE", "заставка", "ролик Cloud.ru", "HTML-анимация", "motion", "графика на ролик", "плашки", "титры поверх видео".
 ---
 
 # ae-motion-live — Cloud.ru motion, in After Effects and in HTML
@@ -15,7 +15,7 @@ one language governs it:
 | **Brand** | the Cloud.ru motion language: eases, durations, stagger, type, colour, geometry, scene choreography, stop-list | `brand/cloudru-motion-brand.md` · tokens `brand/cloudru-motion-tokens.json` |
 | **AE channel** | arbitrary ExtendScript (ES3) executed in the live CEP panel over CDP (port 8092); the `M.*` library builds brand scenes in a few calls | `node scripts/ae.js --lib '@file.jsx'` · `scripts/lib/cloudru-motion.jsx` · `reference/ae-cloudru-recipes.md` |
 | **HTML channel** | deterministic, seekable timeline + brand DOM primitives; headless-Chrome render to stills / beat sheet / video; also shippable as a web asset | `html/engine/*` · `html/templates/showreel.html` · `node html/render/render.js` · `reference/html-engine.md` |
-| **Generation** | AI image/video/upscale/voice through the Phygital sidecar (`127.0.0.1:8765`), imported into the comp | `node scripts/gen.js <cmd>` · `reference/generation-recipes.md` |
+| **Generation** | AI image/video/upscale through the official Phygital+ MCP server (`phygital`) or the Higgsfield CLI, imported into the comp | MCP `list_models` → `get_model_schema` → `generate` → `get_job` · `reference/generation-recipes.md` |
 
 Both engines share the **same tokens** (`node scripts/build-tokens.js` regenerates
 `scripts/lib/tokens.jsx`, `html/engine/tokens.js|css`) and the **same exact bezier → AE
@@ -50,7 +50,7 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 ```
 - Fails to find Chrome/ffmpeg → set `CHROME_PATH` / `FFMPEG_PATH`.
 
-**Generation channel (only when generating assets):** `node scripts/gen.js start && node scripts/gen.js health` → if no session, §6 Auth.
+**Generation channel (only when generating assets):** `claude mcp get phygital` → «Connected» and the `phygital` tools are in the session (`list_models` is free); «Needs authentication» → §6 Auth.
 
 ## 3. Workflow: brand first, then the engine
 
@@ -226,18 +226,20 @@ units, a top-layer curtain, pattern-filled images under a CSS scale, a parallel 
 
 ## 6. Generation workflow
 
-1. Discover params with curl and the sidecar token (`reference/generation-recipes.md`, «Discover exact
-   params»), match aspect/resolution to the comp.
+Phygital+ only through its official MCP server (`reference/generation-recipes.md`, «Phygital+ MCP server»),
+Higgsfield through its CLI. Never script a generator's web app: Phygital banned the account for it, and Runway
+warned. The local sidecar (`scripts/gen.js`, `127.0.0.1:8765`) is legacy; do not use it for new work.
+1. `list_models` → `get_model_schema(model)`: match the inputs, aspect and resolution to the comp.
 2. Author the prompt with `reference/generation-recipes.md` skeletons (keyable background, margin).
-3. `node scripts/gen.js cost …` → **show model + settings + credits and get confirmation**.
+3. **Show model + settings + credits and get confirmation** before `generate`: credits are charged there, and
+   `cancel_job` refunds a job.
 4. Draft low → final high. Never spend on final quality first.
-5. `gen.js generate` (or `submit` + `wait`), copy the result to a non-virtualised folder
-   (MSIX trap), import via `ae.js` / `HOST_BRIDGE.executeToolCall('import_file', …)`.
+5. `generate` → `get_job` until it completes → download the result links into the project folder → import via `ae.js`.
 6. Re-roll guardrails: branch by failure cause; never silently fall back to plain `t2v`; reuse seeds.
 
-**Auth (one-time):** if `gen.js health` shows no session, ask the user to trigger the browser
-login (`POST /auth/recon` with the sidecar token; `gen.js` probes both token locations
-automatically), then re-check `health`.
+**Auth (one-time):** if the `phygital` tools are missing or answer 401, the user signs in: `claude mcp login
+phygital`, or `/mcp` → phygital → Authenticate, approving `offline_access`. A server added mid-session shows up in
+the next session.
 
 ## 7. Safety
 
@@ -258,4 +260,4 @@ Copy verbatim to self-verify in a fresh session:
    `reference/ae-cloudru-recipes.md` §1 (Title), `M.exprErrors()` empty, capture beats 15/30/45/75.
 3. AE: `M.tween` on Opacity 0→100 over 400 ms with `enter` reads back influence 16/70, out-speed ≈ 1562 (quirk-proof of the exact mapping).
 4. HTML: `render.js html/templates/showreel.html --beats auto --sheet` produces a sheet; each scene passes §9 of the brand doc.
-5. Generation: `gen.js cost` → confirm → draft-quality image → import into the active comp.
+5. Generation: `list_models` → `get_model_schema` → credits shown and confirmed → draft-quality image → import into the active comp.
