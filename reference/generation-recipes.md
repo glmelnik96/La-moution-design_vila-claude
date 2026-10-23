@@ -637,6 +637,29 @@ file.
   - After the upscale, clean the shots in Python. Find stray mouse pointers as black connected blobs of 6–24 px. Repaint each
     by copying the same rows from a few pixels aside (lines stay continuous), or by filling with the median of a ring
     around it on flat areas. A ring fill on a two-tone area leaves a visible patch.
+- **Voiceover: «Sound Creation» = `elevenlabs-tts`** (LIVE-VERIFIED 2026-10-23, a 2-minute promo).
+  - Inputs:
+    - `text`, `model_id` (`eleven_v3` by default);
+    - `voice_id`, one of ten presets such as `well_rounded_male_news`;
+    - `custom_voice_id`, a voice ID string as the web node shows it;
+    - `seed`, plus `stability`, `similarity_boost`, `style`, `speed` and `use_speaker_boost`;
+    - `previous_text` / `next_text`, for continuity between takes;
+    - `task_type`, `text_to_speech` or `sound_effects`. `duration` applies to sound effects only, and `language_code`
+      works only with the turbo and flash v2.5 models.
+  - To match an earlier film's voice, copy the user's web node exactly: model, preset, custom voice ID and seed.
+  - One take carried the whole script: 1 750 characters in 17 paragraphs separated by blank lines.
+    - The result: 110.6 s of MP3, mono, 44.1 kHz, 128 kbit/s.
+    - The job ran about 2 minutes, twice the schema's `averageTimeInSeconds`.
+    - MCP shows no price; the web node quoted 20 credits for a text of that length.
+  - Write each name the way the voice should say it:
+    - «Cloud ru» without the dot, so the dot is not voiced;
+    - Latin for an English product name;
+    - Cyrillic for a word that must sound Russian.
+  - Paragraph breaks gave only 0.1–0.8 s pauses. Put the scene pauses in the edit, at real gaps (ae-quirks 279).
+  - Before anyone listens, run Whisper without a prompt and diff the result against the script.
+    - Here nothing was skipped.
+    - A Cyrillic word after two Latin ones in a product name came back as «WIRT», and once as «Weird».
+    - Give the listener such timecodes to check.
 
 ## Higgsfield CLI — the official way to generate from Claude Code (LIVE-VERIFIED 2026-10-13)
 
