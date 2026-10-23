@@ -182,3 +182,40 @@ The rebuild (v3):
   - The security claims became a small diagram that lights word by word with the card's list (quirk 285).
   - Failover: 1.5 s moves on an ease-in-out, one at a time, with host states crossfading and the stages not overlapping.
   - The voice has 20 pauses (+14.6 s). The music repeats 8 bars and ends its groove on the last word of the final title.
+
+### 6c. A partner's screencast film rebuilt in the same language (silent, for a booth)
+
+The input: a partner's 101 s silent demo film in its own look, with the raw screencasts behind it. The film covers
+building an AI agent in the console, then checking its security in the partner's service, with the report at the end.
+The brief: same story, our brand, both logos, for our booth.
+- **Kept:** the partner's story, steps and copy. The step counter «NN / 08 · STEP» became the caps header, with a green
+  number; each step's headline and sub-line became the card's plate and sub-line.
+- **Rebuilt:**
+  - the title: both logos, the arrows, a frame with the first claim, the stars;
+  - under the frame, a green plate with the second claim and its arrow. That plate travels into the card as the first
+    step's plate, and travels back for the finale;
+  - a two-logo footer during the steps.
+- **Screens are video.** Clips of `{src, in, out, speed}` are cut to frames at the film's fps (quirk 293). The browser
+  chrome is cut off, and the window takes the sheet's aspect (quirk 294).
+  - Waiting time is cut out and joined with 0.3 s crossfades (an agent's status going «creating → starting → running»).
+  - Long progress runs play at 8–12×.
+  - Report pages hold as stills while the focus frame walks over the conclusion, the totals and the findings.
+- **What the screen cannot carry at booth distance goes into the card:**
+  - a status list whose squares light up with the badge on screen;
+  - a numbered list of the check's stages, one item per stage.
+- **Focus frames** only on still stretches (quirk 295). **Camera:** one zoom, on the centred wizard; the rest is overview.
+- **Loop** (quirk 296): the finale rebuilds the opening title, and the loop renders from the intro's rest time.
+- **Typography:** two-line sub-lines are wrapped balanced. Binary-search the narrowest width that keeps the line count,
+  so no single word hangs on the second line.
+
+- **Round 2: notes on the first cut.** The client asked for three changes:
+  - an animated deck in front of the film (a Figma storyboard of builds);
+  - «the screencasts are jerky and cut at the important moments»;
+  - three versions: combined, deck only, demo only.
+
+  What was done:
+  - Interactions now play at 1×, each result holds as a freeze frame with its focus frame, and scrolls became measured
+    smooth slides or camera pans over pages stitched from the pauses (quirk 297).
+  - The deck is drawn from Figma's SVG export as Path2D units on the same canvas, with transitions computed from the
+    layer diff of consecutive frames (quirk 298; html-figma-1to1 §8d).
+  - One page renders all three versions, each looping without a seam (quirk 299).

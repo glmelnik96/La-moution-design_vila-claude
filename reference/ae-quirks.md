@@ -4768,3 +4768,135 @@ all 16 threads busy) lost the machine 7.5 minutes in. Three segments had closed;
   the reference. Here every join matched to the pixel.
 - Windows says why it went down. System event 6008 gives the time. Kernel-Power 41 with BugcheckCode 0 and no
   power-button press is a power loss or a hardware reset, not a software crash.
+
+## 293. Screencast video in a canvas film: Playwright's Chromium has no H.264; play pre-cut frames, not a `<video>`
+
+LIVE-VERIFIED 2026-10-23. A partner's demo film was rebuilt from its screencasts (H.264, 1920×1054, 60 fps). The bundled
+Chromium of Playwright ships without proprietary codecs, so a `<video>` with an H.264 source never decodes there. Seeking a
+WebM `<video>` per frame is not frame-exact either.
+- **RIGHT:** describe each clip as `{src, in, out, speed}` (speed 0 = a still) in a JSON file. Cut its frames at the film's
+  frame rate: `ffmpeg -ss in -t (out−in) -i src -vf "crop=…,setpts=(PTS-STARTPTS)/speed,fps=60" -q:v 2 -start_number 0
+  frames/<id>/%05d.jpg`. Frame k of a clip is then film time t0 + k/fps, at any speed.
+- The page fetches the frame and calls `createImageBitmap` on it. Keep a cache of about 16 bitmaps and `close()` the ones
+  evicted. `render(T)` becomes async: it awaits the frames it needs (two during a push or crossfade), then draws
+  synchronously. The renderer calls `await window.render(t)` before `toDataURL`.
+- An odd crop height comes out one row shorter: `crop=1920:969` gave 968-row JPEGs, and the sheet was drawn stretched by
+  a row. Crop to an even height.
+- Cost: 100 s of screen at 60 fps is about 6 000 JPEGs, 0.5 GB, cut in under 10 s. Cut only the clips whose parameters
+  changed (keep the parameters next to the frames).
+
+## 294. A screencast as a sheet: cut the browser chrome and give the window the sheet's aspect
+
+LIVE-VERIFIED 2026-10-23. The screencasts carried the browser's tab strip and address bar, which showed «localhost» on the
+partner's own service. The brand film shows a sheet, not a window (§6 of product-demo-motion).
+- Find the chrome's edge in the row means: the address bar ends at a 1 px separator line, and the page starts on the next
+  row. Here that was y 84, the same in every recording made in that browser. Crop it off in the frame cut.
+- The edge-band fill of quirk 282 cannot be precomputed for video: the page edge changes with every scroll. Give the
+  window the sheet's aspect instead (here 1256×634 for 1920×968). The overview then fills it with no bands. Use
+  z = window height / sheet height, so a fraction of a pixel goes off the sides rather than a hairline gap on top and
+  below.
+- Zooms follow quirk 283. In a web console, a wizard whose form and side panel stand centred on empty page grey allows
+  z = 1. Keep the console header out of frame. Modal dialogs spanning the width, full-width record pages and dark admin
+  panels with full-width cards stay on the overview.
+
+## 295. Focus frames over screen video: only where the page stands still; find the stills by frame difference
+
+LIVE-VERIFIED 2026-10-23. A focus rectangle is fixed in sheet pixels, so during a scroll the content slides out from under it.
+- Find the still stretches first. Take the video at 10 fps, 480 px wide, in grey, and diff consecutive frames. Count the
+  share of pixels that changed by more than 24 levels. Above 0.08 is a page change or scroll; 0.01–0.08 is a local change
+  (typing, a dropdown, a badge); below 0.0004 the page is still. The cursor alone stays below the threshold.
+- Measure the boxes on a frame inside a still stretch:
+  - on a light UI, flood-fill the flat colour around a point inside the button or panel (tolerance 3–20 levels) and take
+    the bounding box;
+  - dark UI cards often differ from their container by only 10–40 levels and share borders, so a flood fill leaks. Read a
+    luminance profile along one row and one column instead; the card edges are the steps.
+- Hold each frame at least 0.8 s (quirk 284). In this film: 0.88–8.4 s, with none during the scrolls.
+
+## 296. A loop for a booth screen: the finale rebuilds the opening title; render from the intro's rest time and diff the seam
+
+LIVE-VERIFIED 2026-10-23. A booth film plays in a loop, so its last frame must be its first.
+- Build the finale with the same title function and parameters as the intro: the same elements, the same rest
+  positions. Elements that arrive differently are fine (a plate morphing back from the card, a frame shrinking back),
+  as long as their rest rectangles are identical.
+- The linear version renders 0 → TOTAL and builds the title from an empty frame. The loop version renders LOOP_IN → TOTAL,
+  where LOOP_IN is a moment when the intro title is fully at rest. In the page, `?loop=1` sets the intro's entrance
+  times far in the past.
+- Verify: the still at LOOP_IN and the still at TOTAL − 1/fps must differ by 0. Here the mean and max absolute
+  difference were both 0.
+
+## 297. Recorded scrolls look jerky when sped up: hold the result, slide between freeze frames, or pan over a stitched page
+
+LIVE-VERIFIED 2026-10-23. A screencast film played its clips at 1.4–2.5× to stay short. A wheel scroll is recorded as jumps
+of 84–360 px with pauses between them, and sped up they come several times a second. The client: «скринкасты дёргаются
+и где-то обрезаются на важных моментах».
+- **RIGHT:** play clicks and typing at 1× (typing up to 1.25×). Hold every result as a freeze frame for 0.8–1.4 s, with a
+  focus frame on it.
+- **Short scroll** (the offset is smaller than the view): measure it between the two pauses (row-profile matching on the
+  scrolling column; the best offset must beat the runner-up by 3×). Then slide: the old frame moves up by dy·e and the
+  new one comes from +dy·(1−e). Both draw only the source rows of the scrolling region, so a fixed header never travels
+  through it. Parts that do not scroll (a sticky side panel) crossfade.
+- **Long form or document:** chain the offsets between consecutive pauses. A pair whose match is ambiguous over a blank
+  area gets intermediate frames. Stitch the region rows into one tall page; each page pixel is the median of every pause
+  that shows it, so the cursor and passing hovers vanish. The fixed parts go on top as an overlay with alpha. A camera then
+  scrolls the page with ease-in-out and stops on the sections. Here: a 5708 px form from 27 pauses, a 15832 px report
+  from 96.
+- Progress bars may still run at 8–12×: they fill, they do not jump. A frame-difference scan of the window after the
+  rework found jumps only where the UI itself changed (a dialog opening, a page loading after a click).
+
+## 298. A Figma storyboard of builds as Path2D units on the film's canvas: rest frames exact, transitions from the layer diff
+
+LIVE-VERIFIED 2026-10-23. A 19-frame storyboard: slides plus their «builds», frames where the next row, column or panel
+appears. It went in front of a canvas screencast film as one timeline.
+- **Data.** Each frame's SVG export (`download_assets`, `defaultFormat: "svg"`) gives the layer names as ids, outlined text
+  and absolute path commands (M L H V C Z only). Parse it once into units:
+  - a group whose children have their own ids is a container and passes only its opacity down. A column dimmed to 0.3
+    keeps full-opacity units with `alpha` 0.3, so it can light up again;
+  - a pattern-filled rect («dot field») becomes its grid: origin and pitch from `patternTransform`, dot size from the
+    inner rect × the scale, the rect's opacity. Draw it procedurally, then it can reveal in a wave and slide;
+  - text is split into lines by the vertical bands of its tall glyphs (subpaths at least 0.6× the median height). Small
+    marks go to the band holding their centre. Words are split by gaps wider than a third of the line height;
+  - a fill-less stroked path is a line; `Union` plus a masked image rect is the title's photo (draw it under
+    `clip(Path2D(mask))`).
+- **Drawing.** `ctx.fill(new Path2D(d))` with the export's fills draws the same anti-aliased outlines Chrome renders from
+  the SVG. Rest frames match the design, and they stay sharp at DPR 2 and through scale morphs, unlike cut bitmaps.
+- **Transitions.** Diff the layers of consecutive frames:
+  - same drawing in the same place (signature = kind + hash of ops) → it stays;
+  - same key, other geometry → it morphs. Rects lerp their geometry and colour; a dot field lerps its rect and grid
+    origin; text and shapes crossfade while scaling by the line-height ratio, anchored top-left;
+  - same key, same place, other text (slide number, a swapped heading) → it rolls: the old one exits up, the new one
+    rises;
+  - new → it enters by kind: words from a line mask, rules drawn on, tiles scaled in, panels wiped, dots in a wave,
+    icons scaled from 0.7;
+  - gone → it exits up while fading, latest-built first.
+- **Z-order** is the new frame's document order, with exits underneath. An «enter everything at once» opening frame
+  needs its own order (logo, shape, image, title, sub-line, dots): reading order would bring the photo in before the title.
+
+## 299. Several versions of one film from one page: each part starts and ends on an empty frame, so every cut loops
+
+LIVE-VERIFIED 2026-10-23. Three deliverables were asked for at the end: deck + demo, deck only, demo only.
+- One page with `?mode=`, one timeline per mode, made of parts: the deck's frames, the demo with a time offset, the
+  closing slide. Each deck part builds from an empty frame and ends with an exit plan to an empty frame. So the deck
+  version (deck → closing slide) and the full one (deck → demo → closing slide) loop without a seam.
+- The demo keeps its own seam: it starts at the moment its title is at rest, and its finale rebuilds the same title
+  (quirk 296). In the full version, the same finale leaves after a hold, so the closing slide can build:
+  - title words, stars, arrows and dots use the title's `out` time;
+  - the frame lines fade;
+  - the green plate folds to the left.
+- Check each mode once: render every 0.5 s for errors, then compare the first and last frames by pixels. Here all three
+  were 0.000 mean, 0 max.
+
+## 300. A green progress bar on the bottom edge vanishes over a full-bleed photo or green shape: give it its own dark lane
+
+LIVE-VERIFIED 2026-10-23. The deck's title has a 3D photo on a green ground that runs to the bottom edge (x 900–1860).
+The §8c bar (green fill over an 8 % white track) drawn there:
+- **WRONG:** fill and track straight over the slide. Over the photo's green the fill disappears, so for half of the title's
+  hold the bar seems to stop growing; over the white plinth it shows. The track is invisible over both.
+- **RIGHT:** under the track, a #222 lane of the bar's height at the bar's alpha. Then:
+  - the unfilled part reads as a dark strip;
+  - the fill front stays visible over any image;
+  - the photo ends 4 px higher, which reads as the bar docked to the edge.
+
+  The lane fades with the track, so the empty first and last frames of a part stay clean and the loop seam holds
+  (diff 0).
+- Check: a row of pixels at y = 1078 across the title. Here behind the front it was brand green (37, 209, 125), and ahead
+  of it (51, 51, 51), the lane under the track, over the photo as well.

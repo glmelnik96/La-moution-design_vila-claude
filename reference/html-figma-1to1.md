@@ -431,3 +431,34 @@ dashboard) as one 163 s film, 4K 50 fps, in the motion language of §8b.
 - **Render.** Parallel segments, one headless Chrome and one libx264 each (4 jobs, `--outw 3840` = DPR 2, preset slow,
   CRF 16, BT.709), joined with the concat demuxer: about 0.2 s a 4K frame per job. If the machine goes down mid-run,
   keep the segments that closed and re-render only the open one (quirk 292).
+
+## 8d. A storyboard of builds on a canvas: SVG export → Path2D units, transitions from the layer diff
+
+First used 2026-10-23: 19 frames (10 slides and their builds), put in front of a canvas screencast film as one timeline,
+in 4K at 60 fps. It is lighter than §8c: no DOM, no cut SVG files, no bitmaps.
+- **Export.** Per frame, `download_assets` with `defaultFormat: "svg"`, saved as `sNN.svg`. Figma writes non-ASCII layer
+  names as UTF-8 bytes in numeric entities: decode latin-1, then UTF-8.
+- **Units.** A build step turns the exports into JSON: kind, ops (paths, rects with `translate`, strokes), bbox,
+  inherited `alpha`. Text is split into lines and words; dot fields are kept as grids. See quirk 298 for the rules.
+- **Page.** For each unit, compile its `Path2D` once and keep a signature (kind + hash of ops).
+  - The transition plan between frames A and B lists the layers that stay, morph, roll, enter or exit. Each entry has a
+    start time: exits staggered by 0.025 s from the top, morphs after the exits, entrances in reading order every 0.09 s
+    (at most 1.1 s spread).
+  - A frame is «assembled» at the last entrance's end. Then it holds: 1.0–1.8 s for a build step, 2.6–5.0 s for a slide's
+    final frame.
+- **Removing a layer for the film** (a date on the title the client wants gone): drop it by layer name in the page,
+  at load, before the transition plans are built. The plans then never see it, and the export and the JSON stay true to
+  Figma.
+- **Progress bar** (asked for in round 2): the §8c bar, with two changes.
+  - One fill per *slide*: a storyboard frame is often a build step of the previous one, so the frames are grouped by
+    slide, and a group's fill runs from its first frame's transition to the next group's.
+  - Its own dark lane under the track, at the bar's alpha: the title's photo reaches the bottom edge, and over its green
+    the green fill vanished (quirk 300).
+  - Each part of a multi-version timeline (deck, closing slide) gets its own bar. It fades in from the part's empty first
+    frame and runs off with the exit, so the loop seam stays clean.
+- **Checks.**
+  - Stills at each frame's assembled time against the storyboard renders.
+  - A sheet of mid-transition stills: a column shrinking into a narrow grey column while the next heading rises, a panel
+    wiping in, a dot field sliding along.
+  - Every mode rendered every 0.5 s for errors, and the first and last frames diffed for the loop seam (quirk 299).
+

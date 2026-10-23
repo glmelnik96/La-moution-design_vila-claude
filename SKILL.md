@@ -156,6 +156,8 @@ rules still apply (all the motion ones; none of the visual stop-list).
 Product films made of real UI: `reference/product-demo-motion.md` §6.
 - Screenshots with a voiceover: the screen is a sheet, not a window; every beat sits on a word; pages change by
   a push, states by a click (§6–6b, quirks 273–285).
+- A partner's screencasts for a booth: frames instead of `<video>`, the browser chrome cut off, results held as
+  freeze frames instead of sped-up scrolls, the loop closing on the opening title (§6c, quirks 293–297).
 
 ## 5c. A Figma deck as a 1:1 film — the deck pipeline
 
@@ -220,6 +222,8 @@ quirks 239–243, 245–248, 250–256. At DPR 2, put every 4K layer box on whol
 A whole deck rebuilt element by element from Figma's SVG export (13 slides, carry-overs and curtains, 4K): §8c.
 Traps: quirks 286–292 (the 48 KB `use_figma` cap, image adjustments and dashed strokes the export drops, chrome
 units, a top-layer curtain, pattern-filled images under a CSS scale, a parallel render cut off by a power loss).
+A storyboard of builds drawn on a canvas film (Path2D from the SVG export, transitions from the layer diff, several
+versions from one page, a slide progress bar with its own lane): §8d, quirks 298–300.
 
     node tools/film.js v1.html --video out/v1_2K.mp4 --2k        # tools = copies of html/figma/*
     python tools/verify_anim.py v3.html "figma/frames/s3_f%02d.png" --mask 3:92-1053
