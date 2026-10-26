@@ -4972,3 +4972,14 @@ to a new link: 90 characters with UTM tags.
   into the unit at load, and the export and the units JSON stay as Figma has them.
 - **Check where it ships.** Decode the code from a 4K still of the page, then from the rest frame of the 4K master and
   of the 1080p copy.
+
+## 306. Git Bash's `sed` drops the CR of CRLF lines: a patch copied from its output does not match
+
+LIVE-VERIFIED 2026-10-26. A scripted replace guarded by `s.count(old) == 1` failed on a CRLF `deck.js`. The old text had
+been copied from `sed -n` output.
+- MSYS `sed` reads in text mode and prints LF: `sed -n 7,10p f | od -c` shows no `\r`, while `sed -b` and `cat` keep it.
+  A `grep -c $'\r$'` on the file counts every line.
+- **RIGHT:** take line endings from the bytes (`open(f, 'rb').read().count(b'\r\n')`). Read with `newline=''`, turn the
+  patch's `\n` into the file's newline before matching, and write back with `newline=''`.
+- Write such patch scripts to a file, not a Bash heredoc: the heredoc turns `\\r` into `\r`, and the script then writes a
+  real CR into the text. Git stops normalising a file with a lone CR, and the whole file shows as changed.
