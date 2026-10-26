@@ -223,7 +223,8 @@ A whole deck rebuilt element by element from Figma's SVG export (13 slides, carr
 Traps: quirks 286–292 (the 48 KB `use_figma` cap, image adjustments and dashed strokes the export drops, chrome
 units, a top-layer curtain, pattern-filled images under a CSS scale, a parallel render cut off by a power loss).
 A storyboard of builds drawn on a canvas film (Path2D from the SVG export, transitions from the layer diff, several
-versions from one page, a slide progress bar with its own lane): §8d, quirks 298–300.
+versions from one page, a slide progress bar with its own lane, slides dropped and a QR swapped later): §8d,
+quirks 298–300 and 305.
 
     node tools/film.js v1.html --video out/v1_2K.mp4 --2k        # tools = copies of html/figma/*
     python tools/verify_anim.py v3.html "figma/frames/s3_f%02d.png" --mask 3:92-1053

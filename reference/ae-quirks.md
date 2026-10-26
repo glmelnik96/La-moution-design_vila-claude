@@ -4951,3 +4951,24 @@ LIVE-VERIFIED 2026-10-23. Two diagram moves the client called sloppy («неак
   - only live migration (maintenance) moves the chip. It travels along a lane under the hosts with rounded corners,
     and the lower chip of a column leaves first.
 - On a green band, a moving or booting chip flashes white: green vanishes on green.
+
+## 305. Swapping the QR on a slide for a new link: decode the old one, keep the layout's polarity and corner, check the shipped frame
+
+LIVE-VERIFIED 2026-10-26. The closing slide of a deck film (Path2D units from Figma's SVG export, quirk 298) had to point
+to a new link: 90 characters with UTM tags.
+- **Find it and read it.** Figma exports a QR as one `Vector` path, a rectangle per run of modules in a row. Rebuild its
+  grid from the runs (here 25 × 25 modules of 11.99 px) and decode it with OpenCV. That proves which unit is the code and
+  gives the old target (a short link).
+- **A long link makes a denser code.** 90 bytes at error correction M need version 6, 41 × 41 modules. Keep the layout's
+  box and take the largest module it allows. Keep M: a phone photographs a screen with moiré and glare.
+- **Draw it as the export does.** `qrcode` with border 0; one rectangle per run, all in one path (abutting runs leave no
+  seam within a single fill). Put the modules on the 4K pixel grid: 7.5 px in a 1920 layout is 15 px in 4K. Anchor at the
+  corner the layout aligns: here the bottom right, flush with the caption's right edge, the panel's padding unchanged.
+- **Keep the layout's polarity.** Here white modules sit on a #383838 panel: an inverted code, with the panel as its
+  quiet zone (at least 4 modules clear on every side). OpenCV reads it only from the inverted image (`255 - img`), with
+  both `QRCodeDetector` and `QRCodeDetectorAruco`. Camera apps on phones generally read inverted codes, some scanner
+  apps do not, so scan the delivered frame on a screen with a phone.
+- **Override, don't edit the data.** The code lives in its own file (link, version, module, box, path). The page swaps it
+  into the unit at load, and the export and the units JSON stay as Figma has them.
+- **Check where it ships.** Decode the code from a 4K still of the page, then from the rest frame of the 4K master and
+  of the 1080p copy.

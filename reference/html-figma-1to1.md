@@ -449,6 +449,12 @@ in 4K at 60 fps. It is lighter than §8c: no DOM, no cut SVG files, no bitmaps.
 - **Removing a layer for the film** (a date on the title the client wants gone): drop it by layer name in the page,
   at load, before the transition plans are built. The plans then never see it, and the export and the JSON stay true to
   Figma.
+- **Dropping slides later** is a sequence edit. Take their frames out of the sequence and their group out of the bar.
+  The layer diff plans the new neighbours by itself (here 11 → 19: the heading rolls, the rest exits and enters like any
+  slide change); look at a sheet of that pair. The corner numbers are Figma's frame numbers, so they no longer run in
+  order.
+- **A QR swapped for a new link**: a generated path the page puts into the code's unit at load, like a dropped layer;
+  the export and the JSON stay as Figma has them (quirk 305).
 - **Progress bar** (asked for in round 2): the §8c bar, with two changes.
   - One fill per *slide*: a storyboard frame is often a build step of the previous one, so the frames are grouped by
     slide, and a group's fill runs from its first frame's transition to the next group's.
