@@ -1,0 +1,15 @@
+node_modules/
+__pycache__/
+_build/
+out/
+projects/
+.claude/
+.playwright-mcp/
+*.aep
+*.prproj
+*.mov
+*.mp4
+*.webm
+*.png
+.env
+.env.*

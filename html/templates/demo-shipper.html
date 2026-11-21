@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Demo — product motion, reference rebuilt</title>
+<link rel="stylesheet" href="../engine/tokens.css">
+<link rel="stylesheet" href="../engine/brand.css">
+<script src="../engine/tokens.js"></script>
+<script src="../engine/motion.js"></script>
+<script src="../engine/brand.js"></script>
+<script src="../engine/demo.js"></script>
+<style>
+  .dm-ui, .dm-ui .cr-text { font-family: Inter, "Segoe UI", Roboto, system-ui, sans-serif; color: #1f2328; }
+  .dm-card { position: absolute; background: #fff; border: 1px solid #e6e8eb; border-radius: 14px; box-shadow: 0 8px 30px rgba(20,24,40,.08); }
+  .dm-serif { font-family: Georgia, "Times New Roman", serif; font-weight: 700; letter-spacing: -0.01em; }
+</style>
+</head>
+<body>
+<script>
+// The reference (reference/product-demo-motion.md) rebuilt from plain DOM with Demo.* —
+// the same structure, the same measured timings, none of the original pixels. Layout is
+// deliberately plain: this page proves the MOTION level, and it is the pattern to copy when
+// a supplied frame arrives (rebuild the frame's elements as boxes, then choreograph).
+(function () {
+  const F = MotionTokens.format['1080p'];
+  const canvas = Brand.canvas(document.body, '1080p');
+  canvas.classList.add('dm-ui');
+  const tl = Motion.timeline({ fps: F.fps });
+  const box = Brand.box, el = Brand.el;
+  function scene(name, t0, t1, bg) { const s = Brand.scene(canvas, 'cr-tone-light'); s.style.background = bg || '#fafafa'; tl.scene(name, t0, t1, s); return s; }
+  function text(parent, str, pos, style) { const t = box(parent, 'dm-text', pos); t.textContent = str; Object.assign(t.style, style || {}); return t; }
+  // placeholder "screenshots": a card grid and a dashboard, drawn as boxes
+  function appCard(parent, kind, pos) {
+    const c = box(parent, 'dm-card', pos); c.style.borderRadius = '12px'; c.style.overflow = 'hidden'; c.style.transformOrigin = '50% 50%';
+    const top = el('div', '', { position: 'absolute', left: 0, right: 0, top: 0, height: 52, background: '#fff', borderBottom: '1px solid #eceef1' }, c);
+    el('div', '', { position: 'absolute', left: 22, top: 17, width: 18, height: 18, borderRadius: '50%', background: '#e11d48' }, top);
+    el('div', '', { position: 'absolute', right: 22, top: 14, width: 120, height: 24, borderRadius: '12px', background: '#111' }, top);
+    if (kind === 'grid') {
+      const cols = ['#c7d2fe', '#fecaca', '#bbf7d0', '#fde68a', '#e9d5ff', '#bae6fd'];
+      for (let i = 0; i < 6; i++) {
+        const x = 26 + (i % 3) * 356, y = 76 + Math.floor(i / 3) * 290;
+        el('div', '', { position: 'absolute', left: x, top: y, width: 330, height: 210, borderRadius: '10px', background: 'linear-gradient(135deg,' + cols[i] + ',#f1f5f9)' }, c);
+        el('div', '', { position: 'absolute', left: x, top: y + 222, width: 180, height: 14, borderRadius: '7px', background: '#e5e7eb' }, c);
+        el('div', '', { position: 'absolute', left: x, top: y + 244, width: 110, height: 12, borderRadius: '6px', background: '#eef0f3' }, c);
+      }
+    } else {
+      el('div', '', { position: 'absolute', left: 0, top: 52, width: 220, bottom: 0, background: '#f8f9fb', borderRight: '1px solid #eceef1' }, c);
+      for (let i = 0; i < 6; i++) el('div', '', { position: 'absolute', left: 24, top: 84 + i * 38, width: 120 + (i % 3) * 30, height: 12, borderRadius: '6px', background: '#e5e7eb' }, c);
+      for (let i = 0; i < 4; i++) el('div', '', { position: 'absolute', left: 256 + i * 206, top: 84, width: 186, height: 92, borderRadius: '10px', background: '#fff', border: '1px solid #eceef1' }, c);
+      const chart = box(c, '', { left: 256, top: 200, width: 800, height: 400 });
+      chart.innerHTML = '<svg viewBox="0 0 800 400" width="800" height="400"><path d="M0 300 C120 280 160 180 260 200 S400 340 520 240 S680 80 800 140" fill="none" stroke="#10b981" stroke-width="4"/></svg>';
+    }
+    return c;
+  }
+
+  document.fonts.ready.then(function () {
+    // ===== S1 · words → logo · 0–3.4 =====
+    const s1 = scene('words', 0, 3.4);
+    const line = box(s1, '', { left: 0, right: 0, top: 478, textAlign: 'center' });
+    Object.assign(line.style, { fontSize: '64px', fontWeight: 500, letterSpacing: '-0.01em', whiteSpace: 'nowrap' });
+    const ws = Demo.wordsAccent(tl, line, ['Building', 'apps', 'is', 'hard'], { at: [0.10, 0.55, 1.05, 1.50], accent: '#10b981', last: '#b3261e', gap: 18 });
+    Brand.exit(tl, ws, { at: 2.0, dur: 0.22, drop: -12, stagger: 0.03, from: 'start' });
+    const title = text(s1, 'Shipper', { left: 0, right: 0, top: 430, textAlign: 'center' }, { fontSize: '108px', lineHeight: 1 });
+    title.classList.add('dm-serif');
+    Demo.letters(tl, title, { at: 2.15, each: 0.045, dur: 0.34, blur: 14, dx: -10 });
+    const sub = text(s1, 'makes it easy ✅', { left: 0, right: 0, top: 562, textAlign: 'center' }, { fontSize: '28px', color: '#6b7280' });
+    Brand.enter(tl, sub, { at: 2.72, rise: 14, scale: 1, blur: 3, dur: 0.34 });
+    Demo.sparkles(s1, { pos: { left: 620, top: 370 }, spread: { w: 680, h: 280 }, n: 10, size: 18, seed: 11 }).play(tl, 2.6);
+
+    // ===== S2 · prompt → S3 · build queue · 3.4–11.25 (one card, it expands) =====
+    const s2 = scene('prompt', 3.4, 11.25);
+    const card = box(s2, 'dm-card', { left: 600, top: 465, width: 720, height: 150 });
+    card.style.transformOrigin = '50% 0'; card.style.overflow = 'hidden';
+    Brand.enter(tl, card, { at: 3.45, rise: 26, scale: 0.97, blur: 3, dur: 0.5 });
+    const input = box(card, '', { left: 26, top: 24, right: 26, height: 40 });
+    Object.assign(input.style, { fontSize: '21px', lineHeight: '40px', whiteSpace: 'nowrap', overflow: 'hidden' });
+    Demo.type(tl, input, 'Build an Airbnb-inspired car rental platform', { at: 3.95, cps: 36, caretFrom: 3.5, caretTo: 6.0 });
+    const bar = box(card, '', { left: 26, right: 20, bottom: 18, height: 36 });
+    Object.assign(bar.style, { fontSize: '15px', color: '#6b7280' });
+    text(bar, '+', { left: 0, top: 6 }); text(bar, '✎  Edit', { left: 38, top: 7 }); text(bar, '⌘  Chat', { right: 54, top: 7 });
+    const send = box(bar, '', { right: 0, top: 0, width: 36, height: 36 });
+    Object.assign(send.style, { borderRadius: '50%', background: '#10b981', color: '#fff', textAlign: 'center', lineHeight: '36px', fontSize: '18px' });
+    send.textContent = '↑';
+    const cur = Demo.cursor(canvas);
+    cur.show(tl, 5.05, 1480, 900);
+    const arrive = cur.moveTo(tl, 1298, 606, { at: 5.12 });
+    Demo.glow(tl, send, arrive + 0.02, { off: 6.0 });
+    cur.click(tl, 5.8, send);
+    cur.hide(tl, 6.0);                      // gone before the box starts to grow
+    tl.fromTo([input, bar], { opacity: [1, 0] }, { at: 5.98, dur: 0.15, ease: 'exit' });
+    Demo.expand(tl, card, { at: 6.0, dur: 0.46, fromH: 150, toH: 600, dy: -225 });
+    // the queue lives inside the same card
+    const q = box(card, '', { left: 0, top: 0, right: 0, bottom: 0 }); q.style.overflow = 'hidden';
+    // contents start arriving while the box is still growing (the reference's two-stage energy)
+    tl.fromTo(q, { opacity: [0, 1] }, { at: 6.18, dur: 0.22, ease: 'enter' });
+    const sc = box(q, '', { left: 0, right: 0, top: 56 });
+    // the header is created AFTER the scroller so it sits above it: a white band that masks
+    // rows scrolling underneath, the way a sticky header does
+    const hdr = box(q, '', { left: 0, right: 0, top: 0, height: 56 });
+    Object.assign(hdr.style, { background: '#fff', borderBottom: '1px solid #f0f2f4' });
+    text(hdr, 'Build Queue', { left: 26, top: 18 }, { fontSize: '16px', fontWeight: 600 });
+    text(hdr, '⌃', { right: 24, top: 16 }, { color: '#9aa3ad' });
+    const msg = box(sc, '', { left: 26, right: 26, top: 0, height: 92 });
+    Object.assign(msg.style, { background: '#f6f2fb', borderRadius: '10px' });
+    el('div', '', { position: 'absolute', left: 14, top: 14, width: 10, height: 10, borderRadius: '50%', background: '#a855f7' }, msg);
+    text(msg, "I've broken down your request into 25 tasks", { left: 34, top: 10 }, { fontSize: '14px', color: '#5b4b7a', fontWeight: 600 });
+    text(msg, 'Building in phases means: better results & higher accuracy.', { left: 34, top: 34 }, { fontSize: '13px', color: '#7a6b99' });
+    text(msg, "You'll use fewer credits too. You can try building it all at once if you prefer.", { left: 34, top: 56 }, { fontSize: '13px', color: '#7a6b99' });
+    Brand.enter(tl, msg, { at: 6.36, rise: 10, scale: 1, dur: 0.36 });   // lands as the box finishes growing
+    function phase(top, label, pillText, pillStyle, items, atHead, atRows) {
+      const h = text(sc, label, { left: 26, top: top }, { fontSize: '12px', letterSpacing: '0.08em', color: '#9aa3ad', fontWeight: 600 });
+      const p = Demo.pill(sc, pillText, Object.assign({ pos: { right: 26, top: top - 4 } }, pillStyle));
+      Brand.enter(tl, [h, p], { at: atHead, rise: 8, scale: 1, dur: 0.3, stagger: 0.05 });
+      const list = Demo.checklist(sc, items, { pos: { left: 26, top: top + 28 }, width: 668, rowH: 36, font: 15 });
+      list.appear(tl, atRows, 0.08);
+      return { h: h, pill: p, list: list };
+    }
+    const BLOCK = 28 + 4 * 36 + 26;
+    const p1 = phase(112, 'PHASE 1', 'Building now', { bg: '#eef2ff', color: '#4f46e5' },
+      ['Establish Airbnb design system', 'Build search and location service', 'Create car catalog and listing grid', 'Develop dual-month calendar picker'], 6.75, 6.9);
+    [7.7, 8.1, 8.5, 8.9].forEach(function (t, i) { p1.list.done(tl, i, t); });
+    const pDone = Demo.pill(sc, 'Complete', { pos: { right: 26, top: 108 }, bg: '#e7f8f0', color: '#0f9d63' });
+    Demo.swap(tl, p1.pill, pDone, 9.15);
+    const p2 = phase(112 + BLOCK, 'PHASE 2', 'Up next', { bg: '#fff4e5', color: '#b45309' },
+      ['Enable Shipper Cloud', 'Build detailed listing pages', 'Implement booking and price logic', 'Add smooth UI animations'], 9.3, 9.4);
+    [9.95, 10.35].forEach(function (t, i) { p2.list.done(tl, i, t); });
+    phase(112 + 2 * BLOCK, 'PHASE 3', 'Queued', { bg: '#f3f4f6', color: '#6b7280' },
+      ['Update car database schema', 'Seed new vehicle entries', 'Update vehicle display components'], 10.5, 10.6);
+    Demo.scroll(tl, sc, { at: 9.0, dur: 2.2, dy: -250 });
+    Brand.exit(tl, card, { at: 10.95, dur: 0.26, drop: -24, blur: 4 });
+
+    // ===== S4 · they've built · 11.25–14.45 =====
+    const s4 = scene('built', 11.25, 14.45);
+    const tb = text(s4, "They've built", { left: 0, right: 0, top: 486, textAlign: 'center' }, { fontSize: '60px', fontWeight: 500, letterSpacing: '-0.01em' });
+    Brand.enter(tl, tb, { at: 11.3, rise: 18, scale: 1, blur: 4, dur: 0.42 });
+    Brand.exit(tl, tb, { at: 11.95, dur: 0.22, drop: -14 });
+    const app1 = appCard(s4, 'grid', { left: 410, top: 200, width: 1100, height: 660 });
+    const app2 = appCard(s4, 'dash', { left: 410, top: 200, width: 1100, height: 660 });
+    Demo.card3d(tl, app1, { at: 11.98, from: 'right', ry: -30, rx: 7, z: -620, blur: 8, dur: 0.66 });
+    Demo.whip(tl, app1, { at: 12.95, dur: 0.25, dir: 'left' });
+    Demo.card3d(tl, app2, { at: 13.16, from: 'right', ry: -24, rx: 6, z: -520, blur: 8, dur: 0.6 });
+    tl.fromTo(app2, { opacity: [1, 0], scale: [1, 1.05], blur: [0, 5] }, { at: 14.15, dur: 0.26, ease: 'exit' });
+
+    // ===== S5 · settings · 14.45–17.9 =====
+    const s5 = scene('settings', 14.45, 17.9);
+    const st = box(s5, 'dm-card', { left: 640, top: 380, width: 640, height: 200 }); st.style.transformOrigin = '50% 50%';
+    Brand.enter(tl, st, { at: 14.5, rise: 22, scale: 0.97, blur: 3, dur: 0.44 });
+    text(st, 'Enable Stripe Payments', { left: 24, top: 20 }, { fontSize: '17px', fontWeight: 600 });
+    el('div', '', { position: 'absolute', left: 236, top: 27, width: 10, height: 10, borderRadius: '50%', background: '#10b981' }, st);
+    const field = box(st, '', { left: 24, top: 60, width: 470, height: 44 });
+    Object.assign(field.style, { border: '1px solid #e6e8eb', borderRadius: '8px', padding: '0 14px', fontSize: '18px', lineHeight: '44px', letterSpacing: '0.12em', overflow: 'hidden', whiteSpace: 'nowrap' });
+    Demo.type(tl, field, '••••••••••••••••••••••', { at: 14.95, cps: 40, caretFrom: 14.6, caretTo: 15.9 });
+    text(st, 'Create Stripe Key (1-click) ↗', { left: 24, top: 122 }, { fontSize: '13px', color: '#6b7280' });
+    const save = box(st, '', { left: 520, top: 60, width: 96, height: 44 });
+    Object.assign(save.style, { background: '#10b981', color: '#fff', borderRadius: '8px', textAlign: 'center', lineHeight: '44px', fontSize: '15px', fontWeight: 600 });
+    save.textContent = 'Save';
+    tl.fromTo(save, { opacity: [0, 1], scale: [0.9, 1] }, { at: 15.55, dur: 0.22, ease: 'enter' });
+    cur.show(tl, 15.3, 1500, 860);
+    const a2 = cur.moveTo(tl, 1210, 486, { at: 15.4 });
+    Demo.glow(tl, save, a2 + 0.02, { off: a2 + 0.5 });
+    cur.click(tl, a2 + 0.16, save);
+    cur.hide(tl, a2 + 0.5);
+    const skEnd = Demo.skeleton(tl, st, { at: a2 + 0.22, dur: 0.36 });
+    Brand.exit(tl, st, { at: skEnd + 0.1, dur: 0.24, drop: -20, blur: 4 });
+    const em = box(s5, 'dm-card', { left: 640, top: 400, width: 640, height: 160 }); em.style.transformOrigin = '50% 50%';
+    Brand.enter(tl, em, { at: skEnd + 0.2, rise: 22, scale: 0.97, blur: 3, dur: 0.44 });
+    text(em, 'Built-in Email Service', { left: 24, top: 20 }, { fontSize: '17px', fontWeight: 600 });
+    text(em, 'Enable transactional email capabilities for your application', { left: 24, top: 46 }, { fontSize: '13px', color: '#6b7280' });
+    text(em, 'Enable Email Functionality', { left: 24, top: 92 }, { fontSize: '15px', fontWeight: 600 });
+    text(em, 'Emails are securely routed through infrastructure.', { left: 24, top: 116 }, { fontSize: '12px', color: '#9aa3ad' });
+    Demo.toggle(em, { pos: { right: 24, top: 96 } }).set(tl, true, skEnd + 0.75);
+
+    // ===== S6 · device · 17.9–20.1 (hard cut in) =====
+    const s6 = scene('device', 17.9, 20.1, '#e8e9ec');
+    const dv = Demo.device(s6, { pos: { left: 410, top: 150 }, w: 1100, h: 640 });
+    appCard(dv.screen, 'dash', { left: 0, top: 0, width: 1056, height: 596 });
+    Demo.dolly(tl, dv.el, { at: 17.9, dur: 2.2, from: 1.05, to: 1.0 });
+
+    // ===== S7 · kinetic type · 20.1–22.4 (hard cuts) =====
+    const s7 = scene('kinetic', 20.1, 22.4, '#fafafa');
+    Demo.kinetic(tl, s7, ['TURN', 'IDEAS', 'INTO', 'PRODUCTS'], { at: 20.1, rhythm: [0.6, 0.45, 0.55, 0.7], style: { fontSize: '96px', fontWeight: 800, letterSpacing: '-0.02em', color: '#111' } });
+
+    // ===== S8 · logo · 22.4–25.5 =====
+    const s8 = scene('logo', 22.4, 25.5, '#000');
+    const lg = text(s8, 'Shipper', { left: 0, right: 0, top: 480, textAlign: 'center' }, { fontSize: '96px', color: '#fff', lineHeight: 1 });
+    lg.classList.add('dm-serif');
+    tl.fromTo(lg, { opacity: [0, 1] }, { at: 22.42, dur: 0.3, ease: 'enter' });
+    tl.fromTo(lg, { opacity: [1, 0] }, { at: 24.9, dur: 0.5, ease: 'exit' });
+
+    Motion.mount(tl);
+  });
+})();
+</script>
+</body>
+</html>
