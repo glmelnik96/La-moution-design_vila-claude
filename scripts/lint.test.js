@@ -27,6 +27,13 @@ test('lint rejects reserved words as object keys (quirk #21) but not ternaries',
   assert.ok(lint('var v = x ? {a:1} : 2; JSON.stringify(v)').errors.length === 0);
 });
 
+test('lint rejects a ternary nested in an else branch (quirk #95), not one in parentheses or a then branch', () => {
+  assert.ok(lint('var v = k === "B" ? f() : k === "V" ? g() : h(); JSON.stringify(v)').errors.some(e => /nested in an else/.test(e)));
+  assert.strictEqual(lint('var v = k === "B" ? f() : (k === "V" ? g() : h()); JSON.stringify(v)').errors.length, 0);
+  assert.strictEqual(lint('var v = a ? (b ? 1 : 2) : 3; var w = c ? {x: 1} : {y: 2}; JSON.stringify([v, w])').errors.length, 0);
+  assert.strictEqual(lint('switch (n) { case 1: x = a ? 1 : 2; break; default: x = b ? 3 : 4; } JSON.stringify(x)').errors.length, 0);
+});
+
 test('lint flags non-ASCII identifiers (quirk #19) as errors, Cyrillic in strings as a warning', () => {
   assert.ok(lint('var nо = 1; JSON.stringify(nо)').errors.some(e => /non-ASCII/.test(e)));   // Cyrillic о
   const r = lint('var s = "Привет"; JSON.stringify(s)');

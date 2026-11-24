@@ -397,3 +397,80 @@ file.
   WinError 2; resolve it with `shutil.which('higgsfield')`.
 - A small batch runner over a JSON spec list pays off at once: parallel jobs, job ids kept in `<spec>.log.json` (a rerun
   waits on a submitted job instead of paying again) and downloads into the spec's `out`.
+
+## Kling browser workflow: submission, downloads and tool contact (LIVE-VERIFIED, 2026-11-10)
+
+Applies when the user explicitly chooses the logged-in Kling browser workflow. This is
+not authorization to switch providers, upload unrelated files or spend unapproved credits.
+
+| Symptom / wrong assumption | Verified handling |
+|---|---|
+| The visible Generate price immediately after filling a prompt means the prompt is ready. | Prompt analysis may still be running. A click can yield “Analyzing prompt…” without submitting. Check for new job cards matching the prompt or a submission confirmation before navigating away. If a wait times out, inspect the job list before retrying a paid action. |
+| Every click on Generate is a paid job. | Record accepted job cards, output count and the quoted price. In the verified run, two analysis-only clicks created no jobs and were excluded from the ledger. Keep local spending distinct from account-wide balance. |
+| Downloading a generated image URL preserves a usable Windows filename. | Some text-to-image asset names exceed Windows filename limits. Kling’s native Download control produced short filenames and completed successfully. Wait for the download event, retain its handle, continue independent work, then resolve its local path. Avoid blocking on every large download immediately. |
+| “2K / 16:9” guarantees 2560×1440 or a clean export. | Native Image 3.0 PNG exports in this run were 2720×1536 and had a small Kling mark. Inspect actual dimensions and export content. Label approval material accurately; do not assume final delivery suitability. |
+| Describing a hammer and punch in more detail fixes mechanical contact. | Several text-only generations placed the tools incorrectly. A pose reference showing hand → punch → metal and hammer → exposed punch head produced a usable candidate. Inspect both contact points and the grip before animating impacts. |
+| Any metalworking image is a suitable reference for all craft scenes. | An engraving reference biased a chasing scene back to engraving. Separate material/style references from mechanical pose references. |
+| Repeating “no base” reliably creates a floating open ribbon. | Generations still added pedestals, a floor or forked ends. Composing the middle of a continuous band with both ends outside the frame produced one usable floating variant; review its paired alternative because the other still had a floor. |
+
+For image approval, save selected original exports, their creation URLs, a timed contact
+sheet and the accepted-job ledger. Keep motion generation at the user’s requested approval
+checkpoint. A still frame proves the image choice, not fluid deformation, topology stability,
+sound synchronisation or a seamless transition; those need a short video test.
+
+### Paid-video preflight and reference attachment (LIVE-VERIFIED, 2026-11-10)
+
+- Set resolution/duration while the prompt is empty. In the narrow Kling panel, the settings label extended underneath Generate; clicking its DOM centre submitted an extra paid job. The visible settings icon, located from a fresh screenshot, opened the correct panel. Re-check the displayed price after changing parameters.
+- Navigation to another creation group reset duration to 5 seconds while retaining 1080p. Do not infer duration from the last job.
+- A drag into First frame can silently leave the slot empty. Two accepted jobs had no reference thumbnails and generated a different design. A successful drag from a clearly visible image produced a slot thumbnail plus “replace material”; compare that thumbnail's asset identity with the intended image before submitting. Price alone does not distinguish text-only from image-conditioned video. Occlusion was suspected, not established as the cause of the failed drags.
+- Verify the accepted job also shows the reference thumbnail. The corrected jobs passed this check and their first frames matched the selected artwork. Record rejected jobs as spent; never hide retries from the agreed budget.
+- On this logged-in account, native Download produced a marked export, whereas the already visible player media offered a clean original through the documented media-download capability. Inspect the actual output; use only assets exposed by the authorised session, without changing URLs, removing marks or assuming other accounts have the same export options.
+- A stale browser binding reported browser.user unavailable. Listing tabs in the already selected browser and binding the known tab ID restored access; resetting the runtime or switching browsers was unnecessary.
+
+### Craft mechanics: review stills and motion separately (CLIENT FEEDBACK + STILL TEST, 2026-11-11)
+
+The v05 craft video was technically valid and its text animation was accepted, but the user rejected physical continuity: hammer blur, chip/cloth direction and object placement. Prior still approval was not evidence of believable motion.
+
+- Separate setup, generation and edit failures. Check tool grip, supported workpiece, exposed strike head and both contacts in the still; inspect the raw clip at native speed before blaming or changing the AE retime. Frame-count/decode/audio checks do not establish visual or mechanical quality.
+- For hand operations, use one explicit screen-space direction and one small action. A graver, hand and palm handle move as a unit; the chip originates at the cutting face. A compact polishing cloth remains under the same pressing fingers while the workpiece stays fixed. A hammer's rigid face meets the exposed punch head; inspect approach/contact/rebound individually.
+- Distinguish style/material references from mechanical pose. In this revision GPT Image supplied seven candidate stills; an initially invented ball on the punch tip was corrected with a targeted edit while preserving the strike axis and hands. These are still candidates, not a validated video recipe. New Kling motion tests were pending when this note was written.
+- Avoid forcing unrelated physical materials into a transition (cloth becoming metal). Match a highlight or direction in the edit, then cut into the separate abstract shot. One start image per craft motion test avoids steering toward an incompatible end image.
+- User-selected split for this project: built-in GPT Image for stills, logged-in Kling for animation, AE for assembly. This does not authorize changing providers in unrelated projects or exceeding an approved cap.
+- Test failure-prone actions individually before finals and preserve rejected outputs/costs. Successful static correction does not justify spending the remainder before raw-motion review.
+
+Browser recovery follow-up: listing/rebinding the known tab still failed with browser.user unavailable. Resetting cua_repl and re-binding the same existing IAB tab restored access without navigation or switching browsers. Use only after ordinary documented re-binding fails; not every stale-tab error requires a reset.
+
+
+### v06 raw-motion follow-up (LIVE-REVIEWED, 2026-11-11)
+
+- The 5-second macro test initially retained the chip but lost it near the tail. The 10-second final used the same 4 mm travel over twice the duration plus an explicitly persistent attached shaving; sampled final frames retained the chip and correct leftward tool motion. This is a successful shot-specific correction, not a guarantee from prompt wording.
+- Compact cloth beneath fingertips, with one leftward pass and a secured plate, gave coherent raw motion in both the 720p test and 1080p final. Avoid a free trailing fabric end when the required action is surface polishing.
+- The hammer test retained rigid geometry and correct upper/lower contacts, but had brief fast-stroke blur and some prolonged contact. Tighten the final to brief contact/immediate rebound, modest travel and crisp shutter; inspect the final again. Requested tap count did not reliably match the actual clip; derive musical sync from observed contacts.
+- The requested 1080p/16:9 image-conditioned finals exported as 1916x1080 at 24 fps, with 241 frames for 10 seconds and 361 for 15. Fit proportionally into 1920x1080 rather than assuming exact source dimensions or frame rate.
+- In a narrow IAB panel after opening/closing media, First frame could have a negative left coordinate and clicks did not open its menu. Read its DOM bounds, leave the empty form safe, and reload the same project to restore the layout. Reload reset duration to 5 seconds; re-check resolution, duration, reference filename and quoted price before any paid submission.
+- Maintain accepted-job spend independently of the account-wide credit balance. v06 main jobs and tests accepted at 1325/1500; reserve is not spent until a retry is actually accepted.
+
+
+### Deformation-driven ribbon and loop review (LIVE-REVIEWED, 2026-11-11)
+
+- Asking for a travelling wave still produced too much global rotation in the first hero clip. A retry specified a fixed centre/global orientation and a staged outline change (tall oval → broad oval → saddle → return). The resulting clip visibly changed silhouette. Prompt constraints alone do not prove Mobius topology; inspect folds/occlusions separately.
+- A numerically similar first/last-frame pair still doubled the bright metallic edge when crossfaded. Check the rendered seam, not only a frame similarity score. For this abstract ribbon, a single source played forward/back with eased zero velocity at turns removed the overlap ghost. This treatment is inappropriate for irreversible craft actions such as cutting.
+- Retain the rejected generation and count it as spent. Here the additional 150-credit deformation retry brought accepted v06 spend to 1475/1500; the last 25 were unused.
+
+
+### Sound-driven shot selection: semantic cues before still generation (2026-11-11)
+
+- Numeric waveform attacks do not identify the operation being heard. In this session audio input was explicitly unsupported; do not claim to have listened based on onset/RMS analysis. Ask for the smallest missing semantic cue while completing independent visual work. The user's answer (drilling, impacts, grinding) supplied the sound categories; measured attacks supplied candidate alignment times, not labels.
+- A beautiful static object cannot substitute for the requested audible work. Two silver-plate beauty frames were rejected before Kling; they were retained under rejected_static_plates and consumed no Kling credits. New GPT Image candidates showed a supported/clamped workpiece and a clear tool contact for drilling, abrasive finishing and chasing. Their still mechanics were inspected; animated mechanics remained unverified pending approval.
+- Treat image choice, shot chronology and generation cap as distinct approval fields. Carry forward an existing cap but do not infer new spending from account balance or from approval of an earlier storyboard. With 1475/1500 spent, a new 700-credit proposal remained unapproved and no new job was submitted. Live UI quoted 150 for Kling 4.0 Keyframes 1080p/10s/one output.
+
+
+### v07 manual drilling and strike-cadence limits (LIVE-REVIEWED, 2026-11-11)
+
+- A request for careful manual drilling is a mechanical constraint, not only a slower powered drill. Replace the bench drill still with a hand pin vise before animation. In this run, 5-second test and sampled 10-second final retained a straight planted bit, small finger regrips and the clamped workpiece.
+- A 5-second test does not guarantee the cadence of a 10-second final. Chasing C09 requested six controlled taps but produced rapid repeated hammering with excessive lift and native blur. Retain it as rejected, count its full cost and inspect the retry separately. Do not label a new prompt a successful recipe before its output is reviewed.
+- For impacts, inspect all source frames around approach/contact/rebound. A hammer template matched incorrectly when the head left the frame; template peaks were not reliable contact evidence. Use a labelled crop grid and derive musical remap keys from observed contacts. Avoid Pixel Motion on hammer contacts; keep that option scoped to slow, stable abstract surfaces when separately checked.
+- Source exports in this run were 1284x724 for the 720p tests and 1916x1080 for the 1080p finals, both 24 fps. Do not inherit output dimensions or tap counts from the UI setting or prompt.
+
+
+v07 retry follow-up: C09R produced slower separated approaches with coherent rigid tools, but held the hammer on the punch too long. The edit selected observed contacts at source frames16,85,145 (24fps), mapped them to37,39,41 seconds, and compressed each near-static contact hold to two output frames before rebound. The unused fourth tap stayed outside the cut. This correction used monotonic AE Time Remap with no Pixel Motion; the final render still required visual contact review. Additional spend ended at700/700 including the rejected150-credit C09 and150-credit retry.

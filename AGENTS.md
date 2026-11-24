@@ -42,9 +42,10 @@ node scripts/ae.js 'JSON.stringify({ok:true, comp: (app.project.activeItem insta
 node scripts/ae.js --lib 'JSON.stringify({v: M.VERSION, green: CR.HEX.GREEN})'
 ```
 
-`comp: null` means no composition is selected — ask the user before proceeding. If the
-preflight reports `AE panel CDP target not found on port 8092`, ask the user to open the
-panel rather than retrying.
+`comp: null` means no composition is selected: use the task's exact authorized target when known;
+ask only if ambiguous. If `AE panel CDP target not found on port 8092`, available desktop control
+may open Window → Extensions → LLM Chat under the existing AE-task authorization; re-probe once.
+Ask only if UI access is unavailable or a user-only action is required. Preserve dirty projects.
 
 ## Non-negotiables
 

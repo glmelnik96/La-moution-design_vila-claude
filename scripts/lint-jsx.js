@@ -105,6 +105,20 @@ function lint(src, opts) {
     warnings.push('mutations without app.beginUndoGroup / M.run — one Ctrl+Z will not revert the whole action (quirk #10)');
   }
 
+  // 8. A ternary nested in an else branch: ExtendScript reads `a ? X : b ? Y : Z` as `(a ? X : b) ? Y : Z` (quirk #95)
+  const tern = [0];
+  let depth = 0;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; tern[depth] = 0; }
+    else if (ch === ')' || ch === ']' || ch === '}') { depth = Math.max(0, depth - 1); if (ch === '}') tern[depth] = 0; }
+    else if (ch === ';' || ch === ',') tern[depth] = 0;
+    else if (ch === '?') {
+      if (tern[depth] === 2) errors.push('ES3: ternary nested in an else branch at line ' + lineOf(clean, i) + ' — ExtendScript reads `a ? X : b ? Y : Z` as `(a ? X : b) ? Y : Z`; use if/else (quirk #95)');
+      tern[depth] = 1;
+    } else if (ch === ':' && tern[depth] === 1) tern[depth] = 2;
+  }
+
   // 7. Non-ASCII outside strings/comments is almost always a Cyrillic letter in an identifier (quirk #19)
   const nonAscii = /[^\x00-\x7f]/.exec(clean);
   if (nonAscii) errors.push('non-ASCII character in code (outside strings/comments) at line ' + lineOf(clean, nonAscii.index) + ' — Cyrillic in an identifier? (quirk #19)');

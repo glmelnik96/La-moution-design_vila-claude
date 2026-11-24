@@ -9,6 +9,14 @@ Sources (fetched 2026-09-03): Emil Kowalski's animation standards ([review-anima
 
 ---
 
+## Art direction before motion recipes (observed 2026-11-03)
+
+In the Lyudi Remesla project, technically working AE shutters, flips and sliding plates were rejected as dated. Converting the ornament to native vector paths did not address that design criticism. The replacement stills have NOT yet been approved; this records the failed workflow, not a proven aesthetic recipe.
+
+When feedback concerns visual quality or a radically different direction, resolve composition, typography, crop and hierarchy in reviewable stills before another full animation build. Explain one motion mechanism derived from each design, then test a short representative passage before batch rendering. Judge at intended viewing size as well as close up.
+
+The timing recipes below are options for their stated context, not universal quality gates. A single fade, a cut, simultaneous settling, a long readable hold, or an entirely still text layer can be deliberate. Do not add stagger, extra animated properties, three moving layers or a mandatory event every 90 frames merely to satisfy a recipe; event award holds may explicitly require the opposite. Technical QA cannot establish artistic acceptance.
+
 ## 1. The ten rules every serious skill enforces
 
 1. **Never linear** for anything the eye reads as an event. Linear only for loops (tickers,

@@ -7,7 +7,7 @@ description: Cloud.ru motion design in two engines — a live, already-open Afte
 
 ## 1. What this does / mental model
 
-You (Claude) are a hands-on motion designer for **Cloud.ru**. Two engines produce the work,
+Use this skill for hands-on motion design for **Cloud.ru**. Two engines produce the work,
 one language governs it:
 
 | Channel | What | Entry point |
@@ -26,6 +26,8 @@ This is **not a one-prompt autopilot**. Work in small, verifiable steps: write t
 sheet, build, capture the beats, look at them, fix the worst defect, repeat. When in doubt,
 look before you leap and confirm intent.
 
+When the user explicitly requests browser canvas preparation (without launching generation), read `reference/phygital-browser-nodes.md` for verified copy/paste, upload, per-shot or episodic references, and character-input techniques. This does not authorize backend sidecars or paid runs.
+
 ## 2. Preflight (every session)
 
 **Brand + tests (always):**
@@ -38,9 +40,11 @@ node --test            # 73 tests: lib against the AE mock, lint, tokens in sync
 node scripts/ae.js 'JSON.stringify({ok:true, comp: (app.project.activeItem instanceof CompItem)? app.project.activeItem.name : null})'
 node scripts/ae.js --lib 'JSON.stringify({v: M.VERSION, green: CR.HEX.GREEN})'
 ```
-- `comp: null` → ask the user to select/open a composition.
-- **"AE panel CDP target not found on port 8092"** → ask the user to open **After Effects** and
-  **Window → Extensions → LLM Chat**, then re-run.
+- `comp: null` → resolve the composition from the authorized task by exact name; ask only if the target is ambiguous.
+- **"AE panel CDP target not found on port 8092"** → if desktop control is available and AE work is authorized,
+  inspect AE and open **Window → Extensions → LLM Chat** yourself, then re-run the probe once.
+  Ask the user only when UI access is unavailable or a user-only action is needed. Do not restart AE or
+  discard a dirty project to restore the connection.
 - When a task touches a `VERIFY`-tagged builder of the lib, run its item in
   `reference/live-verify-checklist.md` and record the result in `reference/ae-quirks.md`.
 
@@ -50,7 +54,7 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 ```
 - Fails to find Chrome/ffmpeg → set `CHROME_PATH` / `FFMPEG_PATH`.
 
-**Generation channel (only when generating assets):** `claude mcp get phygital` → «Connected» and the `phygital` tools are in the session (`list_models` is free); «Needs authentication» → §6 Auth.
+**Generation channel (only when generating assets):** Check the configured server with `codex mcp get phygital` in Codex or `claude mcp get phygital` in Claude Code. Confirm the session exposes the official `phygital` tools and that `list_models` returns models. For missing tools or an authentication error, see §6.
 
 ## 3. Workflow: brand first, then the engine
 
@@ -102,6 +106,21 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 - Reference docs on demand: `reference/ae-cloudru-recipes.md` (scenes), `reference/extendscript-patterns.md`
   (text animators, masks/mattes, shape paths/trim, camera, precompose, markers, rigs),
   `reference/expression-library.md`, `reference/ae-quirks.md` (**read before debugging any weird ES3 error**).
+- Tidying an imported scene before tracking: one precomp per asset at the asset's size, pixel-identical (quirk 308);
+  callout lines stay outside, between a null on the block and a track null (quirk 309); `precompose` kills the moved
+  layers' references, and command 16 undoes a failed run (quirk 307).
+- Animating such blocks after tracking: an odometer roll on the live number (quirk 310); one keyed slider staggered by
+  expression for characters, digit columns and icon bars, a label masked by its wiping plate (quirk 311); each precomp
+  layer retimed so its frame 0 is the entrance (quirk 312).
+- Then: numbers that keep growing, and styling variants as comp copies swapped in by `replaceSource` (quirk 314); a new
+  shape layer starts at the comp centre (quirk 313); tracked callouts from 3D blocks with the elbow on the target's side
+  (quirk 315).
+- Numbers that show real values: the value odometer (quirk 317), started at a non-zero value with a rise-in and steps,
+  or re-timed inside the precomp when the scene layer is keyed (quirk 319). Callouts on bodies tracked with OpenCV
+  (quirk 318). Figma text rebuilt 1:1 by ink-box matching (quirk 320). Moments in footage measured, not guessed
+  (quirk 321). A grid tied to a growing value keeps the layout's scale and is never stretched to fill (quirk 322).
+  Growth «скачками с ускорением», with level meters and progress bars driven by the value (quirk 323).
+- For CEP variables surviving separate calls, paragraph-box alignment and Cyrillic file paths, see quirks 340–342.
 
 ## 5. HTML channel rules
 
@@ -185,6 +204,9 @@ contract and QA. The traps are quirks 185–188:
 
 ## 5f. Pixel-aligned HTML animation from a Figma storyboard
 
+For font tracking and labels inside opening boxes, see quirk 324. For outlined SVG reveals and later
+geometry regressions, see §8e of `reference/html-figma-1to1.md`.
+
 Follow `reference/html-figma-1to1.md` for state dumps, layout checks and deterministic
 choreography. Render holds for comparison to the exported design. Check the transition frames
 for stacking order, clipping and text shifts. Use the same runtime with different layout data
@@ -202,9 +224,10 @@ Higgsfield through its CLI. Use the supported integration for each provider. The
 5. `generate` → `get_job` until it completes → download the result links into the project folder → import via `ae.js`.
 6. Re-roll guardrails: branch by failure cause; never silently fall back to plain `t2v`; reuse seeds.
 
-**Auth (one-time):** if the `phygital` tools are missing or answer 401, the user signs in: `claude mcp login
-phygital`, or `/mcp` → phygital → Authenticate, approving `offline_access`. A server added mid-session shows up in
-the next session.
+**Auth (one-time).** If the configured official Phygital server requires OAuth, use
+`codex mcp login phygital` in Codex or `claude mcp login phygital` in Claude Code. In Claude Code,
+`/mcp` → phygital → Authenticate is also available. Follow the official consent flow, then verify
+that `list_models` succeeds. Start a new session if a newly configured server does not appear.
 
 ## 7. Safety
 
