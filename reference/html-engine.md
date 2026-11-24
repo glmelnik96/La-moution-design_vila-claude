@@ -157,6 +157,34 @@ Review protocol: open the sheet, then the individual stills; apply the checklist
 `brand/cloudru-motion-brand.md` §9 and the frame-judging protocol in
 `reference/motion-vocabulary.md` §D. Fix, re-render only the affected `?scene=`, repeat.
 
+### 4a. Embedded video in a seekable booth loop
+
+Keep a small authored clip as native `<video>` when continuous playback is part of the design.
+For screenshot-driven demos, see [Work from supplied designs or footage](product-demo-motion.md#work-from-supplied-designs-or-footage).
+
+- **Live playback.** Anchor the clip when it enters or when playback resumes from an explicit seek.
+  Let the native media clock run at the authored speed. If a clip spans the deck wrap, map both
+  sides to increasing times within the same clip and keep it playing through the wrap. Repeated
+  `currentTime` writes or small `playbackRate` corrections can cause visible jitter. Keep a poster
+  available if the clip fails to decode.
+- **Exact capture.** In the `window.__RENDER__` path, have `__motion.seek(t)` return a promise for the
+  rendered frame. The renderer awaits it through CDP. Quantize the seek to a source frame when its
+  cadence is known, request `requestVideoFrameCallback` before assigning `currentTime`, and check
+  `metadata.mediaTime` against that source frame. Cancel superseded callbacks and bound the wait
+  for unavailable presentation events. The `seeked` event confirms the seek while the compositor
+  can still show an earlier frame, especially at 4K. Verify the captured pixels after seeking
+  elsewhere and back. Leave ordinary playback on its own clock.
+- **Profile the bottleneck.** Compare the source cadence and decoded frames before changing the clip.
+  In Chrome, sample `requestVideoFrameCallback`, `getVideoPlaybackQuality()` and render intervals at the
+  target viewport with hardware acceleration. Track seek events separately from missed presentations.
+  Cache static gradients and blurred variants and blend cached layers during scene changes. DeepDive
+  used separate 1080p buffers for the soft background and glass, with text and diagrams rendered as
+  vectors at 4K. Report which playback test used an accelerated browser and which used the headless
+  renderer, whose default launch passes `--disable-gpu`.
+- **Check both loop contracts.** Compare PNGs at `0` and `duration` with an intervening seek, then watch
+  the live timeline cross the seam and verify that the media clock keeps advancing. If the final scene
+  uses a QR, decode it from a capture at the target resolution and compare the payload with the link.
+
 ## 5. Delivery formats
 
 - **Video** (`--video`): the same page renders 1080p/4K/story/square via `?format=` or your

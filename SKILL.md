@@ -110,6 +110,10 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
   `document.fonts.ready`.
 - Every animation must be **seekable**: no CSS transitions/animations, no wall-clock code —
   the renderer screenshots `__motion.seek(t)`.
+- For silent booth slides, translate each claim into a visible cause and effect in the beat sheet.
+  Read [Animate claims in silent booth loops](reference/product-demo-motion.md#animate-claims-in-silent-booth-loops)
+  for cue timing, diagram geometry and transitions. For a native video layer, see
+  [Embedded video in a seekable booth loop](reference/html-engine.md#4a-embedded-video-in-a-seekable-booth-loop).
 - Review with stills first (`--beats auto --sheet`), video last (`--video`), a single scene via
   `?scene=`; formats via `?format=story|square|4k`.
 - Logo: the placeholder lockup is for prototyping; deliverables use the real SVG
