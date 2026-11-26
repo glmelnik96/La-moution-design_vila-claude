@@ -1,7 +1,7 @@
 // gfx-build.js — the After Effects half of graphics over a Premiere edit (reference/gfx-for-edit.md;
 // the plan format lives in premiere-autopilot references/gfx-plan.md).
 //
-//   node scripts/gfx-build.js --plan <gfx-plan.json> [--only LT_01,Q_02] [--refresh-plate] [--rebuild-kit] [--no-capture]
+//   node scripts/gfx-build.js --plan <gfx-plan.json> [--preview] [--only LT_01,Q_02] [--refresh-plate] [--rebuild-kit] [--no-capture]
 //   node scripts/gfx-build.js check-kit --aep <scratch.aep> --out <dir> [--rebuild-kit]
 //
 // One AE call per step:
@@ -19,11 +19,12 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
+const { inspectData, inspectPlan, selectMappings } = require('./lib/gfx-contract.cjs');
 const { run } = require('./ae.js');
 const { parseSvg } = require('./lib/svgpath.js');
 
 // sent as ASCII: the kit's Cyrillic placeholders go as \uXXXX, like every payload (quirk 19)
-const LIBS = ['gfx.jsx', 'gfx-kit-cloudru.jsx'].map((f) => fs.readFileSync(path.join(__dirname, 'lib', f), 'utf8')).join('\n')
+const LIBS = ['gfx.jsx', 'gfx-kit-cloudru.jsx', 'gfx-client.jsx'].map((f) => fs.readFileSync(path.join(__dirname, 'lib', f), 'utf8')).join('\n')
   .replace(/[\u0080-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const LOGO_SVG = path.join(__dirname, '..', 'assets', 'cloudru-logo.svg');
 const AE_EXE = process.env.AE_EXE || 'C:/Program Files/Adobe/Adobe After Effects 2026/Support Files/AfterFX.exe';
@@ -48,29 +49,18 @@ function logoData() {
   return { w: svg.viewBox[2], h: svg.viewBox[3], paths: svg.paths.map((p) => ({ color: colorOf(p.fill), subpaths: p.subpaths })) };
 }
 
-// What the AE side needs before touching AE (the full validation: premiere-autopilot gfxplan.mjs).
-function checkPlan(plan) {
-  const e = [];
-  if (!plan || plan.version !== 1) e.push('version must be 1');
-  const s = plan && plan.sequence;
-  if (!s || !(s.fps > 0) || !Number.isInteger(s.frames) || !Number.isInteger(s.w) || !Number.isInteger(s.h)) e.push('sequence needs fps, whole frames, w, h');
-  else if (Math.abs(s.w / s.h - 16 / 9) > 0.01) e.push(`only 16:9 in v1 (got ${s.w}x${s.h})`);
-  if (!plan || !/\.aep$/i.test(plan.aep || '')) e.push('aep must be an .aep path');
-  if (!plan || !plan.plate) e.push('plate is required');
-  if (plan && plan.style && plan.style !== 'cloudru') e.push(`style ${plan.style}: only the cloudru kit exists yet`);
-  for (const sl of (plan && plan.slots) || []) {
-    if (!TYPES.includes(sl.type)) e.push(`${sl.id}: unknown type ${sl.type}`);
-    if (!Number.isInteger(sl.in) || !Number.isInteger(sl.out) || sl.out <= sl.in) e.push(`${sl.id}: in/out must be whole frames, in < out`);
-  }
-  return e;
+// The offline report is shared with premiere-autopilot; retain the errors-only helper for callers.
+function checkPlan(plan, registry) {
+  return inspectData(plan, registry).errors;
 }
 function slotsInOrder(plan, only) {
   return plan.slots.filter((s) => !s.lost && (!only || only.includes(s.id)))
     .sort((a, b) => (LAYER_ORDER[a.layer] - LAYER_ORDER[b.layer]) || (a.in - b.in));
 }
 
-const openBody = (aep) => `
+const openBody = (aep, prepared = false) => `
   var want = new File(${J(fwd(aep))}), cur = app.project.file;
+  ${prepared ? 'if (!want.exists) { throw new Error("prepare the working AEP with client template copies under TEMPLATES first"); }' : ''}
   if (cur && cur.fsName.toLowerCase() === want.fsName.toLowerCase()) { return { opened: "already", file: cur.fsName }; }
   if (app.project.dirty) { throw new Error("AE has unsaved changes in " + (cur ? cur.fsName : "an untitled project") + ": save or close it, then run again"); }
   if (want.exists) { app.open(want); return { opened: "open", file: app.project.file.fsName }; }
@@ -117,11 +107,37 @@ const previewBody = (plan, slots) => {
   app.project.save();
   return { preview: c.name, saved: app.project.file.fsName };`;
 };
-const captureBody = (plan, slots, dir) => `
-  M.use(G.find(${J('PREVIEW_' + plan.sequence.name)}, CompItem));
+// Keep exact resolved source names and field targets from the offline report. No project
+// lookup is made by editorial type on the client path.
+function clientSpec(plan, slots, mappings) {
+  const seq = plan.sequence;
+  const byId = new Map(mappings.map((m) => [m.id, m]));
+  return {
+    seq: seq.id, preview: 'PREVIEW_' + seq.name, duration: seq.frames / seq.fps,
+    w: seq.w, h: seq.h, fps: seq.fps, plate: fwd(plan.plate),
+    timeline: slotsInOrder(plan).map((s) => ({ id: s.id, inS: s.in / seq.fps })),
+    rows: slots.map((s) => ({
+      id: s.id, template: byId.get(s.id).template, fields: byId.get(s.id).fields,
+      inS: s.in / seq.fps, D: (s.out - s.in) / seq.fps,
+    })),
+  };
+}
+const projectGuard = (aep) => `
+  var current = app.project.file;
+  if (!current || current.fsName.toLowerCase() !== new File(${J(fwd(aep))}).fsName.toLowerCase()) { throw new Error("working AEP changed"); }`;
+const clientBody = (plan, spec, refresh) =>
+  projectGuard(plan.aep) + '\n  return C.build(' + J(spec) + ', ' + (refresh ? 'true' : 'false') + ');';
+const captureBody = (plan, slots, dir, client = false) => {
+  const previewName = J('PREVIEW_' + plan.sequence.name);
+  const seq = client ? J(plan.sequence.id) : null;
+  const guard = client ? projectGuard(plan.aep) + '\n  var gfx = C.folder("GFX", app.project.rootFolder, false), copies = C.folder("_tpl", gfx, false);' : '';
+  const preview = client ? `C.owned(${previewName}, CompItem, gfx, ${seq})` : `G.find(${previewName}, CompItem)`;
+  const template = client ? `C.owned(S[i].id + "__tpl", CompItem, copies, ${seq})` : 'G.find("TPL_" + S[i].type, CompItem)';
+  return `${guard}
+  M.use(${preview});
   var S = ${J(slots.map((s) => ({ id: s.id, type: s.type, inF: s.in, outF: s.out })))}, out = [], i;
   for (i = 0; i < S.length; i++) {
-    var info = G.tplInfo(G.find("TPL_" + S[i].type, CompItem)), fr = [];
+    var info = G.tplInfo(${template}), fr = [];
     var a = S[i].inF + Math.round(info.tin * M.FPS) + 2, b = Math.round((S[i].inF + S[i].outF) / 2);
     fr.push(a < S[i].outF ? a : b);
     if (b !== fr[0]) { fr.push(b); }
@@ -130,6 +146,7 @@ const captureBody = (plan, slots, dir) => `
     out.push({ id: S[i].id, frames: fr, files: M.capture(fr, "qa_" + S[i].id, ${J(fwd(dir))}) });
   }
   return { shots: out };`;
+};
 
 // What one step sends: the libraries, then the body, with JSON.stringify on the LAST line (ae.js's
 // lint looks there, quirk 16). `raw` is for the open step: no undo group around opening a project,
@@ -183,28 +200,44 @@ function sheet(files, out) {
 
 async function build(argv) {
   const val = (k) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv[i + 1] : undefined; };
+  if (!val('plan') || val('plan').startsWith('--')) throw new Error('--plan needs a plan path');
+  if (argv.includes('--only') && (!val('only') || val('only').startsWith('--'))) throw new Error('--only needs one or more slot IDs');
   const planPath = path.resolve(val('plan'));
-  const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
-  const errs = checkPlan(plan);
-  if (errs.length) throw new Error('plan: ' + errs.join('; '));
-  const slots = slotsInOrder(plan, val('only') ? val('only').split(',') : null);
+  const plan = JSON.parse(fs.readFileSync(planPath, 'utf8').replace(/^\uFEFF/, ''));
+  const checked = selectMappings(inspectPlan(plan, planPath), val('only'));
+  if (argv.includes('--preview') || !checked.ok) return checked;
+  const selected = checked.mappings.map((m) => m.id);
+  const slots = slotsInOrder(plan, selected);
+  if (!slots.length) throw new Error('no active slots to build');
+  const client = Boolean(plan.kit);
+  if (client && argv.includes('--rebuild-kit')) throw new Error('--rebuild-kit is only for the generated Cloud.ru templates');
+  if (client && !fs.existsSync(plan.aep)) throw new Error('prepare a working AEP with client template copies under TEMPLATES first: ' + plan.aep);
   const report = { ae: await ensureAE() };
-  report.open = await aeStep('gfx: open', openBody(plan.aep), { raw: true });
-  report.kit = await aeStep('gfx: kit', kitBody([...new Set(slots.map((s) => s.type))], argv.includes('--rebuild-kit')));
-  report.plate = await aeStep('gfx: plate', plateBody(plan.plate, argv.includes('--refresh-plate')));
-  const problems = [];
-  report.slots = [];
-  for (const s of slots) {
-    const r = await aeStep('gfx: slot ' + s.id, slotBody(s, plan));
-    report.slots.push({ id: s.id, D: r.D, min: r.min, overflow: r.overflow, missing: r.missing });
-    for (const [f, px] of Object.entries(r.overflow || {})) problems.push(`${s.id}: text.${f} sticks out of BOX_${f.toUpperCase()} by ${px} px, shorten it`);
-    for (const f of r.missing || []) problems.push(`${s.id}: the template has no TXT_${f.toUpperCase()}`);
+  report.open = await aeStep('gfx: open', openBody(plan.aep, client), { raw: true });
+  if (client) {
+    const spec = clientSpec(plan, slots, checked.mappings);
+    const result = await aeStep('gfx: client templates', clientBody(plan, spec, argv.includes('--refresh-plate')));
+    report.slots = result.slots;
+    report.preview = result.preview;
+  } else {
+    report.kit = await aeStep('gfx: kit', kitBody([...new Set(slots.map((s) => s.type))], argv.includes('--rebuild-kit')));
+    report.plate = await aeStep('gfx: plate', plateBody(plan.plate, argv.includes('--refresh-plate')));
+    report.slots = [];
+    for (const s of slots) {
+      const r = await aeStep('gfx: slot ' + s.id, slotBody(s, plan));
+      report.slots.push({ id: s.id, D: r.D, min: r.min, overflow: r.overflow, missing: r.missing });
+    }
+    report.preview = await aeStep('gfx: preview', previewBody(plan, slotsInOrder(plan)));
   }
-  report.preview = await aeStep('gfx: preview', previewBody(plan, slotsInOrder(plan, null)));
+  const problems = [];
+  for (const r of report.slots) {
+    for (const [f, px] of Object.entries(r.overflow || {})) problems.push(`${r.id}: text.${f} exceeds its template box by ${px} px, shorten it`);
+    for (const f of r.missing || []) problems.push(`${r.id}: the template has no TXT_${f.toUpperCase()}`);
+  }
   if (!argv.includes('--no-capture')) {
     const dir = path.join(path.dirname(planPath), 'qa');
     fs.mkdirSync(dir, { recursive: true });
-    const cap = await aeStep('gfx: capture', captureBody(plan, slots, dir));
+    const cap = await aeStep('gfx: capture', captureBody(plan, slots, dir, client));
     const files = cap.shots.flatMap((x) => x.files);
     await waitFiles(files);
     report.qa = { shots: cap.shots, sheet: sheet(files, path.join(dir, 'sheet.png')) };
@@ -215,6 +248,7 @@ async function build(argv) {
 }
 
 async function checkKit(argv) {
+  if (argv.includes('--preview') || argv.includes('--plan')) throw new Error('preview mappings with --plan <gfx-plan.json> --preview');
   const val = (k) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv[i + 1] : undefined; };
   if (!val('aep') || !val('out')) throw new Error('check-kit needs --aep <scratch.aep> --out <dir>');
   const out = path.resolve(val('out'));
@@ -245,13 +279,13 @@ async function checkKit(argv) {
   return report;
 }
 
-module.exports = { checkPlan, slotsInOrder, logoData, colorOf, J, payload, openBody, kitBody, plateBody, slotBody, previewBody, captureBody };
+module.exports = { clientSpec, clientBody, checkPlan, slotsInOrder, logoData, colorOf, J, payload, openBody, kitBody, plateBody, slotBody, previewBody, captureBody };
 
 if (require.main === module) {
   const argv = process.argv.slice(2);
   const job = argv[0] === 'check-kit' ? checkKit(argv) : (argv.includes('--plan') ? build(argv) : null);
   if (!job) {
-    console.error('usage: gfx-build.js --plan <gfx-plan.json> [--only A,B] [--refresh-plate] [--rebuild-kit] [--no-capture]\n       gfx-build.js check-kit --aep <scratch.aep> --out <dir> [--rebuild-kit]');
+    console.error('usage: gfx-build.js --plan <gfx-plan.json> [--preview] [--only A,B] [--refresh-plate] [--rebuild-kit] [--no-capture]\n       gfx-build.js check-kit --aep <scratch.aep> --out <dir> [--rebuild-kit]');
     process.exit(2);
   }
   job.then((r) => { console.log(JSON.stringify(r, null, 2)); process.exitCode = r.ok ? 0 : 1; })

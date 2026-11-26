@@ -1,14 +1,27 @@
 ---
 name: ae-motion-live
-description: Cloud.ru motion design in two engines — a live, already-open After Effects (ExtendScript over CDP, port 8092, with the cloudru-motion.jsx library) and a dependency-free HTML motion engine rendered with headless Chrome — plus AI asset generation through the official Phygital+ MCP server and the Higgsfield CLI. Use for any brand animation, title/KPI/divider/scheme/logo scenes, explainer spots, web motion, or AE scripting. Also the After Effects half of graphics over a Premiere edit (lower thirds, key thoughts, callouts, chapter cards, intro/outro linked back through Dynamic Link) together with premiere-autopilot. Triggers on "анимация", "моушен", "After Effects", "AE", "заставка", "ролик Cloud.ru", "HTML-анимация", "motion", "графика на ролик", "плашки", "титры поверх видео".
+description: Motion design and generated-shot production in After Effects or seekable HTML. Use for brand animation, product demos, Figma storyboards and resizes, stage and LED loops, graphics over Premiere edits through Dynamic Link, or storyboards and reference-guided shots for narrative films and game cinematics. Supports series adaptations, character pose sheets with separate backgrounds, Cloud.ru art direction and supplied client designs. Запросы про моушен, заставки, графику к монтажу, аниматики и игровые видеогенерации.
 ---
 
-# ae-motion-live — Cloud.ru motion, in After Effects and in HTML
+# ae-motion-live — motion design and generated shots
 
 ## 1. What this does / mental model
 
-Use this skill for hands-on motion design for **Cloud.ru**. Two engines produce the work,
-one language governs it:
+Choose the route by the deliverable. A mixed film can use several rows.
+
+| Deliverable | Method and acceptance check |
+|---|---|
+| Brand animation, title sequence, product explainer or UI demo | Use §§3–5b and [product-demo motion](reference/product-demo-motion.md). Build beats around what the viewer sees after each action. Check movement, reading time and size. |
+| New episode in an established motion series | Use the [series adaptation recipe](reference/series-adaptation.md) to carry over approved graphics, fit new copy and attach the cue to this episode. For an edit-led series use the companion editing skill’s rhythm and titles profile when timing the cut. |
+| Character animation using reusable poses and separate backgrounds | Follow [pose sheets and background plates](reference/pose-plates.md). Choose the action phases, register the contact point, composite over the separate plates and review the retimed action across the cut. |
+| Editable deck film, Figma-to-HTML animation or resizes | For decks use §5c and [the deck pipeline](reference/deck-pipeline.md). For storyboard states and responsive variants use §5f and [the Figma method](reference/html-figma-1to1.md). Use the companion editing skill's `scripts/resize_review.py` to identify affected deliveries and review the entry, hold and exit at each size. |
+| Stage, multi-screen LED or browser loop | Use §5d, [LED delivery](reference/led-wall-pipeline.md) and [long VJ loops](reference/vj-wall-loops.md). Use the companion editing skill's `scripts/loop_review.py` to inspect segment joins and replay the end into the beginning. For a one-shot intro, check its handoff into the loop. Sample screens at the same show time; verify real-time playback when delivering for a browser. |
+| Graphics over an existing edit | Use §5e and [the graphics hand-off](reference/gfx-for-edit.md). Judge the linked graphics over the picture, captions and sound of the podcast, documentary or promo. |
+| Generated narrative film, game cinematic or hybrid spot | Start with the brief, storyboard and an animatic when timing matters. Record action, camera direction, character or prop state, target duration, references and compositing tasks for each shot. Follow §6 and [generation recipes](reference/generation-recipes.md). Compare takes across the cut and hand selected files and usable ranges to Premiere. For gameplay capture use the companion editing skill's `scripts/gameplay_review.py` to check the action, feedback and relevant HUD. Review all four edges while the delivery crop moves, including the frames between action marks. |
+
+For Cloud.ru originals use the brand guide. For supplied artwork or a client kit use that project's approved design.
+
+For a flat video reference, the companion `premiere-autopilot` skill provides `scripts/video_reference.py` for cut candidates and motion inside a region. For two exports on a common timeline, use its `scripts/version_review.py` for picture and audio comparison. When a brief changes a small graphic or background, mark the reading holds. Inspect local differences across versions, motion during each hold and the lettering that should stay fixed. Run the commands from the Premiere skill root. The input can be an HTML render or an AE master. In a retimed or redesigned shot compare the intended action and reading hold against the brief.
 
 | Channel | What | Entry point |
 |---|---|---|
@@ -58,8 +71,8 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
 
 ## 3. Workflow: brand first, then the engine
 
-1. **Read the brand** (`brand/cloudru-motion-brand.md`) and pick the scene types from §3 there;
-   then `reference/motion-best-practices.md` — the market baseline (premium entrance triple,
+1. **Set the art direction.** For Cloud.ru originals read `brand/cloudru-motion-brand.md` and choose the scene types from §3 there. For other clients use the approved artwork, kit or brief.
+   For movement read `reference/motion-best-practices.md` — the market baseline (premium entrance triple,
    three motion layers, holds, follow-through, springs ζ ≥ 0.8, hidden-cut transitions) that the
    brand adapts. Non-Cloud.ru showcase work only: `reference/motion-art-direction.md`.
 2. **Write the beat sheet** before any code: `t (ms) | element | action | ease | dur | note`.
@@ -70,7 +83,7 @@ node html/render/render.js html/templates/showreel.html --out out/check --beats 
    iteration; port later with `reference/html-engine.md` §6).
 4. **Build in small steps** using the library/primitives, not raw keyframes.
 5. **Capture the beats and look at them** (`M.capture` / `render.js --beats auto --sheet`).
-   Judge with `brand/cloudru-motion-brand.md` §9 and `reference/motion-vocabulary.md` §D.
+   Judge the result against the approved design and brief. For Cloud.ru originals use `brand/cloudru-motion-brand.md` §9 and `reference/motion-vocabulary.md` §D.
 6. **Fix the worst defect, re-render only what changed, repeat.** Present only frames you
    have seen.
 
@@ -221,7 +234,7 @@ Higgsfield through its CLI. Use the supported integration for each provider. The
 3. **Show model + settings + credits and get confirmation** before `generate`: credits are charged there, and
    `cancel_job` refunds a job.
 4. Draft low → final high. Never spend on final quality first.
-5. `generate` → `get_job` until it completes → download the result links into the project folder → import via `ae.js`.
+5. `generate` → `get_job` until it completes. Keep the selected take in the project folder with its job/version and usable interval. For compositing import it via `ae.js`; for editorial assembly hand the file and range to Premiere.
 6. Re-roll guardrails: branch by failure cause; never silently fall back to plain `t2v`; reuse seeds.
 
 **Auth (one-time).** If the configured official Phygital server requires OAuth, use

@@ -135,13 +135,13 @@ const PLAN = { version: 1, sequence: { id: 's', name: 'Фильм', fps: 25, w: 
   slots: [{ id: 'CH', type: 'chapter', layer: 'insert', in: 300, out: 375, text: { title: 'Глава' } },
           { id: 'LG', type: 'logo', layer: 'logo', in: 0, out: 450, text: {} },
           { id: 'LT', type: 'lower_third', layer: 'overlay', in: 25, out: 125, text: { name: 'Иван', role: 'CTO' } },
-          { id: 'X', type: 'quote', layer: 'overlay', in: 10, out: 20, text: { quote: 'x' }, lost: true }] };
+          { id: 'X_LOST', type: 'quote', layer: 'overlay', in: 10, out: 20, text: { quote: 'x' }, lost: true }] };
 
 test('gfx-build: plan checks and build order (overlays, logo, inserts; lost slots skipped)', () => {
   assert.deepStrictEqual(B.checkPlan(PLAN), []);
   assert.deepStrictEqual(B.slotsInOrder(PLAN).map((s) => s.id), ['LT', 'LG', 'CH']);
   assert.match(B.checkPlan({ ...PLAN, sequence: { ...PLAN.sequence, w: 1080, h: 1920 } }).join(' '), /16:9/);
-  assert.match(B.checkPlan({ ...PLAN, style: 'client' }).join(' '), /only the cloudru kit/);
+  assert.match(B.checkPlan({ ...PLAN, style: 'client' }).join(' '), /kit/);
 });
 
 test('gfx-build: payloads are ASCII (Cyrillic as \\u escapes) and lint-clean', () => {

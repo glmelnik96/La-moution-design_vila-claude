@@ -79,18 +79,20 @@ G.tplInfo = function (comp) {
 // Write a slot's texts into a template copy. A field the slot leaves out becomes a single space:
 // the layer keeps an ink box of ~0, so the plate expressions shrink instead of breaking.
 // Returns the text keys that have no TXT_ layer.
-G.setTexts = function (comp, text) {
+G.setTexts = function (comp, text, mappedOnly) {
   var missing = [], i, k;
   for (i = 1; i <= comp.numLayers; i++) {
     var L = comp.layer(i), n = String(L.name);
     if (n.substring(0, 4) !== "TXT_") { continue; }
-    var f = n.substring(4).toLowerCase(), v = text.hasOwnProperty(f) ? String(text[f]) : "";
+    var f = n.substring(4).toLowerCase(), mapped = Object.prototype.hasOwnProperty.call(text, f);
+    if (mappedOnly && (!mapped || n !== "TXT_" + f.toUpperCase())) { continue; }
+    var v = mapped ? String(text[f]) : "";
     var st = L.property("ADBE Text Properties").property("ADBE Text Document");
     var d = st.value;
     d.text = v === "" ? " " : v.split("\n").join("\r");
     st.setValue(d);
   }
-  for (k in text) { if (text.hasOwnProperty(k) && !G.layer(comp, "TXT_" + k.toUpperCase())) { missing.push(k); } }
+  for (k in text) { if (Object.prototype.hasOwnProperty.call(text, k) && !G.layer(comp, "TXT_" + k.toUpperCase())) { missing.push(k); } }
   return missing;
 };
 // How far (px) a field's ink sticks out of its BOX at template time tSec; 0 = it fits.
@@ -114,7 +116,7 @@ G.fontOk = function (ps) {
 // links to it, and a comp deleted and re-created under the same name is a different item.
 // o: { id, D (s), fps, w, h, tpl (CompItem), plate (FootageItem|null), inS (s), text, folder, tplFolder }
 G.buildSlot = function (o) {
-  var info = G.tplInfo(o.tpl), min = G.minSec(info.T, info.tin, info.tout), i, k, j;
+  var info = G.tplInfo(o.tpl), min = G.minSec(info.T, info.tin, info.tout), i;
   if (o.D < min - 0.5 / o.fps) { throw new Error(o.id + ": " + o.D + " s is shorter than " + min + " s, the minimum of " + o.tpl.name); }
   var comp = G.find(o.id, CompItem);
   if (!comp) { comp = app.project.items.addComp(o.id, o.w, o.h, 1, o.D, o.fps); }
@@ -134,7 +136,12 @@ G.buildSlot = function (o) {
       if (px > 1) { over[f] = Math.round(px); }
     }
   }
-  var L = comp.layers.add(copy);
+  G.addSlotLayers(comp, copy, o, info);
+  return { id: o.id, D: o.D, min: min, missing: missing, overflow: over };
+};
+// Add the template with its four remap keys and the silent guide. Both kits use this fit.
+G.addSlotLayers = function (comp, copy, o, info) {
+  var k, j, L = comp.layers.add(copy);
   L.name = "TEMPLATE";
   // quirk 183: remap FIRST, then the out point, then our keys, then drop the default keys
   L.timeRemapEnabled = true;
@@ -159,7 +166,6 @@ G.buildSlot = function (o) {
     P.audioEnabled = false;
     P.moveToEnd();
   }
-  return { id: o.id, D: o.D, min: min, missing: missing, overflow: over };
 };
 // The whole film in AE: the plate as a NORMAL layer and every slot comp at its time. QA frames come
 // from here: a capture of a slot comp alone drops its guide plate (quirk 186). Slots are added in the
